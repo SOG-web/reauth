@@ -1,6 +1,6 @@
 {
-  "name": "@reauth/reauth",
-  "version": "0.1.0-alpha.1",
+  "name": "@re-auth/reauth",
+  "version": "0.1.0-alpha.0",
   "type": "module",
   "main": "./dist/cjs/src/index.js",
   "module": "./dist/esm/src/index.js",
@@ -27,15 +27,10 @@
       "import": "./dist/esm/src/plugins/utils/index.js",
       "require": "./dist/cjs/src/plugins/utils/index.js"
     },
-    "./plugins/email-password": {
-      "types": "./dist/esm/src/plugins/email-password/email-password.plugin.d.ts",
-      "import": "./dist/esm/src/plugins/email-password/email-password.plugin.js",
-      "require": "./dist/cjs/src/plugins/email-password/email-password.plugin.js"
-    },
-    "./plugins/passwordless": {
-      "types": "./dist/esm/src/plugins/passwordless/passwordless.plugin.d.ts",
-      "import": "./dist/esm/src/plugins/passwordless/passwordless.plugin.js",
-      "require": "./dist/cjs/src/plugins/passwordless/passwordless.plugin.js"
+    "./plugins": {
+      "types": "./dist/esm/src/plugins/index.d.ts",
+      "import": "./dist/esm/src/plugins/index.js",
+      "require": "./dist/cjs/src/plugins/index.js"
     },
     "./services": {
       "types": "./dist/esm/src/services/index.d.ts",
@@ -51,11 +46,8 @@
       "plugins/utils": [
         "./dist/esm/src/plugins/utils/index.d.ts"
       ],
-      "plugins/email-password": [
-        "./dist/esm/src/plugins/email-password/email-password.plugin.d.ts"
-      ],
-      "plugins/passwordless": [
-        "./dist/esm/src/plugins/passwordless/passwordless.plugin.d.ts"
+      "plugins": [
+        "./dist/esm/src/plugins/index.d.ts"
       ],
       "services": [
         "./dist/esm/src/services/index.d.ts"
@@ -68,6 +60,13 @@
     "package.json",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SOG-web/reauth"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",

@@ -2,7 +2,7 @@
   "mode": "pre",
   "tag": "alpha",
   "initialVersions": {
-    "@reauth/reauth": "0.1.0-alpha.0"
+    "@re-auth/reauth": "0.1.0-alpha.0"
   },
   "changesets": []
 }

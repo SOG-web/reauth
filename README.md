@@ -1,13 +1,13 @@
-# Turborepo starter
+# Reauth
 
-This Turborepo starter is maintained by the Turborepo core team.
+Reauth is a authentication library for Node.js and the web.
 
 ## Using this example
 
 Run the following command:
 
 ```sh
-npx create-turbo@latest
+pnpm install
 ```
 
 ## What's inside?
@@ -37,7 +37,7 @@ This Turborepo has some additional tools already setup for you:
 To build all apps and packages, run the following command:
 
 ```
-cd my-turborepo
+cd reauth
 pnpm build
 ```
 
@@ -46,7 +46,7 @@ pnpm build
 To develop all apps and packages, run the following command:
 
 ```
-cd my-turborepo
+cd reauth
 pnpm dev
 ```
 
@@ -60,7 +60,7 @@ Turborepo can use a technique known as [Remote Caching](https://turborepo.com/do
 By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
 
 ```
-cd my-turborepo
+cd reauth
 npx turbo login
 ```
 
