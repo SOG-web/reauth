@@ -27,6 +27,18 @@ out/
 build
 dist
 
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+vite.config.*.timestamp*
+vitest.config.*.timestamp*
+.angular
+
+keys
+
 
 # Debug
 npm-debug.log*
@@ -36,3 +48,21 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+
+# Expo
+node_modules/
+.expo/
+.yarn/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+cache/
+
+db.sqlite

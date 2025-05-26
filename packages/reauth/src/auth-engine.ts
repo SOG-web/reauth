@@ -1,0 +1,486 @@
+import {
+  createContainer,
+  InjectionMode,
+  AwilixContainer,
+  asValue,
+} from 'awilix';
+import { createHookRegisterer, executeStep } from './plugins/utils';
+import type {
+  AuthInput,
+  AuthOutput,
+  AuthPlugin,
+  AuthToken,
+  EntityService,
+  HooksType,
+  MigrationConfig,
+  ReAuthCradle,
+  SessionService,
+  SensitiveFields,
+  Entity,
+  AuthHooks,
+} from './types';
+import { PluginNotFound, StepNotFound } from './types';
+
+export class ReAuthEngine {
+  private container: AwilixContainer<ReAuthCradle>;
+  private plugins: AuthPlugin[] = [];
+  private migrationConfig: MigrationConfig;
+  private sensitiveFields: SensitiveFields = {};
+  private authHooks: AuthHooks[] = [];
+
+  constructor(config: {
+    plugins: AuthPlugin[];
+    entity: EntityService;
+    session: SessionService;
+    sensitiveFields?: SensitiveFields;
+    authHooks?: AuthHooks[];
+  }) {
+    this.container = createContainer<ReAuthCradle>({
+      injectionMode: InjectionMode.CLASSIC,
+      strict: true,
+    });
+
+    this.sensitiveFields = config.sensitiveFields || {};
+    this.authHooks = config.authHooks || [];
+
+    // Register core services and sensitive fields handling
+    this.container.register({
+      entityService: asValue(config.entity),
+      sessionService: asValue(config.session),
+      sensitiveFields: asValue(this.sensitiveFields),
+      serializeEntity: asValue(this.serializeEntity.bind(this)),
+      reAuthEngine: asValue(this),
+    });
+
+    config.plugins.forEach((plugin) => this.registerPlugin(plugin));
+
+    this.migrationConfig = {
+      migrationName: 'reauth',
+      outputDir: 'migrations',
+      baseTables: [
+        {
+          tableName: 'entities',
+          columns: {
+            id: {
+              type: 'uuid',
+              primary: true,
+              nullable: false,
+              unique: true,
+              defaultValue: 'uuid',
+            },
+            role: {
+              type: 'string',
+              nullable: false,
+              defaultValue: 'user',
+            },
+          },
+          timestamps: true,
+        },
+        {
+          tableName: 'sessions',
+          columns: {
+            id: {
+              type: 'uuid',
+              primary: true,
+              nullable: false,
+              unique: true,
+              defaultValue: 'uuid',
+            },
+            entity_id: {
+              type: 'uuid',
+              nullable: false,
+            },
+            token: {
+              type: 'string',
+              unique: true,
+              nullable: false,
+            },
+            expires_at: {
+              type: 'timestamp',
+              nullable: true,
+            },
+          },
+          timestamps: true,
+        },
+      ],
+      plugins: config.plugins
+        .map((plugin) => plugin.migrationConfig)
+        .filter((config) => config !== undefined),
+    };
+  }
+
+  registerAuthHook(opt: {
+    pluginName: string;
+    type: HooksType;
+    fn: (
+      data: AuthInput | AuthOutput,
+      container: AwilixContainer<ReAuthCradle>,
+      error?: Error,
+    ) => Promise<AuthOutput | AuthInput | void>;
+    steps?: string[];
+    universal?: boolean;
+  }) {
+    this.authHooks.push({
+      pluginName: opt.pluginName,
+      steps: opt.steps || [],
+      type: opt.type,
+      fn: opt.fn,
+      universal: opt.universal,
+    });
+    return this;
+  }
+
+  getMirgrationCongfig(): MigrationConfig {
+    return this.migrationConfig;
+  }
+
+  /**
+   * Get a service from the DI container
+   * @param name The name of the service to retrieve
+   */
+  getService<T extends keyof ReAuthCradle>(
+    container: AwilixContainer<ReAuthCradle>,
+    serviceName: T,
+  ): ReAuthCradle[T] {
+    return container.cradle[serviceName];
+  }
+
+  /**
+   * Register an auth plugin
+   * @param auth The auth plugin to register
+   */
+  private registerPlugin(plugin: AuthPlugin) {
+    this.plugins.push(plugin);
+
+    // Register plugin's sensitive fields if defined
+    if (plugin.getSensitiveFields) {
+      const fields = plugin.getSensitiveFields();
+      if (fields && fields.length > 0) {
+        this.sensitiveFields[plugin.name] = fields;
+      }
+    }
+    plugin.initialize(this.container);
+    return this;
+  }
+
+  /**
+   * Serializes an entity by redacting sensitive fields
+   * @param entity The entity to serialize
+   * @returns A new object with sensitive fields redacted
+   */
+  private serializeEntity<T extends Entity>(entity: T): T {
+    if (!entity) return entity;
+
+    // Create a shallow copy of the entity
+    const serialized = { ...entity } as Record<string, any>;
+
+    // Get all sensitive fields from all plugins
+    const allSensitiveFields = Object.values(this.sensitiveFields).flat();
+
+    // Redact sensitive fields
+    allSensitiveFields.forEach((field) => {
+      if (field in serialized) {
+        serialized[field] = '[REDACTED]';
+      }
+    });
+
+    return serialized as T;
+  }
+
+  /**
+   * Get a plugin by name
+   * @param name The name of the plugin to retrieve
+   */
+  getPlugin(name: string) {
+    const plugin = this.plugins.find((p) => p.name === name);
+    if (!plugin) {
+      throw new PluginNotFound(name);
+    }
+    return plugin;
+  }
+
+  /**
+   * Get all registered plugins
+   */
+  getAllPlugins() {
+    return this.plugins;
+  }
+
+  /**
+   * Get the DI container
+   */
+  getContainer(): AwilixContainer<ReAuthCradle> {
+    return this.container;
+  }
+
+  executeStep(pluginName: string, stepName: string, input: AuthInput) {
+    const plugin = this.getPlugin(pluginName);
+    const step = plugin.steps.find((s) => s.name === stepName);
+    if (!step) {
+      throw new StepNotFound(stepName, pluginName);
+    }
+
+    if (plugin.runStep) return plugin.runStep(step.name, input, this.container);
+
+    return executeStep(stepName, input, {
+      pluginName,
+      step,
+      container: this.container,
+      config: plugin.config,
+    });
+  }
+
+  registerHook(
+    pluginName: string,
+    stepName: string,
+    type: HooksType,
+    fn: (
+      data: AuthInput | AuthOutput,
+      container: AwilixContainer<ReAuthCradle>,
+      error?: Error,
+    ) => Promise<AuthOutput | AuthInput | void>,
+  ) {
+    const plugin = this.getPlugin(pluginName);
+    const step = plugin.steps.find((s) => s.name === stepName);
+    if (!step) {
+      throw new StepNotFound(stepName, pluginName);
+    }
+
+    if (step.registerHook) {
+      step.registerHook(type, fn);
+
+      return this;
+    }
+
+    if (!step.hooks) step.hooks = {};
+
+    const register = createHookRegisterer(step.hooks);
+    register(type, fn);
+    return this;
+  }
+
+  getStepInputs(pluginName: string, stepName: string) {
+    const plugin = this.getPlugin(pluginName);
+    const step = plugin.steps.find((s) => s.name === stepName);
+    if (!step) {
+      throw new StepNotFound(stepName, pluginName);
+    }
+    return step.inputs;
+  }
+
+  /**
+   * Create a new session for an entity
+   * This method runs through session creation hooks to allow plugins to perform additional checks
+   * @param entityId The entity ID to create a session for
+   * @returns Promise<{ token: AuthToken, success: boolean, error?: string }>
+   */
+  async createSession(entity: Entity): Promise<{
+    token: AuthToken;
+    success: boolean;
+    message?: string;
+    error?: Error;
+  }> {
+    try {
+      // Create input for session creation hooks
+      const input: AuthInput = {
+        entity,
+      };
+
+      // Run session creation hooks (before)
+      const processedInput = await this.executeSessionHooks('before', input);
+
+      if (!processedInput.entity) {
+        return {
+          token: null,
+          success: false,
+          message: 'Entity not found',
+          error: new Error('Entity not found'),
+        };
+      }
+
+      // Create the session
+      const sessionService = this.container.cradle.sessionService;
+      const token = await sessionService.createSession(entity.id);
+
+      // Create output for session creation hooks
+      const output: AuthOutput = {
+        entity,
+        token,
+        success: true,
+        message: 'Session created successfully',
+        status: 'created',
+      };
+
+      // Run session creation hooks (after)
+      const processedOutput = await this.executeSessionHooks('after', output);
+
+      return {
+        token: processedOutput.token!,
+        success: true,
+        message: 'Session created successfully',
+      };
+    } catch (error: any) {
+      // Run session creation hooks (onError)
+      await this.executeSessionHooks('onError', { entity } as AuthInput, error);
+
+      return {
+        token: null,
+        success: false,
+        message: error.message,
+        error: error,
+      };
+    }
+  }
+
+  /**
+   * Validate a session token and return the associated entity
+   * This method runs through session validation hooks to allow plugins to perform additional checks
+   * @param token The session token to validate
+   * @returns Promise<{entity: Entity | null, token: AuthToken, valid: boolean}>
+   */
+  async checkSession(token: string): Promise<{
+    entity: Entity | null;
+    token: AuthToken;
+    valid: boolean;
+    message?: string;
+    error?: Error;
+  }> {
+    try {
+      // Verify the session with the session service
+      const sessionService = this.container.cradle.sessionService;
+      const result = await sessionService.verifySession(token);
+
+      if (!result.entity || !result.token) {
+        return {
+          entity: null,
+          token: null,
+          valid: false,
+          message: 'Invalid or expired session',
+          error: new Error('Invalid or expired session'),
+        };
+      }
+
+      // Create input for session validation hooks
+      const input: AuthInput = {
+        entity: result.entity,
+        token: result.token,
+      };
+
+      // Run session validation hooks (before)
+      const processedInput = await this.executeSessionHooks('before', input);
+
+      // Create output for session validation hooks
+      const output: AuthOutput = {
+        entity: processedInput.entity!,
+        token: processedInput.token!,
+        success: true,
+        message: 'Session is valid',
+        status: 'valid',
+      };
+
+      // Run session validation hooks (after)
+      const processedOutput = await this.executeSessionHooks('after', output);
+
+      return {
+        entity: processedOutput.entity!,
+        token: processedOutput.token!,
+        valid: processedOutput.success,
+        message: processedOutput.success ? undefined : processedOutput.message,
+        error: processedOutput.success ? undefined : processedOutput.error,
+      };
+    } catch (error: any) {
+      console.log('Error checking session:', error);
+      // Run session validation hooks (onError)
+      await this.executeSessionHooks(
+        'onError',
+        { token } as AuthInput,
+        error as Error,
+      );
+
+      return {
+        entity: null,
+        token: null,
+        valid: false,
+        message: error.message,
+        error: error,
+      };
+    }
+  }
+
+  /**
+   * Execute session-related hooks
+   * @private
+   */
+  private async executeSessionHooks(
+    type: HooksType,
+    data: AuthInput | AuthOutput,
+    error?: Error,
+  ): Promise<AuthInput | AuthOutput> {
+    // Find session-related hooks from registered auth hooks
+    const sessionHooks = this.authHooks.filter(
+      (hook) =>
+        hook.type === type &&
+        (hook.universal || hook.steps.includes('session')),
+    );
+
+    if (sessionHooks.length === 0) {
+      return data;
+    }
+
+    let processedData = data;
+
+    if (type === 'onError' && error) {
+      // Execute error hooks in parallel
+      await Promise.all(
+        sessionHooks.map((hook) =>
+          hook.fn(processedData, this.container, error),
+        ),
+      );
+      return processedData;
+    }
+
+    // Execute before/after hooks in sequence
+    for (const hook of sessionHooks) {
+      const result = await hook.fn(processedData, this.container);
+      if (result) {
+        processedData = result as AuthInput | AuthOutput;
+      }
+    }
+
+    return processedData;
+  }
+
+  /**
+   * Register a session hook that will be called during session creation and validation
+   * @param type The type of hook (before, after, onError)
+   * @param fn The hook function
+   * @param universal Whether this hook should run for all session operations
+   */
+  registerSessionHook(
+    type: HooksType,
+    fn: (
+      data: AuthInput | AuthOutput,
+      container: AwilixContainer<ReAuthCradle>,
+      error?: Error,
+    ) => Promise<AuthOutput | AuthInput | void>,
+  ) {
+    this.authHooks.push({
+      pluginName: 'session',
+      steps: ['session'],
+      type,
+      fn,
+      universal: true,
+    });
+    return this;
+  }
+}
+
+export const createReAuthEngine = (config: {
+  plugins: AuthPlugin[];
+  entity: EntityService;
+  session: SessionService;
+  sensitiveFields?: SensitiveFields;
+  authHooks?: AuthHooks[];
+}): ReAuthEngine => {
+  return new ReAuthEngine(config);
+};
