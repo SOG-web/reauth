@@ -1,9 +1,9 @@
-import { createReAuthEngine } from '@the-forgebase/reauth';
-import emailPasswordAuth from '@the-forgebase/reauth/plugins/email-password';
+import { createReAuthEngine } from '@re-auth/reauth';
+import { emailPasswordAuth } from '@re-auth/reauth/plugins';
 import {
   KnexEntityService,
   KnexSessionService,
-} from '@the-forgebase/reauth/services';
+} from '@re-auth/reauth/services';
 import { db } from '..';
 
 const entity = new KnexEntityService(db, 'entities');

@@ -5,7 +5,7 @@ import type {
   AuthPlugin,
   AuthToken,
   Entity,
-} from '@the-forgebase/reauth';
+} from '@re-auth/reauth';
 import { showRoutes } from 'hono/dev';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import knex from 'knex';

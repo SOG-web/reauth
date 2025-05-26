@@ -1,4 +1,4 @@
-import { ReAuthEngine } from '@the-forgebase/reauth';
+import { ReAuthEngine } from '@re-auth/reauth';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 

@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.2",
-    "@reauth/reauth": "workspace:*",
+    "@re-auth/reauth": "workspace:*",
     "better-sqlite3": "^11.10.0",
     "hono": "^4.7.10",
     "knex": "^3.1.0"
