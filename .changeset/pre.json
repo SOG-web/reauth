@@ -2,7 +2,13 @@
   "mode": "pre",
   "tag": "alpha",
   "initialVersions": {
-    "@re-auth/reauth": "0.1.0-alpha.0"
+    "@re-auth/reauth": "0.1.0-alpha.0",
+    "web": "0.1.0",
+    "@repo/eslint-config": "0.0.0",
+    "@repo/typescript-config": "0.0.0",
+    "@repo/ui": "0.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "nice-poets-jog"
+  ]
 }

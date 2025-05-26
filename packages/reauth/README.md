@@ -1,44 +1,194 @@
-# 🔐 Authentication Plugin Specification
+# 🔐 ReAuth - Modular Authentication System
 
-This document defines the structure, behavior, and lifecycle of authentication plugins used in the ForgeBase authentication system. It supports both class-based and object-based plugins, with strict rules for context and lifecycle behavior.
+ReAuth is a flexible, plugin-based authentication system for Node.js applications. It provides a robust framework for handling various authentication methods while maintaining a clean and extensible architecture.
 
----
+## 🚀 Features
 
-## 📦 Plugin Formats
+- **Plugin-based Architecture**: Easily extendable with custom authentication methods
+- **Multiple Authentication Flows**: Supports email/password, passwordless, and more
+- **TypeScript First**: Built with TypeScript for enhanced developer experience
+- **Dependency Injection**: Powered by Awilix for clean dependency management
+- **Session Management**: Built-in session handling with token support
+- **Extensible**: Create custom authentication plugins for any use case
 
-### ✅ 1. Object-Based Plugin (No `this`)
+## 📦 Installation
 
-- Must be a plain object.
-- Cannot rely on `this` — must capture external context via closure or dependency injection.
-- Useful for simple stateless or semi-stateful plugin definitions.
+```bash
+pnpm add @re-auth/reauth
+# or
+yarn add @re-auth/reauth
+# or
+npm install @re-auth/reauth
+```
 
-```ts
-const emailPasswordPlugin: AuthPlugin = {
-  name: 'email-password',
+## 🛠️ Getting Started
+
+### Basic Setup
+
+```typescript
+import { ReAuthEngine, emailPasswordAuth } from '@re-auth/reauth';
+import { KnexEntityService, KnexSessionService } from './services';
+
+// Initialize your entity and session services
+const entityService = new KnexEntityService(knex);
+const sessionService = new KnexSessionService(knex);
+
+// Create an email/password auth plugin
+const emailPassword = emailPasswordAuth({
+  verifyEmail: true,
+  loginOnRegister: true,
+  async sendCode(entity, code, email, type) {
+    // Implement your email sending logic here
+    console.log(`Sending ${type} code ${code} to ${email}`);
+  }
+});
+
+// Initialize the auth engine
+const auth = new ReAuthEngine({
+  plugins: [emailPassword],
+  entity: entityService,
+  session: sessionService,
+  sensitiveFields: {
+    password: true,
+    token: true
+  }
+});
+```
+
+## 🔌 Built-in Plugins
+
+### Email/Password Authentication
+
+```typescript
+import { emailPasswordAuth } from '@re-auth/reauth';
+
+const emailPassword = emailPasswordAuth({
+  verifyEmail: true, // Require email verification
+  loginOnRegister: true, // Automatically login after registration
+  codeType: 'numeric', // Code type for verification/reset ('numeric' | 'alphanumeric' | 'alphabet')
+  codeLenght: 6, // Length of the verification code
+  resetPasswordCodeExpiresIn: 30 * 60 * 1000, // 30 minutes
+  
+  // Required for email verification and password reset
+  async sendCode(entity, code, email, type) {
+    // Send email with the code
+    console.log(`Sending ${type} code ${code} to ${email}`);
+  },
+  
+  // Optional: Custom code generator
+  async generateCode(email, entity) {
+    return Math.floor(100000 + Math.random() * 900000); // 6-digit code
+  }
+});
+```
+
+## 🧩 Creating Custom Plugins
+
+ReAuth supports two types of plugins:
+
+### 1. Object-Based Plugin
+
+```typescript
+import { AuthPlugin } from '@re-auth/reauth';
+
+const myPlugin: AuthPlugin = {
+  name: 'my-auth-plugin',
   version: '1.0.0',
-  steps: [...],
+  
+  steps: [
+    {
+      name: 'authenticate',
+      description: 'Custom authentication step',
+      async run(input, { container }) {
+        // Your authentication logic here
+        return {
+          success: true,
+          message: 'Authenticated successfully',
+          status: 'authenticated'
+        };
+      },
+      inputs: ['username', 'password']
+    }
+  ],
+  
   initialize(container) {
-    // Use closure to store references if needed
+    // Initialize your plugin here
+  },
+  
+  getSensitiveFields() {
+    return ['password', 'token'];
   }
 };
 ```
 
----
+### 2. Class-Based Plugin
 
-### ✅ 2. Class-Based Plugin
+```typescript
+import { AuthPlugin, AuthStep } from '@re-auth/reauth';
 
-- Must extend from a base plugin interface or class.
-- Can safely use `this` for accessing services or shared state.
-- Recommended for more complex plugins.
-
-```ts
-class EmailPasswordPlugin implements AuthPlugin {
-  name = 'email-password';
+export class MyAuthPlugin implements AuthPlugin {
+  name = 'my-auth-plugin';
   version = '1.0.0';
-
-  constructor(private container: AwilixContainer<Cradle>) {}
-
+  steps: AuthStep[] = [];
+  
+  constructor(private container: any) {
+    this.steps = [
+      {
+        name: 'authenticate',
+        description: 'Custom authentication step',
+        run: this.authenticate.bind(this),
+        inputs: ['username', 'password']
+      }
+    ];
+  }
+  
+  private async authenticate(input: any) {
+    // Your authentication logic here
+    return {
+      success: true,
+      message: 'Authenticated successfully',
+      status: 'authenticated'
+    };
+  }
+  
   async initialize() {
+    // Initialize your plugin here
+  }
+  
+  getSensitiveFields() {
+    return ['password', 'token'];
+  }
+}
+```
+
+## 📚 API Reference
+
+### ReAuthEngine
+
+The main authentication engine that manages plugins and authentication flows.
+
+```typescript
+const auth = new ReAuthEngine({
+  plugins: AuthPlugin[],      // Array of authentication plugins
+  entity: EntityService,     // Entity service implementation
+  session: SessionService,   // Session service implementation
+  sensitiveFields?: {        // Fields to redact in logs
+    [key: string]: boolean;
+  };
+  authHooks?: AuthHooks[];   // Global authentication hooks
+});
+```
+
+### Built-in Services
+
+- `EntityService`: Manages user entities
+- `SessionService`: Handles session management
+- `KnexEntityService`: Knex-based entity service
+- `KnexSessionService`: Knex-based session service
+
+## 📝 License
+
+MIT
     this.emailService = this.container.resolve('emailService');
   }
 
