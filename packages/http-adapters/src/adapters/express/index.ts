@@ -145,7 +145,7 @@ export class ExpressAuthAdapter {
         return this.handleStepResponse(req, res, result, httpConfig);
       } catch (error: any) {
         console.error(`Error in ${pluginName}.${stepName}:`, error);
-        return this.errorResponse(res, error);
+        this.errorResponse(res, error);
       }
     };
   }
@@ -236,14 +236,14 @@ export class ExpressAuthAdapter {
     console.error('Auth error:', error);
 
     if (error.name === 'InputValidationError') {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         error: 'Validation Error',
         message: error.message,
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal Server Error',
       message:
@@ -289,11 +289,11 @@ export class ExpressAuthAdapter {
       const entity = req.user;
 
       if (!entity) {
-        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
 
       if (options.roles && !options.roles.includes(entity!.role)) {
-        res.status(403).json({ success: false, error: 'Forbidden' });
+        return res.status(403).json({ success: false, error: 'Forbidden' });
       }
 
       if (options.authorize) {

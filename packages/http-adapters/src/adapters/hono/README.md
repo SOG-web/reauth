@@ -13,14 +13,16 @@ This package provides seamless integration between ReAuth and Hono.js applicatio
 ## Installation
 
 ```bash
-pnpm add @reauth/http-adapters hono @re-auth/reauth
+pnpm add @re-auth/http-adapters hono @re-auth/reauth
 ```
 
 ## Basic Usage
 
 ```typescript
 import { Hono } from 'hono';
-import { createHonoAuth } from '@reauth/http-adapters/hono';
+// Start server (example with Node.js)
+import { serve } from '@hono/node-server';
+import { createHonoAuth } from '@re-auth/http-adapters/hono';
 import { reauth } from '@re-auth/reauth';
 
 // Initialize ReAuth
@@ -55,15 +57,19 @@ app.get('/profile', (c) => {
   return c.json({ user });
 });
 
-// Start server
-app.fire();
+serve({
+  fetch: app.fetch,
+  port: 3000,
+});
 ```
 
 ## Usage with main app
 
 ```typescript
 import { Hono } from 'hono';
-import { createHonoAuth } from '@reauth/http-adapters/hono';
+// Start server (example with Node.js)
+import { serve } from '@hono/node-server';
+import { createHonoAuth } from '@re-auth/http-adapters/hono';
 import { reauth } from '@re-auth/reauth';
 
 // Initialize ReAuth
@@ -107,34 +113,67 @@ app.get(
 );
 
 // Start server
-app.fire();
+
+serve({
+  fetch: app.fetch,
+  port: 3000,
+});
 ```
 
 ## API Reference
 
-### `createHonoAuth(engine: ReAuthEngine, config?: HonoAuthConfig)`
+### `createHonoAuth(engine: ReAuthEngine, config?: HonoAuthConfig): Hono`
 
-Creates a Hono router with authentication routes.
+Creates a new Hono application with authentication routes.
 
 #### Parameters
 
-- `engine`: Instance of ReAuthEngine
-- `config`: Optional configuration object
-  - `basePath`: Base path for auth routes (default: '/auth')
-  - `cookieName`: Name of the auth cookie (default: 'auth_token')
-  - `cookieOptions`: Cookie options (default: { httpOnly: true, secure: true in production, sameSite: 'lax' })
+- `engine`: An instance of ReAuthEngine
+- `config`: Optional configuration object (see below)
 
-### Context Extensions
+#### Returns
 
-The adapter extends Hono's context with:
+A Hono application instance with authentication routes mounted under the configured base path.
 
-- `c.get('entity')`: The authenticated user entity
-- `c.get('token')`: The authentication token
+### `protect(options?: ProtectOptions)`
+
+Middleware to protect routes. Can be used to require authentication and optionally check for specific roles.
+
+#### Parameters
+
+- `options` (object, optional):
+  - `roles` (string[]): Array of allowed role names
+  - `authorize` (function): Custom authorization function that receives the entity and context
+
+#### Returns
+
+A Hono middleware function that enforces the protection rules.
+
+### `HonoAuthConfig`
+
+Configuration options for the Hono adapter:
+
+- `basePath` (string, default: `'/auth'`): Base path for all auth routes
+- `cookieName` (string, default: `'auth_token'`): Name of the auth cookie
+- `cookieOptions` (object): Cookie options
+  - `httpOnly` (boolean, default: `true`)
+  - `secure` (boolean, default: `process.env.NODE_ENV === 'production'`)
+  - `sameSite` (string, default: `'lax'`)
+  - `maxAge` (number, default: 604800 - 7 days in seconds)
+  - `domain` (string, optional)
+  - `path` (string, optional)
+
+### Context Variables
+
+The adapter adds the following variables to the Hono context:
+
+- `c.get('entity')`: The authenticated user entity (or null if not authenticated)
+- `c.get('token')`: The authentication token (or null if not authenticated)
 - `c.get('authenticated')`: Boolean indicating if the request is authenticated
 
 ## Protected Routes
 
-You can protect routes using the context extensions:
+You can protect routes using the `protect` middleware:
 
 ```typescript
 // Protected route example

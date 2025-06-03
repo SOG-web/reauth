@@ -16,7 +16,7 @@ const plugin: AuthPlugin<OrgConfig> = {
   dependsOn: organizationPluginDependsOn,
   async initialize(container: AwilixContainer<ReAuthCradle>) {
     if (!this.config.orgService) {
-      throw new Error('adminEntity service is missing');
+      throw new Error('orgService is missing');
     }
 
     const dpn = checkDependsOn(
@@ -37,7 +37,8 @@ const plugin: AuthPlugin<OrgConfig> = {
       'after',
       async (data, container) => {
         const { token, ...rest } = data as AuthOutput;
-        const entityId = await extractEntityId(rest, container);
+        // Pass token along so the helper has full context
+        const entityId = await extractEntityId({ token, ...rest }, container);
 
         if (!entityId) {
           throw new Error(
@@ -45,11 +46,22 @@ const plugin: AuthPlugin<OrgConfig> = {
           );
         }
 
-        // check if the entity is on org table
+        //TODO: this still full blown proper checking
+        //FIX: Do not use this plugin for now
+        const org = await container.cradle.orgService.findEntity(
+          entityId,
+          'entity_id',
+        );
+
+        if (!org) {
+          throw new Error('entity not found');
+        }
 
         return data;
       },
     );
+
+    throw new Error('organization plugin is not ready for production');
   },
   migrationConfig: {
     pluginName: 'organization',
@@ -113,9 +125,20 @@ declare module '../../types' {
   }
 }
 
-export type OrgService = {
+export type OrgUser = {
   id: string;
   entity_id: string;
   permissions?: string[];
   roles?: string[];
+};
+
+export type OrgService = {
+  findEntity(id: string, filed: string): Promise<OrgUser | null>;
+  createEntity(entity: Partial<OrgUser>): Promise<OrgUser>;
+  updateEntity(
+    id: string,
+    filed: string,
+    entity: Partial<OrgUser>,
+  ): Promise<OrgUser>;
+  deleteEntity(id: string, filed: string): Promise<void>;
 };
