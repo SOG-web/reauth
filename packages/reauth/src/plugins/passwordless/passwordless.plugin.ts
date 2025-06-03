@@ -8,7 +8,7 @@ const emailSchema = type('string.email');
 const phoneSchema = type('string.regex|/^\+?[1-9]\d{1,14}$/');
 const token = type('string');
 
-const plugin: AuthPlugin<AuthStepConfig> = {
+const plugin: AuthPlugin<PasswordLessConfig> = {
   name: 'passwordless',
   getSensitiveFields: () => [
     'magiclink_code',
@@ -122,8 +122,10 @@ const plugin: AuthPlugin<AuthStepConfig> = {
           return { success: false, message: 'Token expired', status: 'ic' };
         }
 
-        const newToken =
-          await container.cradle.reAuthEngine.createSession(entity);
+        const newToken = await container.cradle.reAuthEngine.createSession(
+          entity,
+          this.name,
+        );
 
         if (!newToken.success) {
           return {
@@ -258,8 +260,10 @@ const plugin: AuthPlugin<AuthStepConfig> = {
           return { success: false, message: 'Token expired', status: 'ic' };
         }
 
-        const newToken =
-          await container.cradle.reAuthEngine.createSession(entity);
+        const newToken = await container.cradle.reAuthEngine.createSession(
+          entity,
+          this.name,
+        );
 
         if (!newToken.success) {
           return {
@@ -293,8 +297,32 @@ const plugin: AuthPlugin<AuthStepConfig> = {
   initialize: async function (container) {
     this.container = container;
   },
-  config: {
-    secret: 'secrete',
+  config: {},
+  migrationConfig: {
+    pluginName: 'passwordless',
+    extendTables: [
+      {
+        tableName: 'entities',
+        columns: {
+          magiclink_code: { type: 'string', nullable: true },
+          magiclink_code_expires_at: { type: 'timestamp', nullable: true },
+          otp_code: { type: 'string', nullable: true },
+          otp_code_expires_at: { type: 'timestamp', nullable: true },
+        },
+      },
+    ],
+  },
+};
+
+export default function passwordlessAuth(
+  config?: PasswordLessConfig,
+  overrideStep?: {
+    name: string;
+    override: Partial<AuthStep<PasswordLessConfig>>;
+  }[],
+): AuthPlugin<PasswordLessConfig> {
+  return createAuthPlugin(config || {}, plugin, overrideStep, {
+    secret: 'secret',
     checkPhoneVerification: false,
     checkEmailVerification: false,
     expireTime: '10m',
@@ -320,36 +348,12 @@ const plugin: AuthPlugin<AuthStepConfig> = {
 
       return result.emailorphone;
     },
-  },
-  migrationConfig: {
-    pluginName: 'passwordless',
-    extendTables: [
-      {
-        tableName: 'entities',
-        columns: {
-          magiclink_code: { type: 'string', nullable: true },
-          magiclink_code_expires_at: { type: 'timestamp', nullable: true },
-          otp_code: { type: 'string', nullable: true },
-          otp_code_expires_at: { type: 'timestamp', nullable: true },
-        },
-      },
-    ],
-  },
-};
-
-export default function passwordlessAuth(
-  config?: Partial<AuthPlugin<AuthStepConfig>>,
-  overrideStep?: {
-    name: string;
-    override: Partial<AuthStep<AuthStepConfig>>;
-  }[],
-): AuthPlugin {
-  return createAuthPlugin(config || {}, plugin, overrideStep);
+  });
 }
 
-interface AuthStepConfig {
+interface PasswordLessConfig {
   /**
-   * @default 'secrete'
+   * @default 'secret'
    */
   secret: string;
   /**

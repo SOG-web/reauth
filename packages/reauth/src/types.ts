@@ -1,5 +1,4 @@
 import { AwilixContainer } from 'awilix';
-import { Knex } from 'knex';
 import { ReAuthEngine } from './auth-engine';
 
 export interface ValidationResult {
@@ -17,15 +16,17 @@ export type ValidationSchema = Record<
   ValidationRule | ValidationRule[]
 >;
 
-type StepInputHook<T> = (
+export type StepInputHook<T> = (
   input: T,
   container: AwilixContainer<ReAuthCradle>,
 ) => T | Promise<T>;
-type StepOutputHook<T> = (
+
+export type StepOutputHook<T> = (
   output: T,
   container: AwilixContainer<ReAuthCradle>,
 ) => T | Promise<T>;
-type StepErrorHook = (
+
+export type StepErrorHook = (
   error: Error,
   input: AuthInput,
   container: AwilixContainer<ReAuthCradle>,
@@ -37,6 +38,23 @@ export interface AuthStepHooks {
   onError?: StepErrorHook[];
 }
 
+export type RootStepInputHook = (
+  input: AuthInput,
+  container: AwilixContainer<ReAuthCradle>,
+  step: AuthStep<AuthInput>,
+) => AuthInput | Promise<AuthInput>;
+
+export type RootStepOutputHook = (
+  output: AuthOutput,
+  container: AwilixContainer<ReAuthCradle>,
+  step: AuthStep<AuthOutput>,
+) => AuthOutput | Promise<AuthOutput>;
+
+export interface RootStepHooks {
+  before?: RootStepInputHook[];
+  after?: RootStepOutputHook[];
+}
+
 export interface AuthHooks {
   type: HooksType;
   fn: (
@@ -46,6 +64,7 @@ export interface AuthHooks {
   ) => Promise<AuthOutput | AuthInput | void>;
   pluginName: string;
   steps: string[];
+  session?: boolean;
   universal?: boolean;
 }
 
@@ -109,13 +128,18 @@ export interface AuthPlugin<T = any> {
 
   migrationConfig?: PluginMigrationConfig;
 
-  config: T;
+  config: Partial<T>;
+
+  dependsOn?: string[];
 
   runStep?(
     step: string,
     input: AuthInput,
     container: AwilixContainer<ReAuthCradle>,
   ): Promise<AuthOutput>;
+
+  //TODO: fix the implementation
+  rootHooks?: RootStepHooks;
 }
 
 export type AuthOutput = {
@@ -130,13 +154,13 @@ export type AuthOutput = {
 export interface BaseReAuthCradle {
   entityService: EntityService;
   sessionService: SessionService;
-  knex: Knex;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface ReAuthCradleExtension {}
 
 export interface ReAuthCradle extends BaseReAuthCradle, ReAuthCradleExtension {
+  knex: any;
   sensitiveFields: SensitiveFields;
   serializeEntity: <T extends Entity>(entity: T) => T;
   reAuthEngine: ReAuthEngine;

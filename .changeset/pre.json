@@ -9,6 +9,7 @@
     "@repo/ui": "0.0.0"
   },
   "changesets": [
+    "floppy-coins-boil",
     "nice-poets-jog",
     "public-worlds-tan"
   ]

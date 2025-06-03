@@ -20,7 +20,7 @@ const loginValidation = {
   ),
 };
 
-const plugin: AuthPlugin<AuthStepConfig> = {
+const plugin: AuthPlugin<PhonePasswordConfig> = {
   name: 'phone-password',
   getSensitiveFields: () => [
     'phone_verification_code_expires_at',
@@ -69,7 +69,10 @@ const plugin: AuthPlugin<AuthStepConfig> = {
           return { success: false, message: 'Invalid password', status: 'ip' };
         }
 
-        const token = await container.cradle.reAuthEngine.createSession(entity);
+        const token = await container.cradle.reAuthEngine.createSession(
+          entity,
+          this.name,
+        );
 
         if (!token.success) {
           return {
@@ -162,7 +165,7 @@ const plugin: AuthPlugin<AuthStepConfig> = {
         }
 
         const token = config.loginOnRegister
-          ? await container.cradle.reAuthEngine.createSession(entity)
+          ? await container.cradle.reAuthEngine.createSession(entity, this.name)
           : undefined;
 
         if (token && !token.success) {
@@ -233,7 +236,10 @@ const plugin: AuthPlugin<AuthStepConfig> = {
           },
         );
 
-        const token = await container.cradle.reAuthEngine.createSession(entity);
+        const token = await container.cradle.reAuthEngine.createSession(
+          entity,
+          this.name,
+        );
 
         if (!token.success) {
           return {
@@ -367,7 +373,27 @@ const plugin: AuthPlugin<AuthStepConfig> = {
       },
     ],
   },
-  config: {
+  config: {},
+};
+
+/**
+ * Phone password authentication plugin
+ * @param config Configuration for the phone password plugin
+ * @param overrideStep Optional array of step overrides
+ * @throws {Error} If required configuration is missing
+ */
+export default function phonePasswordAuth(
+  config: PhonePasswordConfig,
+  overrideStep?: {
+    name: string;
+    override: Partial<AuthStep<PhonePasswordConfig>>;
+  }[],
+): AuthPlugin<PhonePasswordConfig> {
+  if (!config.sendCode) {
+    throw new Error('sendCode function is required for phone-password plugin');
+  }
+
+  return createAuthPlugin(config, plugin, overrideStep, {
     verifyPhone: false,
     loginOnRegister: true,
     expireTime: '10m',
@@ -408,20 +434,10 @@ const plugin: AuthPlugin<AuthStepConfig> = {
         .map(() => String.fromCharCode(48 + Math.floor(Math.random() * 10)))
         .join('');
     },
-  },
-};
-
-export default function phonePasswordAuth(
-  config?: Partial<AuthPlugin<AuthStepConfig>>,
-  overrideStep?: {
-    name: string;
-    override: Partial<AuthStep<AuthStepConfig>>;
-  }[],
-): AuthPlugin {
-  return createAuthPlugin(config || {}, plugin, overrideStep);
+  });
 }
 
-export interface AuthStepConfig {
+export interface PhonePasswordConfig {
   /**
    * @default false
    */
@@ -456,12 +472,17 @@ export interface AuthStepConfig {
    */
   generateCode?: (entity: Entity) => string;
   /**
+   * Function to send verification code to the user's phone
    * @example
    * ```ts
-   * sendCode: (entity: Entity, code: string, phone: string) => Promise<void>;
+   * sendCode: async (entity, code, phone) => {
+   *   // Implement your SMS sending logic here
+   *   await sendSms(phone, `Your verification code is: ${code}`);
+   * }
    * ```
+   * @throws {Error} If not provided - this is a required configuration
    */
-  sendCode?: (entity: Entity, code: string, phone: string) => Promise<void>;
+  sendCode: (entity: Entity, code: string, phone: string) => Promise<void>;
 }
 
 declare module '../../types' {

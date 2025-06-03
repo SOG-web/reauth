@@ -118,6 +118,7 @@ export class ReAuthEngine {
       error?: Error,
     ) => Promise<AuthOutput | AuthInput | void>;
     steps?: string[];
+    session?: boolean;
     universal?: boolean;
   }) {
     this.authHooks.push({
@@ -125,7 +126,8 @@ export class ReAuthEngine {
       steps: opt.steps || [],
       type: opt.type,
       fn: opt.fn,
-      universal: opt.universal,
+      session: opt.session || false,
+      universal: opt.universal || false,
     });
     return this;
   }
@@ -213,21 +215,49 @@ export class ReAuthEngine {
     return this.container;
   }
 
-  executeStep(pluginName: string, stepName: string, input: AuthInput) {
-    const plugin = this.getPlugin(pluginName);
-    const step = plugin.steps.find((s) => s.name === stepName);
-    if (!step) {
-      throw new StepNotFound(stepName, pluginName);
+  async executeStep(pluginName: string, stepName: string, input: AuthInput) {
+    try {
+      const plugin = this.getPlugin(pluginName);
+      const step = plugin.steps.find((s) => s.name === stepName);
+      if (!step) {
+        throw new StepNotFound(stepName, pluginName);
+      }
+
+      const processedInput = await this.executeAuthHooks(
+        'before',
+        input,
+        stepName,
+        pluginName,
+      );
+      input = processedInput;
+
+      if (plugin.runStep)
+        return plugin.runStep(step.name, input, this.container);
+
+      const output = await executeStep(stepName, input, {
+        pluginName,
+        step,
+        container: this.container,
+        config: plugin.config,
+      });
+
+      const processedOutput = await this.executeAuthHooks(
+        'after',
+        output,
+        stepName,
+        pluginName,
+      );
+      return processedOutput as AuthOutput;
+    } catch (error: any) {
+      await this.executeAuthHooks(
+        'onError',
+        input,
+        stepName,
+        pluginName,
+        error,
+      );
+      throw error;
     }
-
-    if (plugin.runStep) return plugin.runStep(step.name, input, this.container);
-
-    return executeStep(stepName, input, {
-      pluginName,
-      step,
-      container: this.container,
-      config: plugin.config,
-    });
   }
 
   registerHook(
@@ -274,7 +304,10 @@ export class ReAuthEngine {
    * @param entityId The entity ID to create a session for
    * @returns Promise<{ token: AuthToken, success: boolean, error?: string }>
    */
-  async createSession(entity: Entity): Promise<{
+  async createSession(
+    entity: Entity,
+    stepName: string,
+  ): Promise<{
     token: AuthToken;
     success: boolean;
     message?: string;
@@ -287,7 +320,11 @@ export class ReAuthEngine {
       };
 
       // Run session creation hooks (before)
-      const processedInput = await this.executeSessionHooks('before', input);
+      const processedInput = await this.executeSessionHooks(
+        'before',
+        input,
+        stepName,
+      );
 
       if (!processedInput.entity) {
         return {
@@ -312,16 +349,26 @@ export class ReAuthEngine {
       };
 
       // Run session creation hooks (after)
-      const processedOutput = await this.executeSessionHooks('after', output);
+      const processedOutput = await this.executeSessionHooks(
+        'after',
+        output,
+        stepName,
+      );
 
       return {
         token: processedOutput.token!,
-        success: true,
-        message: 'Session created successfully',
+        success: processedOutput.success ?? true,
+        message: processedOutput.message ?? 'Session created successfully',
+        error: processedOutput.error,
       };
     } catch (error: any) {
       // Run session creation hooks (onError)
-      await this.executeSessionHooks('onError', { entity } as AuthInput, error);
+      await this.executeSessionHooks(
+        'onError',
+        { entity } as AuthInput,
+        stepName,
+        error,
+      );
 
       return {
         token: null,
@@ -367,7 +414,11 @@ export class ReAuthEngine {
       };
 
       // Run session validation hooks (before)
-      const processedInput = await this.executeSessionHooks('before', input);
+      const processedInput = await this.executeSessionHooks(
+        'before',
+        input,
+        '',
+      );
 
       // Create output for session validation hooks
       const output: AuthOutput = {
@@ -379,7 +430,11 @@ export class ReAuthEngine {
       };
 
       // Run session validation hooks (after)
-      const processedOutput = await this.executeSessionHooks('after', output);
+      const processedOutput = await this.executeSessionHooks(
+        'after',
+        output,
+        '',
+      );
 
       return {
         entity: processedOutput.entity!,
@@ -394,7 +449,8 @@ export class ReAuthEngine {
       await this.executeSessionHooks(
         'onError',
         { token } as AuthInput,
-        error as Error,
+        '',
+        error,
       );
 
       return {
@@ -414,13 +470,15 @@ export class ReAuthEngine {
   private async executeSessionHooks(
     type: HooksType,
     data: AuthInput | AuthOutput,
+    stepName: string,
     error?: Error,
   ): Promise<AuthInput | AuthOutput> {
     // Find session-related hooks from registered auth hooks
     const sessionHooks = this.authHooks.filter(
       (hook) =>
         hook.type === type &&
-        (hook.universal || hook.steps.includes('session')),
+        hook.session &&
+        (hook.steps.includes(stepName) || hook.universal),
     );
 
     if (sessionHooks.length === 0) {
@@ -463,15 +521,67 @@ export class ReAuthEngine {
       container: AwilixContainer<ReAuthCradle>,
       error?: Error,
     ) => Promise<AuthOutput | AuthInput | void>,
+    universal?: boolean,
   ) {
     this.authHooks.push({
       pluginName: 'session',
       steps: ['session'],
       type,
       fn,
-      universal: true,
+      session: true,
+      universal,
     });
     return this;
+  }
+
+  /**
+   * Execute auth hooks
+   * @private
+   * @param type The type of hook (before, after, onError)
+   * @param data The data to pass to the hook
+   * @param stepName The name of the step to execute hooks for
+   * @param error The error to pass to the hook
+   */
+  private async executeAuthHooks(
+    type: HooksType,
+    data: AuthInput | AuthOutput,
+    stepName: string,
+    pluginName?: string,
+    error?: Error,
+  ): Promise<AuthInput | AuthOutput> {
+    // Find auth hooks from registered auth hooks
+    const authHooks = this.authHooks.filter(
+      (hook) =>
+        hook.type === type &&
+        !hook.session &&
+        (hook.steps.includes(stepName) ||
+          hook.universal ||
+          pluginName === hook.pluginName),
+    );
+
+    if (authHooks.length === 0) {
+      return data;
+    }
+
+    let processedData = data;
+
+    if (type === 'onError' && error) {
+      // Execute error hooks in parallel
+      await Promise.all(
+        authHooks.map((hook) => hook.fn(processedData, this.container, error)),
+      );
+      return processedData;
+    }
+
+    // Execute before/after hooks in sequence
+    for (const hook of authHooks) {
+      const result = await hook.fn(processedData, this.container);
+      if (result) {
+        processedData = result as AuthInput | AuthOutput;
+      }
+    }
+
+    return processedData;
   }
 }
 

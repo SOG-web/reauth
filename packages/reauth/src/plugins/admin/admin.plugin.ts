@@ -1,12 +1,22 @@
-import { AwilixContainer } from 'awilix';
-import { AuthPlugin, AuthInput, AuthOutput, ReAuthCradle } from '../../types';
+import { asValue, AwilixContainer } from 'awilix';
+import {
+  AuthPlugin,
+  AuthInput,
+  AuthOutput,
+  ReAuthCradle,
+  AuthStep,
+} from '../../types';
 import { createStandardSchemaRule } from '../../utils';
 import { type } from 'arktype';
-import { ReAuthEngine } from '../../auth-engine';
 import { extractEntityId, performBanCheck } from './ban-interceptor';
+import banSteps from './ban-steps';
+import { checkDependsOn, createAuthPlugin } from '../utils';
+import { hashPassword, haveIbeenPawned } from '../../lib';
 
-const userIdSchema = type('string');
-const reasonSchema = type('string');
+const emailSchema = type('string.email');
+const passwordSchema = type(
+  'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
+);
 
 interface AdminConfig {
   /**
@@ -45,6 +55,8 @@ interface AdminConfig {
     unbannedBy: string,
     container: AwilixContainer<ReAuthCradle>,
   ) => Promise<void>;
+
+  adminEntity: AdminEntityService;
 }
 
 interface BanInfo {
@@ -57,179 +69,123 @@ interface BanInfo {
 const plugin: AuthPlugin<AdminConfig> = {
   name: 'admin',
   steps: [
+    ...banSteps,
     {
-      name: 'ban-user',
-      description: 'Ban a user from the system',
-      validationSchema: {
-        entityId: createStandardSchemaRule(
-          userIdSchema,
-          'Please provide a valid user ID',
-        ),
-        reason: createStandardSchemaRule(
-          reasonSchema,
-          'Please provide a reason for banning',
-        ),
-        bannedBy: createStandardSchemaRule(
-          userIdSchema,
-          'Please provide the ID of who is banning',
-        ),
-      },
-      hooks: {},
-      inputs: ['entityId', 'reason', 'bannedBy'],
-      async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
-        const { entityId, reason, bannedBy } = input;
+      name: 'create-admin',
+      description: 'create a new admin',
+      inputs: ['email', 'password'],
+      async run(input, pluginProperties) {
         const { container, config } = pluginProperties!;
+        const { email, password } = input;
 
-        try {
-          if (config.banUser) {
-            await config.banUser(entityId, reason, bannedBy, container);
-          } else {
-            await container.cradle.entityService.updateEntity(entityId, 'id', {
-              banned: true,
-              ban_reason: reason,
-              banned_at: new Date(),
-              banned_by: bannedBy,
-            });
+        let entity = await container.cradle.entityService.findEntity(
+          email,
+          'email',
+        );
+
+        let admin: AdminEntity;
+
+        if (entity) {
+          const serializedEntity = container.cradle.serializeEntity(entity);
+
+          const exist = await container.cradle.adminEntityService.findEntity(
+            entity.id,
+            'entity_id',
+          );
+
+          if (exist) {
+            return {
+              success: false,
+              message: 'Admin already exist',
+              status: 'ip',
+            };
           }
+
+          admin = await container.cradle.adminEntityService.createEntity({
+            entity_id: entity.id,
+          });
+
+          await container.cradle.entityService.updateEntity(entity.id, 'id', {
+            role: 'admin',
+          });
 
           return {
             success: true,
-            message: 'User has been banned successfully',
+            message: 'Register successful',
+            entity: serializedEntity,
+            admin,
             status: 'su',
           };
-        } catch (error) {
+        }
+
+        const savePassword = await haveIbeenPawned(password);
+
+        if (!savePassword) {
           return {
             success: false,
-            message: 'Failed to ban user',
-            status: 'error',
+            message: 'Password has been pawned',
+            status: 'ip',
           };
         }
+
+        entity = await container.cradle.entityService.createEntity({
+          email,
+          password_hash: await hashPassword(password),
+          email_verified: false,
+          role: 'admin',
+        });
+
+        admin = await container.cradle.adminEntityService.createEntity({
+          entity_id: entity.id,
+        });
+
+        const serializedEntity = container.cradle.serializeEntity(entity);
+
+        return {
+          success: true,
+          message: 'Register successful',
+          entity: serializedEntity,
+          admin: admin,
+          status: 'su',
+        };
       },
       protocol: {
         http: {
           method: 'POST',
-          auth: true,
+          ip: 400,
           su: 200,
-          error: 500,
+          ic: 400,
         },
       },
-    },
-    {
-      name: 'unban-user',
-      description: 'Unban a user from the system',
       validationSchema: {
-        entityId: createStandardSchemaRule(
-          userIdSchema,
-          'Please provide a valid user ID',
+        email: createStandardSchemaRule(
+          emailSchema,
+          'Please enter a valid email address',
         ),
-        unbannedBy: createStandardSchemaRule(
-          userIdSchema,
-          'Please provide the ID of who is unbanning',
+        password: createStandardSchemaRule(
+          passwordSchema,
+          'Password must be at least 8 characters',
         ),
-      },
-      hooks: {},
-      inputs: ['entityId', 'unbannedBy'],
-      async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
-        const { entityId, unbannedBy } = input;
-        const { container, config } = pluginProperties!;
-
-        try {
-          if (config.unbanUser) {
-            await config.unbanUser(entityId, unbannedBy, container);
-          } else {
-            await container.cradle.entityService.updateEntity(entityId, 'id', {
-              banned: false,
-              ban_reason: undefined,
-              banned_at: undefined,
-              banned_by: undefined,
-              updated_at: new Date(),
-            });
-          }
-
-          return {
-            success: true,
-            message: 'User has been unbanned successfully',
-            status: 'unbanned',
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message: 'Failed to unban user',
-            status: 'error',
-          };
-        }
-      },
-      protocol: {
-        http: {
-          method: 'POST',
-          auth: true,
-          unbanned: 200,
-          error: 500,
-        },
-      },
-    },
-    {
-      name: 'check-ban-status',
-      description: 'Check if a user is banned',
-      validationSchema: {
-        entityId: createStandardSchemaRule(
-          userIdSchema,
-          'Please provide a valid user ID',
-        ),
-      },
-      hooks: {},
-      inputs: ['entityId'],
-      async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
-        const { entityId } = input;
-        const { container, config } = pluginProperties!;
-
-        try {
-          let banInfo: BanInfo | null = null;
-
-          if (config.checkBanStatus) {
-            banInfo = await config.checkBanStatus(entityId, container);
-          } else {
-            const entity = await container.cradle.entityService.findEntity(
-              entityId,
-              'id',
-            );
-
-            if (entity && entity.banned) {
-              banInfo = {
-                banned: true,
-                reason: entity.ban_reason,
-                banned_at: entity.banned_at,
-                banned_by: entity.banned_by,
-              };
-            }
-          }
-
-          return {
-            success: true,
-            message: banInfo ? 'User is banned' : 'User is not banned',
-            status: 'su',
-            banInfo,
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message: 'Failed to check ban status',
-            status: 'error',
-          };
-        }
-      },
-      protocol: {
-        http: {
-          method: 'GET',
-          auth: true,
-          su: 200,
-          error: 500,
-        },
       },
     },
   ],
   config: {},
+  dependsOn: ['email-password'],
   async initialize(container: AwilixContainer<ReAuthCradle>) {
+    if (!this.config.adminEntity) {
+      throw new Error('adminEntity service is missing');
+    }
+
+    const dpn = checkDependsOn(
+      container.cradle.reAuthEngine.getAllPlugins(),
+      this.dependsOn!,
+    );
+
+    if (!dpn.status)
+      throw new Error(
+        `${this.name} depends on the following plugins ${dpn.pluginName.join(' ')}`,
+      );
+
     // Register the ban check service in the container
     container.register({
       banCheckService: {
@@ -258,6 +214,9 @@ const plugin: AuthPlugin<AdminConfig> = {
         }),
       },
     });
+    container.register({
+      adminEntityService: asValue(this.config.adminEntity),
+    });
     container.cradle.reAuthEngine.registerSessionHook(
       'before',
       async (data, container) => {
@@ -269,11 +228,114 @@ const plugin: AuthPlugin<AdminConfig> = {
         return input;
       },
     );
+
+    container.cradle.reAuthEngine.registerSessionHook(
+      'after',
+      async (data, container) => {
+        const { token, ...rest } = data as AuthOutput;
+        const entityId = await extractEntityId(rest, container);
+
+        if (!entityId) {
+          throw new Error(
+            'something is wrong with the session generation process, this is not suppose to happen',
+          );
+        }
+
+        // check if the entity is on admin table
+        const isAdmin = await container.cradle.adminEntityService.findEntity(
+          entityId,
+          'entity_id',
+        );
+
+        if (isAdmin) {
+          return {
+            ...data,
+            entity: {
+              ...data.entity,
+              is_admin: true,
+              roles: isAdmin.roles,
+              permissions: isAdmin.permissions,
+            },
+          } as AuthOutput;
+        }
+
+        return data;
+      },
+    );
+
+    //Info: this hook runs at execution level
+    container.cradle.reAuthEngine.registerAuthHook({
+      pluginName: this.name,
+      type: 'before',
+      fn: async (data, container) => {
+        const input = data as AuthInput;
+        const entityId = await extractEntityId(input, container);
+
+        if (!entityId) {
+          throw new Error('you are not authorize for this transaction');
+        }
+
+        const isAdmin = await container.cradle.adminEntityService.findEntity(
+          entityId,
+          'entity_id',
+        );
+
+        if (!isAdmin) {
+          throw new Error('you are not authorize for this transaction');
+        }
+
+        return {
+          ...data,
+          entity: {
+            ...data.entity,
+            is_admin: true,
+            roles: isAdmin.roles,
+            permissions: isAdmin.permissions,
+          },
+        } as AuthInput;
+      },
+      session: false,
+    });
+
+    container.cradle.reAuthEngine.registerAuthHook({
+      pluginName: this.name,
+      type: 'after',
+      fn: async (data, container) => {
+        const input = data as AuthInput;
+        const entityId = await extractEntityId(input, container);
+
+        if (!entityId) {
+          return data;
+        }
+
+        const isAdmin = await container.cradle.adminEntityService.findEntity(
+          entityId,
+          'entity_id',
+        );
+
+        if (!isAdmin) {
+          return data;
+        }
+
+        return {
+          ...data,
+          entity: {
+            ...data.entity,
+            is_admin: true,
+            roles: isAdmin.roles,
+            permissions: isAdmin.permissions,
+          },
+        } as AuthInput;
+      },
+      session: false,
+      universal: true,
+    });
+
     this.container = container;
   },
 
   getSensitiveFields() {
-    return ['ban_reason', 'banned_by'];
+    return ['banned_by'];
   },
 
   migrationConfig: {
@@ -328,13 +390,17 @@ const plugin: AuthPlugin<AdminConfig> = {
             unique: true,
             defaultValue: 'uuid',
           },
-          email: {
-            type: 'string',
+          entity_id: {
+            type: 'uuid',
             nullable: false,
             unique: true,
             index: true,
           },
-          password_hash: {
+          permissions: {
+            type: 'string',
+            nullable: false,
+          },
+          roles: {
             type: 'string',
             nullable: false,
           },
@@ -345,12 +411,13 @@ const plugin: AuthPlugin<AdminConfig> = {
 };
 
 export default function adminPlugin(
-  config?: AdminConfig,
+  config: AdminConfig,
+  overrideStep?: {
+    name: string;
+    override: Partial<AuthStep<AdminConfig>>;
+  }[],
 ): AuthPlugin<AdminConfig> {
-  return {
-    ...plugin,
-    config: config || {},
-  };
+  return createAuthPlugin(config, plugin, overrideStep, {});
 }
 
 // Extend the Entity type to include ban fields
@@ -360,13 +427,44 @@ declare module '../../types' {
     ban_reason?: string | undefined;
     banned_at?: Date | undefined;
     banned_by?: string | undefined;
+    /**
+     * this is a computed value
+     */
+    is_admin?: boolean;
+    /**
+     * this is a computed value
+     */
+    permissions?: string[];
+    /**
+     * this is a computed value
+     */
+    roles?: string[];
   }
 
   interface ReAuthCradleExtension {
     banCheckService: {
       checkBanStatus: (entityId: string) => Promise<BanInfo | null>;
     };
+    adminEntityService: AdminEntityService;
   }
 }
+
+export interface AdminEntity {
+  id: string;
+  entity_id: string;
+  permissions?: string[];
+  roles?: string[];
+}
+
+export type AdminEntityService = {
+  findEntity(id: string, field: string): Promise<AdminEntity | null>;
+  createEntity(entity: Partial<AdminEntity>): Promise<AdminEntity>;
+  updateEntity(
+    id: string,
+    field: string,
+    entity: Partial<AdminEntity>,
+  ): Promise<AdminEntity>;
+  deleteEntity(id: string, field: string): Promise<void>;
+};
 
 export type { BanInfo, AdminConfig };

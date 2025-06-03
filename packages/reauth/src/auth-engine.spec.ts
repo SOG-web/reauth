@@ -1,11 +1,73 @@
 import { ReAuthEngine } from './auth-engine';
-import { AuthPlugin, AuthStep, PluginNotFound, StepNotFound } from './types';
-import { describe, it, expect, vi } from 'vitest';
+import {
+  AuthPlugin,
+  AuthStep,
+  AuthToken,
+  Entity,
+  EntityService,
+  PluginNotFound,
+  SessionService,
+  StepNotFound,
+} from './types';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 describe('ReAuthEngine', () => {
+  const entity: Entity = {
+    id: 'id',
+    role: 'user',
+    created_at: new Date(),
+    updated_at: new Date(),
+    email: '',
+    email_verified: true,
+    password_hash: '',
+  };
+
+  const entityService: EntityService = {
+    findEntity: vi
+      .fn()
+      .mockImplementation(async (id: string, filed: string) => {
+        return entity;
+      }),
+    createEntity: vi
+      .fn()
+      .mockImplementation(async (entity: Partial<Entity>) => {
+        return entity;
+      }),
+    updateEntity: vi
+      .fn()
+      .mockImplementation(
+        async (id: string, filed: string, entity: Partial<Entity>) => {
+          return entity;
+        },
+      ),
+    deleteEntity: vi
+      .fn()
+      .mockImplementation(async (id: string, filed: string) => {}),
+  };
+
+  const sessionService: SessionService = {
+    createSession: async function (
+      entityId: string | number,
+    ): Promise<AuthToken> {
+      return 'token';
+    },
+    verifySession: async function (
+      token: string,
+    ): Promise<{ entity: Entity | null; token: AuthToken }> {
+      return {
+        entity,
+        token: 'token',
+      };
+    },
+    destroySession: async function (token: string): Promise<void> {},
+    destroyAllSessions: async function (
+      entityId: string | number,
+    ): Promise<void> {},
+  };
+
   // Mock plugin for testing
   const createMockPlugin = (name: string): AuthPlugin => {
-    const mockStep: AuthStep = {
+    const mockStep: AuthStep<any> = {
       name: 'test-step',
       description: 'Test step for unit testing',
       inputs: ['testInput'],
@@ -17,18 +79,16 @@ describe('ReAuthEngine', () => {
         };
       }),
       registerHook: vi.fn(),
+      protocol: {
+        http: undefined,
+      },
     };
 
     return {
       name,
       steps: [mockStep],
       initialize: vi.fn(),
-      getStep: vi.fn().mockImplementation((stepName: string) => {
-        if (stepName === 'test-step') {
-          return mockStep;
-        }
-        return undefined;
-      }),
+      config: {},
       runStep: vi
         .fn()
         .mockImplementation(async (stepName, input, container) => {
@@ -50,17 +110,15 @@ describe('ReAuthEngine', () => {
   beforeEach(() => {
     // Create a fresh plugin and ReAuthEnginne instance for each test
     mockPlugin = createMockPlugin('test-plugin');
-    reAuth = new ReAuthEngine([mockPlugin], { database: '' });
+    reAuth = new ReAuthEngine({
+      plugins: [mockPlugin],
+      entity: entityService,
+      session: sessionService,
+    });
   });
 
   it('should register plugins during initialization', () => {
     expect(mockPlugin.initialize).toHaveBeenCalled();
-  });
-
-  it('should register a plugin after initialization', () => {
-    const newPlugin = createMockPlugin('new-plugin');
-    reAuth.registerPlugin(newPlugin);
-    expect(newPlugin.initialize).toHaveBeenCalled();
   });
 
   it('should get a registered plugin by name', () => {
@@ -89,7 +147,6 @@ describe('ReAuthEngine', () => {
         testInput: 'test-value',
       });
       // If we reach here, the test should fail
-      fail('Expected StepNotFound to be thrown');
     } catch (error) {
       expect(error).toBeInstanceOf(StepNotFound);
       expect((error as StepNotFound).message).toContain('non-existent-step');

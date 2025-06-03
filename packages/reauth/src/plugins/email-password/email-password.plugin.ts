@@ -20,7 +20,7 @@ const loginValidation = {
   ),
 };
 
-const plugin: AuthPlugin<AuthStepConfig> = {
+const plugin: AuthPlugin<EmailPasswordConfig> = {
   name: 'email-password',
   getSensitiveFields: () => [
     'password_hash',
@@ -92,7 +92,10 @@ const plugin: AuthPlugin<AuthStepConfig> = {
           return { success: false, message: 'Invalid password', status: 'ip' };
         }
 
-        const token = await container.cradle.reAuthEngine.createSession(entity);
+        const token = await container.cradle.reAuthEngine.createSession(
+          entity,
+          this.name,
+        );
 
         if (!token.success) {
           return {
@@ -135,6 +138,19 @@ const plugin: AuthPlugin<AuthStepConfig> = {
         const { container, config } = pluginProperties!;
         const { email, password } = input;
 
+        const en = await container.cradle.entityService.findEntity(
+          email,
+          'email',
+        );
+
+        if (en) {
+          return {
+            success: false,
+            message: 'User already exist',
+            status: 'ip',
+          };
+        }
+
         const savePassword = await haveIbeenPawned(password);
 
         if (!savePassword) {
@@ -175,7 +191,7 @@ const plugin: AuthPlugin<AuthStepConfig> = {
         }
 
         const token = config.loginOnRegister
-          ? await container.cradle.reAuthEngine.createSession(entity)
+          ? await container.cradle.reAuthEngine.createSession(entity, this.name)
           : undefined;
 
         if (token && !token.success) {
@@ -509,7 +525,17 @@ const plugin: AuthPlugin<AuthStepConfig> = {
       },
     ],
   },
-  config: {
+  config: {},
+};
+
+const emailPasswordAuth = (
+  config: EmailPasswordConfig = {},
+  overrideStep?: {
+    name: string;
+    override: Partial<AuthStep<EmailPasswordConfig>>;
+  }[],
+): AuthPlugin<EmailPasswordConfig> => {
+  return createAuthPlugin(config, plugin, overrideStep, {
     verifyEmail: false,
     loginOnRegister: true,
     codeLenght: 4,
@@ -554,17 +580,7 @@ const plugin: AuthPlugin<AuthStepConfig> = {
     },
     resetPasswordCodeExpiresIn: 30 * 60 * 1000,
     codeType: 'numeric',
-  },
-};
-
-const emailPasswordAuth = (
-  config?: Partial<AuthPlugin<AuthStepConfig>>,
-  overrideStep?: {
-    name: string;
-    override: Partial<AuthStep<AuthStepConfig>>;
-  }[],
-): AuthPlugin => {
-  return createAuthPlugin(config || {}, plugin, overrideStep);
+  });
 };
 
 export default emailPasswordAuth;
@@ -580,7 +596,7 @@ declare module '../../types' {
   }
 }
 
-interface AuthStepConfig {
+interface EmailPasswordConfig {
   /**
    * @default false
    * Whether to verify the email after registration

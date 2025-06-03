@@ -1,12 +1,13 @@
 import { AuthPlugin, AuthStep } from '../../types';
 
 export function createAuthPlugin(
-  config: Partial<AuthPlugin>,
+  config: Record<string, any>,
   plugin: AuthPlugin,
   overrideStep?: {
     name: string;
     override: Partial<AuthStep<any>>;
   }[],
+  initialConfig?: Record<string, any>,
 ): AuthPlugin {
   const basePlugin = plugin;
 
@@ -29,26 +30,32 @@ export function createAuthPlugin(
     });
   }
 
-  // Apply config steps if provided
-  if (config.steps && config.steps.length > 0) {
-    config.steps.forEach((configStep) => {
-      const existingStepIndex = allSteps.findIndex(
-        (s) => s.name === configStep.name,
-      );
-      if (existingStepIndex !== -1) {
-        // Replace the existing step with the config step
-        allSteps[existingStepIndex] = configStep;
-      } else {
-        // Add new step from config
-        allSteps.push(configStep);
-      }
-    });
-  }
-
   const combinedPlugin: AuthPlugin = {
     ...basePlugin,
-    ...config,
+    config: {
+      ...initialConfig,
+      ...basePlugin.config,
+      ...config.config,
+    },
     steps: allSteps,
   };
   return combinedPlugin;
+}
+
+export function checkDependsOn(plugins: AuthPlugin[], dependsOn: string[]) {
+  const names = plugins.map((p) => p.name);
+  let notFound = true;
+  let pluginName: string[] = [];
+  for (let d = 0; d < dependsOn.length; d++) {
+    const found = names.includes(dependsOn[d]!);
+    if (!found) {
+      notFound = false;
+      pluginName.push(dependsOn[d]!);
+    }
+  }
+
+  return {
+    status: notFound,
+    pluginName,
+  };
 }

@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 describe('executeStep', () => {
   // Mock step for testing
-  const mockStep: AuthStep = {
+  const mockStep: AuthStep<any> = {
     name: 'test-step',
     description: 'Test step for unit testing',
     inputs: ['testInput'],
@@ -70,7 +70,7 @@ describe('executeStep', () => {
     });
 
     // Create a step with hooks
-    const stepWithHooks: AuthStep = {
+    const stepWithHooks: AuthStep<any> = {
       ...mockStep,
       hooks: {
         before: [beforeHook],
@@ -106,7 +106,7 @@ describe('executeStep', () => {
     });
 
     // Create a step with hooks
-    const stepWithHooks: AuthStep = {
+    const stepWithHooks: AuthStep<any> = {
       ...mockStep,
       run: runFn,
       hooks: {
@@ -138,7 +138,7 @@ describe('executeStep', () => {
     const errorHook = vi.fn();
 
     // Create a step that throws an error
-    const errorStep: AuthStep = {
+    const errorStep: AuthStep<any> = {
       ...mockStep,
       run: vi.fn().mockRejectedValue(testError),
       hooks: {
@@ -169,7 +169,7 @@ describe('executeStep', () => {
     });
 
     // Create a step with multiple before hooks
-    const stepWithHooks: AuthStep = {
+    const stepWithHooks: AuthStep<any> = {
       ...mockStep,
       hooks: {
         before: [beforeHook1, beforeHook2],
@@ -220,7 +220,7 @@ describe('executeStep', () => {
     });
 
     // Create a step with multiple after hooks
-    const stepWithHooks: AuthStep = {
+    const stepWithHooks: AuthStep<any> = {
       ...mockStep,
       run: runFn,
       hooks: {
@@ -266,7 +266,7 @@ describe('executeStep', () => {
     const errorHook2 = vi.fn();
 
     // Create a step that throws an error
-    const errorStep: AuthStep = {
+    const errorStep: AuthStep<any> = {
       ...mockStep,
       run: vi.fn().mockRejectedValue(testError),
       hooks: {

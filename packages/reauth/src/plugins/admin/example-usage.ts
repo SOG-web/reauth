@@ -10,6 +10,7 @@ import {
 } from './index';
 import { KnexEntityService, KnexSessionService } from '../../services';
 import { Knex } from 'knex';
+import { AdminEntity } from './admin.plugin';
 
 // Example usage of the admin plugin with ban interceptor
 
@@ -19,20 +20,16 @@ export function createAuthWithAdminPlugin(knex: Knex) {
     plugins: [
       // Regular auth plugins
       emailPasswordAuth({
-        config: {
-          verifyEmail: true,
-          sendCode: async (entity, code, email, type) => {
-            console.log(`Sending ${type} code ${code} to ${email}`);
-          },
+        verifyEmail: true,
+        sendCode: async (entity, code, email, type) => {
+          console.log(`Sending ${type} code ${code} to ${email}`);
         },
       }),
 
       passwordlessAuth({
-        config: {
-          secret: 'your-secret-key',
-          send: async (entity, token, emailOrPhone, type) => {
-            console.log(`Sending ${type} token ${token} to ${emailOrPhone}`);
-          },
+        secret: 'your-secret-key',
+        send: async (entity, token, emailOrPhone, type) => {
+          console.log(`Sending ${type} token ${token} to ${emailOrPhone}`);
         },
       }),
 
@@ -88,6 +85,29 @@ export function createAuthWithAdminPlugin(knex: Knex) {
           });
 
           console.log(`User ${entityId} unbanned by ${unbannedBy}`);
+        },
+        adminEntity: {
+          findEntity: function (
+            id: string,
+            field: string,
+          ): Promise<AdminEntity | null> {
+            throw new Error('Function not implemented.');
+          },
+          createEntity: function (
+            entity: Partial<AdminEntity>,
+          ): Promise<AdminEntity> {
+            throw new Error('Function not implemented.');
+          },
+          updateEntity: function (
+            id: string,
+            field: string,
+            entity: Partial<AdminEntity>,
+          ): Promise<AdminEntity> {
+            throw new Error('Function not implemented.');
+          },
+          deleteEntity: function (id: string, field: string): Promise<void> {
+            throw new Error('Function not implemented.');
+          },
         },
       }),
     ],
