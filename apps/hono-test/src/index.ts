@@ -13,13 +13,8 @@ import reAuth from './reauth/auth';
 
 const app = new Hono();
 
-export const db = knex({
-  client: 'better-sqlite3',
-  connection: {
-    filename: './test.db',
-  },
-  useNullAsDefault: true,
-});
+// Set the introspection auth key for testing
+process.env.REAUTH_INTROSPECTION_KEY = 'test-key-123';
 
 app.use(async (c, next) => {
   c.set('entity', null);
@@ -158,6 +153,24 @@ app.route('/auth', auth);
 app.get('/', (c) => {
   const entity = c.get('entity');
   return c.json({ message: 'Hello Hono!', entity });
+});
+
+// Test introspection endpoint
+app.get('/test-introspection', async (c) => {
+  try {
+    // Call the introspection method directly on the engine
+    const introspectionData = reAuth.getIntrospectionData();
+    return c.json({
+      message: 'Introspection data retrieved successfully',
+      data: introspectionData,
+    });
+  } catch (error) {
+    console.error('Introspection test error:', error);
+    return c.json({
+      error: 'Failed to get introspection data',
+      details: error instanceof Error ? error.message : String(error),
+    }, 500);
+  }
 });
 
 showRoutes(app, {

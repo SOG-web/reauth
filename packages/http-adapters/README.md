@@ -2,6 +2,15 @@
 
 HTTP adapters for ReAuth authentication framework. This package provides HTTP server adapters to easily integrate ReAuth with various Node.js HTTP frameworks.
 
+## Features
+
+- **Auto-Introspection**: Automatically discovers all ReAuth plugins and creates HTTP routes for their steps
+- **Framework Support**: Express.js, Fastify, and Hono adapters
+- **Route Overriding**: Override any auto-generated plugin route with custom logic
+- **Custom Routes**: Add additional routes for external plugins or custom functionality
+- **Flexible Configuration**: Global middleware, custom error handlers, and more
+- **TypeScript Support**: Full type safety with comprehensive interfaces
+
 ## Installation
 
 ```bash

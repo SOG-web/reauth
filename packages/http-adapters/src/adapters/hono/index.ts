@@ -390,3 +390,5 @@ declare module 'hono' {
     authenticated: boolean;
   }
 }
+
+export * from './hono-adapter-v2';

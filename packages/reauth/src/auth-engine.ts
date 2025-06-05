@@ -18,6 +18,10 @@ import type {
   SensitiveFields,
   Entity,
   AuthHooks,
+  IntrospectionResult,
+  EntitySchema,
+  FieldSchema,
+  StepOutput,
 } from './types';
 import { PluginNotFound, StepNotFound } from './types';
 
@@ -291,11 +295,245 @@ export class ReAuthEngine {
 
   getStepInputs(pluginName: string, stepName: string) {
     const plugin = this.getPlugin(pluginName);
+    if (!plugin) {
+      throw new PluginNotFound(pluginName);
+    }
+
     const step = plugin.steps.find((s) => s.name === stepName);
     if (!step) {
       throw new StepNotFound(stepName, pluginName);
     }
+
     return step.inputs;
+  }
+
+  /**
+   * Get introspection data for SDK generation
+   * Returns comprehensive information about entity schema, plugins, steps, and types
+   */
+  getIntrospectionData(): IntrospectionResult {
+    // Get entity schema from migration config
+    const migrationConfig = this.getMirgrationCongfig();
+    const entitySchema = this.extractEntitySchema(migrationConfig);
+
+    // Get all plugins with their steps and metadata
+    const plugins = this.plugins.map((plugin) => ({
+      name: plugin.name,
+      description: `${plugin.name} authentication plugin`,
+      dependsOn: plugin.dependsOn || [],
+      steps: plugin.steps.map((step) => ({
+        name: step.name,
+        description: step.description,
+        inputs: step.inputs.map((input) => ({
+          name: input,
+          type: this.inferInputType(input, step.validationSchema),
+          required: !input.endsWith('?'),
+          description: this.getInputDescription(input, step.validationSchema),
+        })),
+        outputs: this.getStepOutputs(step, plugin.name),
+        protocol: step.protocol,
+        requiresAuth: step.protocol.http?.auth || false,
+      })),
+    }));
+
+    return {
+      entity: entitySchema,
+      plugins,
+      generatedAt: new Date().toISOString(),
+      version: '1.0.0',
+    };
+  }
+
+  /**
+   * Extract entity schema from migration config
+   */
+  private extractEntitySchema(migrationConfig: MigrationConfig): EntitySchema {
+    const baseEntityFields: Record<string, FieldSchema> = {
+      id: { type: 'string', required: true, description: 'Unique entity identifier' },
+      role: { type: 'string', required: true, description: 'Entity role' },
+      created_at: { type: 'string', format: 'date-time', required: true, description: 'Creation timestamp' },
+      updated_at: { type: 'string', format: 'date-time', required: true, description: 'Last update timestamp' },
+    };
+
+    // Collect all fields from plugin extensions
+    const extendedFields: Record<string, FieldSchema> = {};
+
+    migrationConfig.plugins.forEach((pluginConfig) => {
+      if (pluginConfig.extendTables) {
+        pluginConfig.extendTables.forEach((tableExtension) => {
+          if (tableExtension.tableName === 'entities') {
+            Object.entries(tableExtension.columns).forEach(([fieldName, column]) => {
+              extendedFields[fieldName] = {
+                type: this.mapColumnTypeToTsType(column.type),
+                format: this.getColumnFormat(column.type),
+                required: !column.nullable,
+                description: `${fieldName} field from ${pluginConfig.pluginName} plugin`,
+              };
+            });
+          }
+        });
+      }
+    });
+
+    return {
+      type: 'object',
+      properties: { ...baseEntityFields, ...extendedFields },
+      required: Object.entries({ ...baseEntityFields, ...extendedFields })
+        .filter(([_, field]) => field.required)
+        .map(([name]) => name),
+    };
+  }
+
+  /**
+   * Map database column types to TypeScript types
+   */
+  private mapColumnTypeToTsType(columnType: string): string {
+    switch (columnType) {
+      case 'string':
+      case 'text':
+      case 'uuid':
+        return 'string';
+      case 'integer':
+        return 'number';
+      case 'boolean':
+        return 'boolean';
+      case 'datetime':
+      case 'timestamp':
+        return 'string';
+      case 'json':
+        return 'object';
+      case 'decimal':
+        return 'number';
+      default:
+        return 'any';
+    }
+  }
+
+  /**
+   * Get format for specific column types
+   */
+  private getColumnFormat(columnType: string): string | undefined {
+    switch (columnType) {
+      case 'datetime':
+      case 'timestamp':
+        return 'date-time';
+      case 'uuid':
+        return 'uuid';
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Infer TypeScript type for step input
+   */
+  private inferInputType(input: string, validationSchema?: any): string {
+    // Remove optional marker
+    const fieldName = input.replace('?', '');
+    
+    // Check validation schema for type hints
+    if (validationSchema && validationSchema[fieldName]) {
+      const rule = validationSchema[fieldName];
+      if (typeof rule === 'function') {
+        // Try to infer from function name or common patterns
+        const ruleName = rule.name || rule.toString();
+        if (ruleName.includes('email')) return 'string';
+        if (ruleName.includes('number') || ruleName.includes('integer')) return 'number';
+        if (ruleName.includes('boolean')) return 'boolean';
+        if (ruleName.includes('array')) return 'array';
+        if (ruleName.includes('object')) return 'object';
+      }
+    }
+
+    // Infer from field name patterns
+    if (fieldName.includes('email')) return 'string';
+    if (fieldName.includes('password')) return 'string';
+    if (fieldName.includes('phone')) return 'string';
+    if (fieldName.includes('count') || fieldName.includes('age') || fieldName.includes('id')) return 'number';
+    if (fieldName.includes('verified') || fieldName.includes('enabled')) return 'boolean';
+    if (fieldName.includes('data') || fieldName.includes('metadata')) return 'object';
+    if (fieldName.includes('permissions') || fieldName.includes('roles') || fieldName.includes('teams')) return 'array';
+
+    // Default to string
+    return 'string';
+  }
+
+  /**
+   * Get description for step input
+   */
+  private getInputDescription(input: string, validationSchema?: any): string {
+    const fieldName = input.replace('?', '');
+    
+    // Check if we have validation schema with custom messages
+    if (validationSchema && validationSchema[fieldName]) {
+      // Could extract description from validation rule if available
+    }
+
+    // Generate description from field name
+    const words = fieldName.split(/[_-]/).map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    );
+    
+    return words.join(' ');
+  }
+
+  /**
+   * Get expected outputs for a step
+   */
+  private getStepOutputs(step: any, pluginName: string): StepOutput[] {
+    const baseOutputs: StepOutput[] = [
+      { name: 'success', type: 'boolean', required: true, description: 'Whether the operation was successful' },
+      { name: 'message', type: 'string', required: true, description: 'Response message' },
+      { name: 'status', type: 'string', required: true, description: 'Operation status code' },
+    ];
+
+    // Add common auth outputs
+    if (step.protocol.http?.method === 'POST' && ['login', 'register', 'callback'].includes(step.name)) {
+      baseOutputs.push(
+        { name: 'token', type: 'string', required: false, description: 'Authentication token' },
+        { name: 'entity', type: 'Entity', required: false, description: 'User entity data' },
+      );
+    }
+
+    // Add redirect output for OAuth steps
+    if (step.name === 'start' || step.name === 'callback') {
+      baseOutputs.push(
+        { name: 'redirect', type: 'string', required: false, description: 'Redirect URL' },
+      );
+    }
+
+    // Add plugin-specific outputs based on step name
+    switch (step.name) {
+      case 'create-organization':
+        baseOutputs.push(
+          { name: 'organization', type: 'Organization', required: false, description: 'Created organization' },
+        );
+        break;
+      case 'get-organizations':
+        baseOutputs.push(
+          { name: 'organizations', type: 'Organization[]', required: false, description: 'User organizations' },
+        );
+        break;
+      case 'create-api-key':
+        baseOutputs.push(
+          { name: 'apiKey', type: 'string', required: false, description: 'Generated API key' },
+          { name: 'keyData', type: 'object', required: false, description: 'API key metadata' },
+        );
+        break;
+      case 'list-api-keys':
+        baseOutputs.push(
+          { name: 'apiKeys', type: 'object[]', required: false, description: 'User API keys' },
+        );
+        break;
+      case 'get-anonymous-data':
+        baseOutputs.push(
+          { name: 'data', type: 'object', required: false, description: 'Anonymous user data' },
+          { name: 'isLinked', type: 'boolean', required: false, description: 'Whether user is linked' },
+        );
+        break;
+    }
+
+    return baseOutputs;
   }
 
   /**

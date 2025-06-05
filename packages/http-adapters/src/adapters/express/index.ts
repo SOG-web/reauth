@@ -339,3 +339,5 @@ declare global {
 }
 
 export default createExpressAdapter;
+
+export * from './express-adapter-v2';

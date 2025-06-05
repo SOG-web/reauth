@@ -4,7 +4,16 @@ import {
   KnexEntityService,
   KnexSessionService,
 } from '@re-auth/reauth/services';
-import { db } from '..';
+import knex from 'knex';
+
+
+export const db = knex({
+  client: 'better-sqlite3',
+  connection: {
+    filename: './test.db',
+  },
+  useNullAsDefault: true,
+});
 
 const entity = new KnexEntityService(db, 'entities');
 const session = new KnexSessionService(db, 'sessions');
@@ -12,9 +21,9 @@ const session = new KnexSessionService(db, 'sessions');
 const reAuth = createReAuthEngine({
   plugins: [
     emailPasswordAuth({
-      config: {
-        verifyEmail: true,
-        sendCode: async (entity, code, email, type) => {},
+      verifyEmail: true,
+      sendCode: async (entity, code, email, type) => {
+        console.log('sendCode', entity, code, email, type);
       },
     }),
   ],

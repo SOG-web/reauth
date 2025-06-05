@@ -352,3 +352,64 @@ export type SessionService = {
   destroySession(token: string): Promise<void>;
   destroyAllSessions(entityId: string | number): Promise<void>;
 };
+
+/**
+ * SDK Generation and Introspection Types
+ */
+
+export interface FieldSchema {
+  type: string;
+  format?: string;
+  required: boolean;
+  description: string;
+}
+
+export interface EntitySchema {
+  type: 'object';
+  properties: Record<string, FieldSchema>;
+  required: string[];
+}
+
+export interface StepInput {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+export interface StepOutput {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+export interface IntrospectionStep {
+  name: string;
+  description: string;
+  inputs: StepInput[];
+  outputs: StepOutput[];
+  protocol: {
+    http?: {
+      method: string;
+      auth?: boolean;
+      [key: string]: any;
+    };
+    [key: string]: any;
+  };
+  requiresAuth: boolean;
+}
+
+export interface IntrospectionPlugin {
+  name: string;
+  description: string;
+  dependsOn: string[];
+  steps: IntrospectionStep[];
+}
+
+export interface IntrospectionResult {
+  entity: EntitySchema;
+  plugins: IntrospectionPlugin[];
+  generatedAt: string;
+  version: string;
+}

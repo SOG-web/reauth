@@ -1,6 +1,6 @@
 import { createReAuthEngine } from '../../auth-engine';
 import emailPasswordAuth from '../email-password/email-password.plugin';
-import passwordlessAuth from '../passwordless/passwordless.plugin';
+// import passwordlessAuth from '../passwordless/passwordless.plugin';
 import {
   adminPlugin,
   registerBanInterceptor,
@@ -26,12 +26,12 @@ export function createAuthWithAdminPlugin(knex: Knex) {
         },
       }),
 
-      passwordlessAuth({
-        secret: 'your-secret-key',
-        send: async (entity, token, emailOrPhone, type) => {
-          console.log(`Sending ${type} token ${token} to ${emailOrPhone}`);
-        },
-      }),
+      // passwordlessAuth({
+      //   secret: 'your-secret-key',
+      //   send: async (entity, token, emailOrPhone, type) => {
+      //     console.log(`Sending ${type} token ${token} to ${emailOrPhone}`);
+      //   },
+      // }),
 
       // Admin plugin for user management
       adminPlugin({
