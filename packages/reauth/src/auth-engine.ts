@@ -319,7 +319,6 @@ export class ReAuthEngine {
     const plugins = this.plugins.map((plugin) => ({
       name: plugin.name,
       description: `${plugin.name} authentication plugin`,
-      dependsOn: plugin.dependsOn || [],
       steps: plugin.steps.map((step) => ({
         name: step.name,
         description: step.description,

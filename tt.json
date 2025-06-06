@@ -1,0 +1,378 @@
+{
+    "message": "Introspection data retrieved successfully",
+    "data": {
+      "entity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "required": true,
+            "description": "Unique entity identifier"
+          },
+          "role": {
+            "type": "string",
+            "required": true,
+            "description": "Entity role"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "required": true,
+            "description": "Creation timestamp"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "required": true,
+            "description": "Last update timestamp"
+          },
+          "email": {
+            "type": "string",
+            "required": true,
+            "description": "email field from email-password plugin"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "created_at",
+          "updated_at",
+          "email",
+          "email_verified"
+        ]
+      },
+      "plugins": [
+        {
+          "name": "email-password",
+          "description": "email-password authentication plugin",
+          "steps": [
+            {
+              "name": "login",
+              "description": "Authenticate user with email and password",
+              "inputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "pattern": "^[\\w%+.-]+@[\\d.A-Za-z-]+\\.[A-Za-z]{2,}$",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*d)(?=.*[@$!%*?&])[A-Za-zd@$!%*?&]{8,}$"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              },
+              "outputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "entity": {
+                    "type": "object"
+                  },
+                  "error": {
+                    "anyOf": [
+                      {
+                        "type": "object"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "token": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message",
+                  "status",
+                  "success"
+                ]
+              },
+              "protocol": {
+                "http": {
+                  "method": "POST",
+                  "unf": 401,
+                  "ip": 400,
+                  "su": 200,
+                  "eq": 300,
+                  "ic": 400
+                }
+              },
+              "requiresAuth": false
+            },
+            {
+              "name": "register",
+              "description": "Register a new user with email and password",
+              "inputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "pattern": "^[\\w%+.-]+@[\\d.A-Za-z-]+\\.[A-Za-z]{2,}$",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*d)(?=.*[@$!%*?&])[A-Za-zd@$!%*?&]{8,}$"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              },
+              "outputs": {},
+              "protocol": {
+                "http": {
+                  "method": "POST",
+                  "ip": 400,
+                  "su": 200,
+                  "ic": 400
+                }
+              },
+              "requiresAuth": false
+            },
+            {
+              "name": "verify-email",
+              "description": "Verify email",
+              "inputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number",
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991
+                      }
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "pattern": "^[\\w%+.-]+@[\\d.A-Za-z-]+\\.[A-Za-z]{2,}$",
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "code",
+                  "email"
+                ]
+              },
+              "outputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "message",
+                  "status",
+                  "success"
+                ]
+              },
+              "protocol": {
+                "http": {
+                  "method": "POST",
+                  "ic": 400,
+                  "su": 200,
+                  "unf": 401
+                }
+              },
+              "requiresAuth": false
+            },
+            {
+              "name": "resend-verify-email",
+              "description": "Resend verify email",
+              "inputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "pattern": "^[\\w%+.-]+@[\\d.A-Za-z-]+\\.[A-Za-z]{2,}$",
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              },
+              "outputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "message",
+                  "status",
+                  "success"
+                ]
+              },
+              "protocol": {
+                "http": {
+                  "method": "POST",
+                  "nc": 400,
+                  "su": 200,
+                  "unf": 401
+                }
+              },
+              "requiresAuth": false
+            },
+            {
+              "name": "send-reset-password",
+              "description": "Send reset password",
+              "inputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "pattern": "^[\\w%+.-]+@[\\d.A-Za-z-]+\\.[A-Za-z]{2,}$",
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              },
+              "outputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "message",
+                  "status",
+                  "success"
+                ]
+              },
+              "protocol": {
+                "http": {
+                  "method": "POST",
+                  "ev": 400,
+                  "su": 200,
+                  "unf": 401
+                }
+              },
+              "requiresAuth": false
+            },
+            {
+              "name": "reset-password",
+              "description": "Reset password",
+              "inputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number",
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991
+                      }
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "pattern": "^[\\w%+.-]+@[\\d.A-Za-z-]+\\.[A-Za-z]{2,}$",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*d)(?=.*[@$!%*?&])[A-Za-zd@$!%*?&]{8,}$"
+                  }
+                },
+                "required": [
+                  "code",
+                  "email",
+                  "password"
+                ]
+              },
+              "outputs": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "message",
+                  "status",
+                  "success"
+                ]
+              },
+              "protocol": {
+                "http": {
+                  "method": "POST",
+                  "ic": 400,
+                  "ip": 400,
+                  "su": 200,
+                  "unf": 401
+                }
+              },
+              "requiresAuth": false
+            }
+          ]
+        }
+      ],
+      "generatedAt": "2025-06-06T00:34:23.071Z",
+      "version": "1.0.0"
+    }
+  }

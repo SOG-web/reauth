@@ -393,7 +393,6 @@ export interface IntrospectionStep {
 export interface IntrospectionPlugin {
   name: string;
   description: string;
-  dependsOn: string[];
   steps: IntrospectionStep[];
 }
 

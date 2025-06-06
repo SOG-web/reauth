@@ -5,8 +5,7 @@ import { createAuthPlugin } from '../utils/create-plugin';
 
 const loginSchema = type({
   email: 'string.email',
-  password: 'string',
-  //password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/'
+  password: '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/'
 })
 
 
@@ -441,8 +440,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       description: 'Reset password',
       validationSchema: type({
         email: 'string.email',
-        // password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
-        password: 'string',
+        password: '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
         code: "number.safe | string",
       }),
       run: async function (input, pluginProperties) {
