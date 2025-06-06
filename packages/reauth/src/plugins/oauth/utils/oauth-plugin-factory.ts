@@ -375,10 +375,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
       name: 'callback',
       description: `Handle ${providerName} OAuth callback`,
       inputs: ['code', 'state'],
-      validationSchema: {
-        code: createStandardSchemaRule(stringSchema, 'Authorization code is required'),
-        state: createStandardSchemaRule(stringSchema, 'State parameter is required'),
-      },
+      validationSchema: type({
+        code: 'string',
+        state: 'string',
+      }),
       protocol: {
         http: {
           method: 'POST',
@@ -528,10 +528,17 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
       name: 'link',
       description: `Link ${providerName} account to existing user`,
       inputs: ['code', 'state'],
-      validationSchema: {
-        code: createStandardSchemaRule(stringSchema, 'Authorization code is required'),
-        state: createStandardSchemaRule(stringSchema, 'State parameter is required'),
-      },
+      validationSchema: type({
+        code: 'string',
+        state: 'string',
+      }),
+      outputs: type({
+        "entity?": 'object',
+        "token?": 'string',
+        "message": 'string',
+        "status": 'string',
+        "success": 'boolean',
+      }),
       protocol: {
         http: {
           method: 'POST',
@@ -639,7 +646,16 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
     steps.push({
       name: 'unlink',
       description: `Unlink ${providerName} account from user`,
-      inputs: [],
+      inputs: ['entity'],
+      validationSchema: type({
+        entity: 'object',
+      }),
+      outputs: type({
+        "entity?": 'object',
+        "message": 'string',
+        "status": 'string',
+        "success": 'boolean',
+      }),
       protocol: {
         http: {
           method: 'POST',

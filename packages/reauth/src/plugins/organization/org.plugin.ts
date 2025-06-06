@@ -1,10 +1,7 @@
 import { asValue, AwilixContainer } from 'awilix';
 import { AuthOutput, AuthPlugin, AuthStep, ReAuthCradle, AuthInput } from '../../types';
 import { checkDependsOn, createAuthPlugin } from '../utils';
-import { createStandardSchemaRule } from '../../utils';
 import { type } from 'arktype';
-
-const stringSchema = type('string');
 
 interface OrgConfig {
   orgService: OrgService;
@@ -28,6 +25,20 @@ interface OrgConfig {
 
 export const organizationPluginDependsOn = ['admin'];
 
+// ArkType schemas for validation
+const createOrganizationSchema = type({
+  name: 'string>=1',
+  'description?': 'string',
+});
+
+const joinOrganizationSchema = type({
+  organizationId: 'string>=1',
+  'role?': 'string',
+  'permissions?': 'string[]',
+});
+
+const getOrganizationsSchema = type({});
+
 const plugin: AuthPlugin<OrgConfig> = {
   config: {},
   name: 'organization',
@@ -35,11 +46,13 @@ const plugin: AuthPlugin<OrgConfig> = {
     {
       name: 'create-organization',
       description: 'Create a new organization',
-      inputs: ['name', 'description'],
-      validationSchema: {
-        name: createStandardSchemaRule(stringSchema, 'Organization name is required'),
-        description: createStandardSchemaRule(stringSchema, 'Organization description is required'),
-      },
+      validationSchema: createOrganizationSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "organization?": 'object',
+      }),
       async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
         const { container, config } = pluginProperties!;
         const { name, description, entity } = input;
@@ -90,27 +103,30 @@ const plugin: AuthPlugin<OrgConfig> = {
           };
         }
       },
+      hooks: {},
+      inputs: ['entity', 'name', 'description'],
       protocol: {
         http: {
           method: 'POST',
           auth: true,
-          success: 201,
-          error: 400,
-          forbidden: 403,
-          unauthorized: 401,
+          lim: 429,
+          su: 201,
         },
       },
     },
     {
       name: 'join-organization',
       description: 'Join an organization',
-      inputs: ['organization_id', 'role', 'permissions'],
-      validationSchema: {
-        organization_id: createStandardSchemaRule(stringSchema, 'Organization ID is required'),
-      },
+      validationSchema: joinOrganizationSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "membership?": 'object',
+      }),
       async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
         const { container, config } = pluginProperties!;
-        const { organization_id, role, permissions, entity } = input;
+        const { organizationId, role, permissions, entity } = input;
 
         if (!entity) {
           return {
@@ -122,7 +138,7 @@ const plugin: AuthPlugin<OrgConfig> = {
 
         try {
           // Check if organization exists
-          const organization = await container.cradle.orgService.findOrganization(organization_id);
+          const organization = await container.cradle.orgService.findOrganization(organizationId);
           if (!organization) {
             return {
               success: false,
@@ -132,7 +148,7 @@ const plugin: AuthPlugin<OrgConfig> = {
           }
 
           // Check if user is already a member
-          const existingMember = await container.cradle.orgService.findMember(organization_id, entity.id);
+          const existingMember = await container.cradle.orgService.findMember(organizationId, entity.id);
           if (existingMember) {
             return {
               success: false,
@@ -145,7 +161,7 @@ const plugin: AuthPlugin<OrgConfig> = {
           const memberPermissions = permissions || config.defaultPermissions || [];
 
           const member = await container.cradle.orgService.addMember({
-            organization_id,
+            organization_id: organizationId,
             entity_id: entity.id,
             role: memberRole,
             permissions: memberPermissions,
@@ -166,6 +182,8 @@ const plugin: AuthPlugin<OrgConfig> = {
           };
         }
       },
+      hooks: {},
+      inputs: ['entity', 'organizationId', 'role', 'permissions'],
       protocol: {
         http: {
           method: 'POST',
@@ -181,7 +199,13 @@ const plugin: AuthPlugin<OrgConfig> = {
     {
       name: 'get-organizations',
       description: 'Get user organizations',
-      inputs: [],
+      validationSchema: getOrganizationsSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "organizations?": 'object[]',
+      }),
       async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
         const { container } = pluginProperties!;
         const { entity } = input;
@@ -211,6 +235,8 @@ const plugin: AuthPlugin<OrgConfig> = {
           };
         }
       },
+      hooks: {},
+      inputs: ['entity'],
       protocol: {
         http: {
           method: 'GET',

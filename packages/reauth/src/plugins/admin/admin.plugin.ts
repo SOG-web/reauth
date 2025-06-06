@@ -13,11 +13,6 @@ import banSteps from './ban-steps';
 import { checkDependsOn, createAuthPlugin } from '../utils';
 import { hashPassword, haveIbeenPawned } from '../../lib';
 
-const emailSchema = type('string.email');
-const passwordSchema = type(
-  'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
-);
-
 interface AdminConfig {
   /**
    * Custom function to check if a user is banned
@@ -65,6 +60,11 @@ interface BanInfo {
   banned_at?: Date;
   banned_by?: string;
 }
+
+const createAdminSchema = type({
+  email: 'string.email',
+  password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
+});
 
 const plugin: AuthPlugin<AdminConfig> = {
   name: 'admin',
@@ -157,16 +157,14 @@ const plugin: AuthPlugin<AdminConfig> = {
           ic: 400,
         },
       },
-      validationSchema: {
-        email: createStandardSchemaRule(
-          emailSchema,
-          'Please enter a valid email address',
-        ),
-        password: createStandardSchemaRule(
-          passwordSchema,
-          'Password must be at least 8 characters',
-        ),
-      },
+      validationSchema: createAdminSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        entity: 'object',
+        admin: 'object',
+      }),
     },
   ],
   config: {},

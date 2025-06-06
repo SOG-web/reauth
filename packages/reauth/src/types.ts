@@ -1,5 +1,6 @@
 import { AwilixContainer } from 'awilix';
 import { ReAuthEngine } from './auth-engine';
+import { Type } from 'arktype';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -77,7 +78,8 @@ export type PluginProp<T = any> = {
 export interface AuthStep<T> {
   name: string;
   description: string;
-  validationSchema?: ValidationSchema;
+  validationSchema?: Type<any>;
+  outputs?: Type<any>;
   inputs: string[];
   hooks?: AuthStepHooks;
   registerHook?(
@@ -99,10 +101,11 @@ export interface AuthStep<T> {
   };
 }
 
-export type AuthInput = {
+export interface AuthInput {
   entity?: Entity;
   token?: AuthToken;
-} & Record<string, any>;
+  [key: string]: any;
+}
 
 export type HooksType = 'before' | 'after' | 'onError';
 
@@ -142,14 +145,15 @@ export interface AuthPlugin<T = any> {
   rootHooks?: RootStepHooks;
 }
 
-export type AuthOutput = {
+export interface AuthOutput {
   entity?: Entity;
   token?: AuthToken;
   redirect?: string;
   success: boolean;
   message: string;
   status: string;
-} & Record<string, any>;
+  [key: string]: any;
+}
 
 export interface BaseReAuthCradle {
   entityService: EntityService;
@@ -370,25 +374,11 @@ export interface EntitySchema {
   required: string[];
 }
 
-export interface StepInput {
-  name: string;
-  type: string;
-  required: boolean;
-  description: string;
-}
-
-export interface StepOutput {
-  name: string;
-  type: string;
-  required: boolean;
-  description: string;
-}
-
 export interface IntrospectionStep {
   name: string;
   description: string;
-  inputs: StepInput[];
-  outputs: StepOutput[];
+  inputs: Record<string, any>;
+  outputs: Record<string, any>;
   protocol: {
     http?: {
       method: string;

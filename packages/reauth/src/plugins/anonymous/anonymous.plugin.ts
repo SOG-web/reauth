@@ -1,8 +1,26 @@
 import { type } from 'arktype';
 import { AuthPlugin, AuthStep, Entity } from '../../types';
-import { createStandardSchemaRule } from '../../utils';
 import { createAuthPlugin } from '../utils/create-plugin';
 import { generateSessionToken } from '../../lib/osolo';
+
+// ArkType schemas for validation
+const createAnonymousSchema = type({});
+
+const linkAccountSchema = type({
+  targetEntityId: 'string',
+});
+
+const convertToUserSchema = type({
+  email: 'string.email',
+  'username?': 'string',
+  'password?': 'string',
+});
+
+const getAnonymousDataSchema = type({});
+
+const updateAnonymousDataSchema = type({
+  data: 'object',
+});
 
 const plugin: AuthPlugin<AnonymousConfig> = {
   name: 'anonymous',
@@ -13,8 +31,18 @@ const plugin: AuthPlugin<AnonymousConfig> = {
   steps: [
     {
       name: 'create-anonymous',
-      description: 'Create an anonymous user session',
+      description: 'Create anonymous user session',
+      validationSchema: createAnonymousSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "token?": 'string',
+        "entity?": 'object',
+        "anonymousId?": 'string',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container, config } = pluginProperties!;
         
         // Generate anonymous ID
@@ -69,14 +97,16 @@ const plugin: AuthPlugin<AnonymousConfig> = {
     },
     {
       name: 'link-account',
-      description: 'Link anonymous user to a registered account',
-      validationSchema: {
-        targetEntityId: createStandardSchemaRule(
-          type('string>=1'),
-          'Target entity ID is required',
-        ),
-      },
+      description: 'Link anonymous account to registered user',
+      validationSchema: linkAccountSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "linkedEntity?": 'object',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container, config } = pluginProperties!;
         const { entity, targetEntityId } = input;
 
@@ -190,13 +220,16 @@ const plugin: AuthPlugin<AnonymousConfig> = {
     {
       name: 'convert-to-user',
       description: 'Convert anonymous user to registered user',
-      validationSchema: {
-        email: createStandardSchemaRule(
-          type('string.email'),
-          'Valid email address is required',
-        ),
-      },
+      validationSchema: convertToUserSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "token?": 'string',
+        "entity?": 'object',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container, config } = pluginProperties!;
         const { entity, email, password, username } = input;
 
@@ -299,7 +332,7 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         };
       },
       hooks: {},
-      inputs: ['entity', 'email', 'password?', 'username?'],
+      inputs: ['entity', 'email', 'username', 'password'],
       protocol: {
         http: {
           method: 'POST',
@@ -317,7 +350,15 @@ const plugin: AuthPlugin<AnonymousConfig> = {
     {
       name: 'get-anonymous-data',
       description: 'Get anonymous user data',
+      validationSchema: getAnonymousDataSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "data?": 'Record<string, unknown>',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container } = pluginProperties!;
         const { entity } = input;
 
@@ -357,7 +398,15 @@ const plugin: AuthPlugin<AnonymousConfig> = {
     {
       name: 'update-anonymous-data',
       description: 'Update anonymous user data',
+      validationSchema: updateAnonymousDataSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "data?": 'Record<string, unknown>',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container, config } = pluginProperties!;
         const { entity, data } = input;
 

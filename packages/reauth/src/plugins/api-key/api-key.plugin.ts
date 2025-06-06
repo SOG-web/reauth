@@ -1,26 +1,45 @@
 import { type } from 'arktype';
 import { AuthPlugin, AuthStep, Entity } from '../../types';
-import { createStandardSchemaRule } from '../../utils';
 import { createAuthPlugin } from '../utils/create-plugin';
 import { generateSessionToken } from '../../lib/osolo';
 
+// ArkType schemas for validation
 const apiKeySchema = type('string>=32');
+const keyNameSchema = type('string>=1');
+const permissionsSchema = type('string[]');
+const expiresInSchema = type('number.integer>0');
+
+const authenticateSchema = type({
+  apiKey: apiKeySchema,
+});
+
+const createApiKeySchema = type({
+  name: keyNameSchema,
+  permissions: permissionsSchema,
+  'expiresIn?': expiresInSchema,
+});
+
+const listApiKeysSchema = type({});
+
+const revokeApiKeySchema = type({
+  name: keyNameSchema,
+});
 
 const plugin: AuthPlugin<ApiKeyConfig> = {
   name: 'api-key',
-  getSensitiveFields: () => [
-    'api_keys',
-  ],
+  getSensitiveFields: () => ['api_keys'],
   steps: [
     {
       name: 'authenticate',
       description: 'Authenticate using API key',
-      validationSchema: {
-        apiKey: createStandardSchemaRule(
-          apiKeySchema,
-          'API key must be at least 32 characters long',
-        ),
-      },
+      validationSchema: authenticateSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "entity?": 'object',
+        "keyData?": 'object',
+      }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { apiKey } = input;
@@ -82,12 +101,14 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
     {
       name: 'create-api-key',
       description: 'Create a new API key for authenticated user',
-      validationSchema: {
-                 name: createStandardSchemaRule(
-           type('string>=1'),
-           'API key name is required',
-         ),
-      },
+      validationSchema: createApiKeySchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "apiKey?": 'string',
+        "keyData?": 'object',
+      }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { entity, name, permissions, expiresIn } = input;
@@ -158,7 +179,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         };
       },
       hooks: {},
-      inputs: ['entity', 'name', 'permissions?', 'expiresIn?'],
+      inputs: ['entity', 'name', 'permissions', 'expiresIn'],
       protocol: {
         http: {
           method: 'POST',
@@ -173,6 +194,13 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
     {
       name: 'list-api-keys',
       description: 'List all API keys for authenticated user',
+      validationSchema: listApiKeysSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "apiKeys?": 'object[]',
+      }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
         const { entity } = input;
@@ -223,15 +251,15 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
     {
       name: 'revoke-api-key',
       description: 'Revoke an API key',
-      validationSchema: {
-                 keyName: createStandardSchemaRule(
-           type('string>=1'),
-           'API key name is required',
-         ),
-      },
+      validationSchema: revokeApiKeySchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
-        const { entity, keyName } = input;
+        const { entity, name } = input;
 
         if (!entity) {
           return { success: false, message: 'Authentication required', status: 'unauthorized' };
@@ -247,7 +275,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         }
 
         const apiKeys = currentEntity.api_keys || [];
-        const keyIndex = apiKeys.findIndex((key: any) => key.name === keyName);
+        const keyIndex = apiKeys.findIndex((key: any) => key.name === name);
 
         if (keyIndex === -1) {
           return { success: false, message: 'API key not found', status: 'key_not_found' };
@@ -272,7 +300,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         };
       },
       hooks: {},
-      inputs: ['entity', 'keyName'],
+      inputs: ['entity', 'name'],
       protocol: {
         http: {
           method: 'DELETE',

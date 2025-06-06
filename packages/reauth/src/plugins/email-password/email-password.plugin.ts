@@ -1,24 +1,15 @@
 import { type } from 'arktype';
 import { AuthPlugin, AuthStep, Entity } from '../../types';
-import { createStandardSchemaRule } from '../../utils';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { createAuthPlugin } from '../utils/create-plugin';
 
-const emailSchema = type('string.email');
-const passwordSchema = type(
-  'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
-);
+const loginSchema = type({
+  email: 'string.email',
+  password: 'string',
+  //password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/'
+})
 
-const loginValidation = {
-  email: createStandardSchemaRule(
-    emailSchema,
-    'Please enter a valid email address',
-  ),
-  password: createStandardSchemaRule(
-    passwordSchema,
-    'Password must be at least 8 characters',
-  ),
-};
+
 
 const plugin: AuthPlugin<EmailPasswordConfig> = {
   name: 'email-password',
@@ -32,7 +23,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
     {
       name: 'login',
       description: 'Authenticate user with email and password',
-      validationSchema: loginValidation,
+      validationSchema: loginSchema,
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { email, password } = input;
@@ -117,6 +108,14 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           status: 'su',
         };
       },
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        "error?": 'string | object',
+        status: 'string',
+        "token?": 'string',
+        "entity?": 'object',
+      }),
       hooks: {},
       inputs: ['email', 'password'],
       protocol: {
@@ -133,7 +132,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
     {
       name: 'register',
       description: 'Register a new user with email and password',
-      validationSchema: loginValidation,
+      validationSchema: loginSchema,
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { email, password } = input;
@@ -227,6 +226,10 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
     {
       name: 'verify-email',
       description: 'Verify email',
+      validationSchema: type({
+        email: 'string.email',
+        code: "number.safe | string",
+      }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
         const { email, code } = input;
@@ -266,6 +269,11 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           status: 'su',
         };
       },
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
       hooks: {},
       inputs: ['email', 'code'],
       protocol: {
@@ -280,6 +288,9 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
     {
       name: 'resend-verify-email',
       description: 'Resend verify email',
+      validationSchema: type({
+        email: 'string.email',
+      }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { email } = input;
@@ -336,6 +347,11 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         };
       },
       hooks: {},
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
       inputs: ['email'],
       protocol: {
         http: {
@@ -349,6 +365,9 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
     {
       name: 'send-reset-password',
       description: 'Send reset password',
+      validationSchema: type({
+        email: 'string.email',
+      }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { email } = input;
@@ -402,6 +421,11 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         };
       },
       hooks: {},
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
       inputs: ['email'],
       protocol: {
         http: {
@@ -415,6 +439,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
     {
       name: 'reset-password',
       description: 'Reset password',
+      validationSchema: type({
+        email: 'string.email',
+        // password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
+        password: 'string',
+        code: "number.safe | string",
+      }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
         const { email, password, code } = input;
@@ -472,6 +502,11 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         };
       },
       hooks: {},
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
       inputs: ['email', 'password', 'code'],
       protocol: {
         http: {

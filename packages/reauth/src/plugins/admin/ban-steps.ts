@@ -10,20 +10,11 @@ const banSteps: AuthStep<AdminConfig>[] = [
   {
     name: 'ban-user',
     description: 'Ban a user from the system',
-    validationSchema: {
-      entityId: createStandardSchemaRule(
-        userIdSchema,
-        'Please provide a valid user ID',
-      ),
-      reason: createStandardSchemaRule(
-        reasonSchema,
-        'Please provide a reason for banning',
-      ),
-      bannedBy: createStandardSchemaRule(
-        userIdSchema,
-        'Please provide the ID of who is banning',
-      ),
-    },
+    validationSchema: type({
+      entityId: userIdSchema,
+      reason: reasonSchema,
+      bannedBy: userIdSchema,
+    }),
     hooks: {},
     inputs: ['entityId', 'reason', 'bannedBy'],
     async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
@@ -63,20 +54,19 @@ const banSteps: AuthStep<AdminConfig>[] = [
         error: 500,
       },
     },
+    outputs: type({
+      success: 'boolean',
+      message: 'string',
+      status: 'string',
+    }),
   },
   {
     name: 'unban-user',
     description: 'Unban a user from the system',
-    validationSchema: {
-      entityId: createStandardSchemaRule(
-        userIdSchema,
-        'Please provide a valid user ID',
-      ),
-      unbannedBy: createStandardSchemaRule(
-        userIdSchema,
-        'Please provide the ID of who is unbanning',
-      ),
-    },
+    validationSchema: type({
+      entityId: userIdSchema,
+      unbannedBy: userIdSchema,
+    }),
     hooks: {},
     inputs: ['entityId', 'unbannedBy'],
     async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
@@ -117,16 +107,18 @@ const banSteps: AuthStep<AdminConfig>[] = [
         error: 500,
       },
     },
+    outputs: type({
+      success: 'boolean',
+      message: 'string',
+      status: 'string',
+    }),
   },
   {
     name: 'check-ban-status',
     description: 'Check if a user is banned',
-    validationSchema: {
-      entityId: createStandardSchemaRule(
-        userIdSchema,
-        'Please provide a valid user ID',
-      ),
-    },
+    validationSchema: type({
+      entityId: userIdSchema,
+    }),
     hooks: {},
     inputs: ['entityId'],
     async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
@@ -176,6 +168,12 @@ const banSteps: AuthStep<AdminConfig>[] = [
         error: 500,
       },
     },
+    outputs: type({
+      success: 'boolean',
+      message: 'string',
+      status: 'string',
+      banInfo: 'object',
+    }),
   },
 ];
 

@@ -2,23 +2,16 @@ import { AuthPlugin, AuthStep, Entity } from '../../types';
 import { createAuthPlugin } from '../utils/create-plugin';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { type } from 'arktype';
-import { createStandardSchemaRule } from '../../utils';
 
 const phoneSchema = type('string.regex|/^\+?[1-9]\d{1,14}$/');
 const passwordSchema = type(
   'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
 );
 
-const loginValidation = {
-  phone: createStandardSchemaRule(
-    phoneSchema,
-    'Please enter a valid phone number',
-  ),
-  password: createStandardSchemaRule(
-    passwordSchema,
-    'Password must be at least 8 characters',
-  ),
-};
+const loginValidation = type({
+  phone: phoneSchema,
+  password: passwordSchema,
+});
 
 const plugin: AuthPlugin<PhonePasswordConfig> = {
   name: 'phone-password',
@@ -95,6 +88,13 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       },
       hooks: {},
       inputs: ['phone', 'password'],
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        token: 'string',
+        entity: 'object',
+      }),
       protocol: {
         http: {
           method: 'POST',
@@ -189,6 +189,13 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       },
       hooks: {},
       inputs: ['phone', 'password'],
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        token: 'string',
+        entity: 'object',
+      }),
       protocol: {
         http: {
           method: 'POST',
@@ -201,6 +208,10 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
     {
       name: 'verify-phone',
       description: 'Verify phone',
+      validationSchema: type({
+        phone: phoneSchema,
+        code: 'string',
+      }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
         const { phone, code } = input;
@@ -262,6 +273,13 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       },
       hooks: {},
       inputs: ['phone', 'code'],
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        token: 'string',
+        entity: 'object',
+      }),
       protocol: {
         http: {
           method: 'POST',
@@ -275,12 +293,14 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
     {
       name: 'password-reset',
       description: 'Reset password',
-      validationSchema: {
-        phone: createStandardSchemaRule(
-          phoneSchema,
-          'Please enter a valid phone number',
-        ),
-      },
+      validationSchema: type({
+        phone: phoneSchema,
+      }),
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
       hooks: {},
       inputs: ['phone'],
       run: async function (input, pluginProperties) {

@@ -1,36 +1,44 @@
 import { type } from 'arktype';
 import { AuthPlugin, AuthStep, Entity } from '../../types';
-import { createStandardSchemaRule } from '../../utils';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { createAuthPlugin } from '../utils/create-plugin';
 
+// ArkType schemas for validation
 const usernameSchema = type('string.regex|/^[a-zA-Z0-9_]{3,20}$/');
-const passwordSchema = type(
-  'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
-);
+const passwordSchema = type('string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/');
 
-const loginValidation = {
-  username: createStandardSchemaRule(
-    usernameSchema,
-    'Username must be 3-20 characters long and contain only letters, numbers, and underscores',
-  ),
-  password: createStandardSchemaRule(
-    passwordSchema,
-    'Password must be at least 8 characters with uppercase, lowercase, number and special character',
-  ),
-};
+const loginSchema = type({
+  username: usernameSchema,
+  password: passwordSchema,
+});
+
+const registerSchema = type({
+  username: usernameSchema,
+  password: passwordSchema,
+});
+
+const changePasswordSchema = type({
+  currentPassword: passwordSchema,
+  newPassword: passwordSchema,
+});
 
 const plugin: AuthPlugin<UsernamePasswordConfig> = {
   name: 'username-password',
-  getSensitiveFields: () => [
-    'password_hash',
-  ],
+  getSensitiveFields: () => ['password_hash'],
   steps: [
     {
       name: 'login',
       description: 'Authenticate user with username and password',
-      validationSchema: loginValidation,
+      validationSchema: loginSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "token?": 'string',
+        "entity?": 'object',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container, config } = pluginProperties!;
         const { username, password } = input;
 
@@ -92,15 +100,22 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
           unf: 401,
           ip: 400,
           su: 200,
-          ic: 400,
         },
       },
     },
     {
       name: 'register',
       description: 'Register a new user with username and password',
-      validationSchema: loginValidation,
+      validationSchema: registerSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+        "token?": 'string',
+        "entity?": 'object',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container, config } = pluginProperties!;
         const { username, password } = input;
 
@@ -170,17 +185,14 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
     {
       name: 'change-password',
       description: 'Change user password',
-      validationSchema: {
-        currentPassword: createStandardSchemaRule(
-          passwordSchema,
-          'Current password is required',
-        ),
-        newPassword: createStandardSchemaRule(
-          passwordSchema,
-          'New password must be at least 8 characters with uppercase, lowercase, number and special character',
-        ),
-      },
+      validationSchema: changePasswordSchema,
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
       run: async function (input, pluginProperties) {
+
         const { container } = pluginProperties!;
         const { entity, currentPassword, newPassword } = input;
 
@@ -248,18 +260,14 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         };
       },
       hooks: {},
-      inputs: ['entity', 'currentPassword', 'newPassword'],
+      inputs: ['currentPassword', 'newPassword'],
       protocol: {
         http: {
           method: 'POST',
           auth: true,
-          unf: 404,
           ip: 400,
-          cp: 400,
-          sp: 400,
-          np: 400,
           su: 200,
-          unauthorized: 401,
+          unf: 401,
         },
       },
     },

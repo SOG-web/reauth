@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { AuthInput, ValidationResult, ValidationSchema } from '../types';
+import { TraversalError, Type } from 'arktype';
 
 /**
  * Validates input data using a standard-schema compliant validator
@@ -157,30 +158,29 @@ export async function validateInputWithStandardSchema<
  * @returns ValidationResult compatible with reauth's validation system
  */
 export async function validateInputWithValidationSchema(
-  schema: ValidationSchema,
+  schema: Type<any>,
   input: Record<string, any>,
 ): Promise<ValidationResult> {
-  const errors: Record<string, string> = {};
-
-  // Run each validation rule
-  for (const [field, rules] of Object.entries(schema)) {
-    const value = input[field];
-    const rulesArray = Array.isArray(rules) ? rules : [rules];
-
-    for (const rule of rulesArray) {
-      // Create a minimal AuthInput object for the validation rule
-      const authInput: AuthInput = { reqBody: input };
-
-      const error = rule(value, authInput);
-      if (error) {
-        errors[field] = error;
-        break; // Stop on first error for this field
-      }
+  try {
+    const data = schema.assert(input);
+  } catch (error) {
+    if (error instanceof TraversalError) {
+    return {
+      isValid: false,
+      errors: {
+          _error: error.message,
+        },
+      };
     }
-  }
 
+    return {
+      isValid: false,
+      errors: {
+        _error: 'Unknown validation error',
+      },
+    };
+  }
   return {
-    isValid: Object.keys(errors).length === 0,
-    errors: Object.keys(errors).length > 0 ? errors : undefined,
+    isValid: true,
   };
 }
