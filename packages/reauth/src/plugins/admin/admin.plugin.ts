@@ -212,9 +212,9 @@ const plugin: AuthPlugin<AdminConfig> = {
             if (entity && entity.banned) {
               return {
                 banned: true,
-                reason: entity.ban_reason,
-                banned_at: entity.banned_at,
-                banned_by: entity.banned_by,
+                reason: entity.ban_reason!,
+                banned_at: entity.banned_at!,
+                banned_by: entity.banned_by!,
               };
             }
             return null;
@@ -431,10 +431,10 @@ export default function adminPlugin(
 // Extend the Entity type to include ban fields
 declare module '../../types' {
   interface EntityExtension {
-    banned?: boolean;
-    ban_reason?: string | undefined;
-    banned_at?: Date | undefined;
-    banned_by?: string | undefined;
+    banned?: boolean | null;
+    ban_reason?: string | null;
+    banned_at?: Date | null;
+    banned_by?: string | null;
     /**
      * this is a computed value
      */
@@ -442,11 +442,11 @@ declare module '../../types' {
     /**
      * this is a computed value
      */
-    permissions?: string[];
+    permissions?: string[] | null;
     /**
      * this is a computed value
      */
-    roles?: string[];
+    roles?: string[] | null;
   }
 
   interface ReAuthCradleExtension {
@@ -460,8 +460,8 @@ declare module '../../types' {
 export interface AdminEntity {
   id: string;
   entity_id: string;
-  permissions?: string[];
-  roles?: string[];
+  permissions?: string[] | null;
+  roles?: string[] | null;
 }
 
 export type AdminEntityService = {

@@ -516,9 +516,9 @@ export interface PhonePasswordConfig {
 
 declare module '../../types' {
   interface EntityExtension {
-    phone?: string | undefined;
+    phone?: string | null;
     phone_verified?: boolean;
-    phone_verification_code?: string | number | undefined;
-    phone_verification_code_expires_at?: Date | undefined;
+    phone_verification_code?: string | number | null;
+    phone_verification_code_expires_at?: Date | null;
   }
 }

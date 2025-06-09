@@ -11,6 +11,7 @@
     "@re-auth/sdk-generator": "0.0.1"
   },
   "changesets": [
+    "breezy-baths-walk",
     "common-coins-swim",
     "floppy-coins-boil",
     "nice-poets-jog",

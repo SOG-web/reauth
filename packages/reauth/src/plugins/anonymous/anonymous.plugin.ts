@@ -551,12 +551,12 @@ export default anonymousAuth;
 
 declare module '../../types' {
   interface EntityExtension {
-    anonymous_id?: string;
-    is_anonymous?: boolean;
+    anonymous_id?: string | null;
+    is_anonymous?: boolean | null;
     linked_to_entity_id?: string | null;
-    linked_at?: Date;
-    converted_at?: Date;
-    anonymous_data?: Record<string, any>;
+    linked_at?: Date | null;
+    converted_at?: Date | null;
+    anonymous_data?: Record<string, any> | null;
   }
 }
 

@@ -377,7 +377,7 @@ declare module '../../types' {
       last_used_at: Date | null;
       usage_count: number;
       expires_at: Date | null;
-    }>;
+    }> | null;
   }
 }
 

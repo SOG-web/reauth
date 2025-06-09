@@ -333,7 +333,7 @@ export default usernamePasswordAuth;
 
 declare module '../../types' {
   interface EntityExtension {
-    username?: string;
+    username?: string | null;
   }
 }
 

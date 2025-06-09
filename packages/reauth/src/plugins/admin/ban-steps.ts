@@ -138,9 +138,9 @@ const banSteps: AuthStep<AdminConfig>[] = [
           if (entity && entity.banned) {
             banInfo = {
               banned: true,
-              reason: entity.ban_reason,
-              banned_at: entity.banned_at,
-              banned_by: entity.banned_by,
+              reason: entity.ban_reason!,
+              banned_at: entity.banned_at!,
+              banned_by: entity.banned_by!,
             };
           }
         }

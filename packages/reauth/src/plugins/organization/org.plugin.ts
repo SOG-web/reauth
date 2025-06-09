@@ -461,7 +461,7 @@ declare module '../../types' {
       name: string;
       role: string;
       permissions: string[];
-    }>;
+    }> | null;
     /**
      * Teams this user belongs to across all organizations
      */
@@ -476,7 +476,7 @@ declare module '../../types' {
 export interface Organization {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   owner_id: string;
   created_at: Date;
   updated_at: Date;
