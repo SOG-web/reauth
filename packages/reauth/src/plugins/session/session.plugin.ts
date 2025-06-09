@@ -80,20 +80,9 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
                         others,
                     };
                 }
-                const { sessionService } = container.cradle;
+                const { sessionService } = container.cradle
 
-                const session = await sessionService.verifySession(token!);
-
-                if (!session.entity) {
-                    return {
-                        success: false,
-                        message: 'Invalid token',
-                        status: 'unf',
-                        others,
-                    };
-                }
-
-                await sessionService.destroySession(session.entity.id!);
+                await sessionService.destroySession(token!);
                 return {
                     success: true,
                     message: 'Session destroyed',
@@ -137,7 +126,16 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
                     };
                 }
                 const { sessionService } = container.cradle;
-                await sessionService.destroyAllSessions(token!);
+                const session = await sessionService.verifySession(token!);
+                if (!session.entity) {
+                    return {
+                        success: false,
+                        message: 'Invalid token',
+                        status: 'unf',
+                        others,
+                    };
+                }
+                await sessionService.destroyAllSessions(session.entity.id!);
                 return {
                     success: true,
                     message: 'All sessions destroyed',
