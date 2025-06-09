@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.9
+
+### Patch Changes
+
+- [`af8a743`](https://github.com/SOG-web/reauth/commit/af8a7437ae7036e3ab24d9407cb468abe19f3d4e) Thanks [@SOG-web](https://github.com/SOG-web)! - patches
+
 ## 0.1.0-alpha.8
 
 ### Patch Changes
