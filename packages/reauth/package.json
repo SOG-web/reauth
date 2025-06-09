@@ -22,6 +22,11 @@
       "import": "./dist/esm/src/index.js",
       "require": "./dist/cjs/src/index.js"
     },
+    "./lib": {
+      "types": "./dist/esm/src/lib/index.d.ts",
+      "import": "./dist/esm/src/lib/index.js",
+      "require": "./dist/cjs/src/lib/index.js"
+    },
     "./plugins/utils": {
       "types": "./dist/esm/src/plugins/utils/index.d.ts",
       "import": "./dist/esm/src/plugins/utils/index.js",
@@ -42,6 +47,9 @@
     "*": {
       ".": [
         "./dist/esm/src/index.d.ts"
+      ],
+      "lib": [
+        "./dist/esm/src/lib/index.d.ts"
       ],
       "plugins/utils": [
         "./dist/esm/src/plugins/utils/index.d.ts"
