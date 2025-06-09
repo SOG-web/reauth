@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.6
+
+### Minor Changes
+
+- [`52dd086`](https://github.com/SOG-web/reauth/commit/52dd08677f26d31bc16a3db6fffe4f054007968d) Thanks [@SOG-web](https://github.com/SOG-web)! - made more flexible
+
 ## 0.1.0-alpha.5
 
 ### Minor Changes
