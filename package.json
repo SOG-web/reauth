@@ -1,13 +1,14 @@
 {
-  "name": "reauth",
-  "private": true,
+  "name": "re-auth",
+  "private": false,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "release": "pnpm changeset version && pnpm changeset publish"
+    "release": "pnpm changeset version && pnpm changeset publish",
+    "generate:sdk": "pnpm --filter=@re-auth/sdk-generator build && node packages/sdk-generator/dist/index.js --url http://localhost:3001/test-introspection --output apps/web/lib/reauth-client"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.1",

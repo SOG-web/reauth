@@ -11,7 +11,7 @@ const loginSchema = type({
 
 
 const plugin: AuthPlugin<EmailPasswordConfig> = {
-  name: 'email-password',
+  name: 'emailAuthPlugin',
   getSensitiveFields: () => [
     'password_hash',
     'email_verification_code',
@@ -509,6 +509,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       protocol: {
         http: {
           method: 'POST',
+          auth: true,
           ic: 400,
           ip: 400,
           su: 200,

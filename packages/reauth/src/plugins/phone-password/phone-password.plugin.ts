@@ -3,9 +3,9 @@ import { createAuthPlugin } from '../utils/create-plugin';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { type } from 'arktype';
 
-const phoneSchema = type('string.regex|/^\+?[1-9]\d{1,14}$/');
+const phoneSchema = type('/^\\+?[1-9]\\d{1,14}$/');
 const passwordSchema = type(
-  'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
+  '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/'
 );
 
 const loginValidation = type({
@@ -14,7 +14,7 @@ const loginValidation = type({
 });
 
 const plugin: AuthPlugin<PhonePasswordConfig> = {
-  name: 'phone-password',
+  name: 'phoneAuthPlugin',
   getSensitiveFields: () => [
     'phone_verification_code_expires_at',
     'phone_verification_code',
@@ -148,9 +148,9 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
               phone_verification_code: code,
               phone_verification_code_expires_at: new Date(
                 Date.now() +
-                  (config.expireTime
-                    ? (config.expireTime as any).split('m')[0] * 60 * 1000
-                    : 0),
+                (config.expireTime
+                  ? (config.expireTime as any).split('m')[0] * 60 * 1000
+                  : 0),
               ),
             },
           );

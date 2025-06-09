@@ -6,7 +6,6 @@ import {
   ReAuthCradle,
   AuthStep,
 } from '../../types';
-import { createStandardSchemaRule } from '../../utils';
 import { type } from 'arktype';
 import { extractEntityId, performBanCheck } from './ban-interceptor';
 import banSteps from './ban-steps';
@@ -67,7 +66,7 @@ const createAdminSchema = type({
 });
 
 const plugin: AuthPlugin<AdminConfig> = {
-  name: 'admin',
+  name: 'adminPlugin',
   steps: [
     ...banSteps,
     {

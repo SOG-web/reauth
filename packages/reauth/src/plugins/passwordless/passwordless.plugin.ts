@@ -9,7 +9,7 @@
 // const token = type('string');
 
 // const plugin: AuthPlugin<PasswordLessConfig> = {
-//   name: 'passwordless',
+//   name: 'passwordlessPlugin',
 //   getSensitiveFields: () => [
 //     'magiclink_code',
 //     'magiclink_code_expires_at',

@@ -26,7 +26,7 @@ const revokeApiKeySchema = type({
 });
 
 const plugin: AuthPlugin<ApiKeyConfig> = {
-  name: 'api-key',
+  name: 'apiKeyPlugin',
   getSensitiveFields: () => ['api_keys'],
   steps: [
     {

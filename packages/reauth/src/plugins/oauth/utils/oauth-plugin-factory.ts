@@ -1,9 +1,6 @@
 import * as arctic from 'arctic';
 import { AuthPlugin, AuthStep, AuthInput, AuthOutput, PluginProp, Entity } from '../../../types';
 import { type } from 'arktype';
-import { createStandardSchemaRule } from '../../../utils';
-
-const stringSchema = type('string');
 
 /**
  * OAuth ID token claims structure
@@ -716,7 +713,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
     });
 
     return {
-      name: `${providerName.toLowerCase()}-oauth`,
+      name: `${providerName.toLowerCase()}OAuthPlugin`,
       steps,
       config,
       async initialize() {},

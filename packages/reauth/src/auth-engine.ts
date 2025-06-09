@@ -329,12 +329,12 @@ export class ReAuthEngine {
       })),
     }));
 
-    return {
+    return JSON.parse(JSON.stringify({
       entity: entitySchema,
       plugins,
       generatedAt: new Date().toISOString(),
       version: '1.0.0',
-    };
+    }));
   }
 
   /**

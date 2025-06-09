@@ -31,7 +31,7 @@ export interface AppleOAuthConfig extends BaseOAuthConfig {
  * Apple uses regular OAuth flow
  */
 export const appleOAuthPlugin = createOAuthPlugin<AppleOAuthConfig>(
-  'Apple',
+  'apple',
   'regular', // Apple uses regular OAuth
   (config: AppleOAuthConfig) => 
     new arctic.Apple(

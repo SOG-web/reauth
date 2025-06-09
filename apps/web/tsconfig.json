@@ -5,7 +5,10 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "paths": {
+      "@/lib/reauth-client": ["./lib/reauth-client"]
+    }
   },
   "include": [
     "**/*.ts",

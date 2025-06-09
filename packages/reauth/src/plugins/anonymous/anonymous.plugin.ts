@@ -23,7 +23,7 @@ const updateAnonymousDataSchema = type({
 });
 
 const plugin: AuthPlugin<AnonymousConfig> = {
-  name: 'anonymous',
+  name: 'anonymousPlugin',
   getSensitiveFields: () => [
     'anonymous_id',
     'linked_to_entity_id',

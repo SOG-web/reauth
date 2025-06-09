@@ -1,5 +1,5 @@
 import { createReAuthEngine } from '@re-auth/reauth';
-import { emailPasswordAuth } from '@re-auth/reauth/plugins';
+import { emailPasswordAuth, phonePasswordAuth } from '@re-auth/reauth/plugins';
 import {
   KnexEntityService,
   KnexSessionService,
@@ -24,6 +24,12 @@ const reAuth = createReAuthEngine({
       verifyEmail: true,
       sendCode: async (entity, code, email, type) => {
         console.log('sendCode', entity, code, email, type);
+      },
+    }),
+    phonePasswordAuth({
+      verifyPhone: true,
+      sendCode: async (entity, code, phone) => {
+        console.log('sendCode', entity, code, phone);
       },
     }),
   ],

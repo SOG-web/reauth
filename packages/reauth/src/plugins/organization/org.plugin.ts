@@ -41,7 +41,7 @@ const getOrganizationsSchema = type({});
 
 const plugin: AuthPlugin<OrgConfig> = {
   config: {},
-  name: 'organization',
+  name: 'organizationPlugin',
   steps: [
     {
       name: 'create-organization',

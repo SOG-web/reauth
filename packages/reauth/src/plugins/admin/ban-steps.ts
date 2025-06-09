@@ -1,6 +1,5 @@
 import type { AuthInput, AuthOutput, AuthStep } from '../../types';
 import type { AdminConfig, BanInfo } from './admin.plugin';
-import { createStandardSchemaRule } from '../../utils';
 import { type } from 'arktype';
 
 const userIdSchema = type('string');

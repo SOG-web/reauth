@@ -1,4 +1,5 @@
 import emailPasswordAuth from './email-password/email-password.plugin';
+import phonePasswordAuth from './phone-password/phone-password.plugin';
 // import passwordlessAuth from './passwordless/passwordless.plugin';
 import adminPlugin from './admin/admin.plugin';
 import usernamePasswordAuth from './username/username.plugin';
@@ -20,6 +21,7 @@ export * from './oauth';
 
 export { 
   emailPasswordAuth, 
+  phonePasswordAuth,
   // passwordlessAuth, 
   adminPlugin,
   usernamePasswordAuth,

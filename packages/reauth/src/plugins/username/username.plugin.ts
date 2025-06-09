@@ -23,7 +23,7 @@ const changePasswordSchema = type({
 });
 
 const plugin: AuthPlugin<UsernamePasswordConfig> = {
-  name: 'username-password',
+  name: 'usernameAuthPlugin',
   getSensitiveFields: () => ['password_hash'],
   steps: [
     {
