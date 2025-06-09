@@ -30,6 +30,14 @@ export function createAuthPlugin(
     });
   }
 
+  // Apply root hooks if provided
+  if (config.rootHooks) {
+    basePlugin.rootHooks = config.rootHooks;
+  }
+
+  // remove root hooks from config
+  delete config.rootHooks;
+
   const combinedPlugin: AuthPlugin = {
     ...basePlugin,
     config: {

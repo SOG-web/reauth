@@ -18,7 +18,10 @@ customAxiosInstance.interceptors.request.use((config) => {
 const authClient = createReAuthClient({
     axiosInstance: customAxiosInstance,
     auth: {
-        type: 'cookie',
+        type: 'custom',
+        getToken: () => {
+            return '1234567890';
+        }
     }
 });
 

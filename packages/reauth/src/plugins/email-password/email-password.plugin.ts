@@ -1,11 +1,12 @@
 import { type } from 'arktype';
-import { AuthPlugin, AuthStep, Entity } from '../../types';
+import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { createAuthPlugin } from '../utils/create-plugin';
 
 const loginSchema = type({
   email: 'string.email',
-  password: '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/'
+  password: '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
+  others: 'object?'
 })
 
 
@@ -559,7 +560,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       },
     ],
   },
-  config: {},
+  config: {}
 };
 
 const emailPasswordAuth = (
@@ -690,6 +691,16 @@ interface EmailPasswordConfig {
    * should be in milliseconds
    */
   resetPasswordCodeExpiresIn?: number;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 }
 
 //TODO: use change password step as an example on the docs

@@ -1,5 +1,5 @@
 import * as arctic from 'arctic';
-import { AuthPlugin, AuthStep, AuthInput, AuthOutput, PluginProp, Entity } from '../../../types';
+import { AuthPlugin, AuthStep, AuthInput, AuthOutput, PluginProp, Entity, RootStepHooks } from '../../../types';
 import { type } from 'arktype';
 
 /**
@@ -48,6 +48,16 @@ export interface BaseOAuthConfig {
    * Field name to use for finding existing accounts (default: 'email')
    */
   linkField?: string;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 }
 
 /**
@@ -324,6 +334,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
     const linkField = config.linkField || 'email';
 
     const steps: AuthStep<T>[] = [];
+    
+    // extract root hooks from config
+    const rootHooks = config.rootHooks;
+    delete config.rootHooks;
 
     // Step 1: Start OAuth flow
     steps.push({
@@ -745,6 +759,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           },
         ],
       },
+      rootHooks,
     };
   };
 } 

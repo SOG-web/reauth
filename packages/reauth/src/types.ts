@@ -51,9 +51,17 @@ export type RootStepOutputHook = (
   step: AuthStep<AuthOutput>,
 ) => AuthOutput | Promise<AuthOutput>;
 
+export type RootStepErrorHook = (
+  error: Error,
+  input: AuthInput,
+  container: AwilixContainer<ReAuthCradle>,
+  step: AuthStep<AuthInput>,
+) => Promise<void> | void;
+
 export interface RootStepHooks {
-  before?: RootStepInputHook[];
-  after?: RootStepOutputHook[];
+  before?: RootStepInputHook;
+  after?: RootStepOutputHook;
+  onError?: RootStepErrorHook;
 }
 
 export interface AuthHooks {

@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import { AuthPlugin, AuthStep, Entity } from '../../types';
+import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { createAuthPlugin } from '../utils/create-plugin';
 
@@ -343,4 +343,14 @@ interface UsernamePasswordConfig {
    * Whether to login the user after registration
    */
   loginOnRegister?: boolean;
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 } 
+

@@ -232,12 +232,17 @@ export class ReAuthEngine {
         stepName,
         pluginName,
       );
-      input = processedInput;
+
+      if (plugin.rootHooks?.before) {
+        input = await plugin.rootHooks.before(processedInput, this.container, step);
+      } else {
+        input = processedInput;
+      }
 
       if (plugin.runStep)
         return plugin.runStep(step.name, input, this.container);
 
-      const output = await executeStep(stepName, input, {
+      let output = await executeStep(stepName, input, {
         pluginName,
         step,
         container: this.container,
@@ -250,8 +255,21 @@ export class ReAuthEngine {
         stepName,
         pluginName,
       );
-      return processedOutput as AuthOutput;
+
+      if (plugin.rootHooks?.after) {
+        output = await plugin.rootHooks.after(processedOutput as AuthOutput, this.container, step);
+      } else {
+        output = processedOutput as AuthOutput;
+      }
+
+      return output as AuthOutput;
     } catch (error: any) {
+      const plugin = this.getPlugin(pluginName);
+      const step = plugin.steps.find((s) => s.name === stepName);
+      if (!step) {
+        throw new StepNotFound(stepName, pluginName);
+      }
+
       await this.executeAuthHooks(
         'onError',
         input,
@@ -259,6 +277,11 @@ export class ReAuthEngine {
         pluginName,
         error,
       );
+
+      if (plugin.rootHooks?.onError) {
+        await plugin.rootHooks.onError(error, input, this.container, step);
+      }
+
       throw error;
     }
   }

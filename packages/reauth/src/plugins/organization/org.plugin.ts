@@ -1,5 +1,5 @@
 import { asValue, AwilixContainer } from 'awilix';
-import { AuthOutput, AuthPlugin, AuthStep, ReAuthCradle, AuthInput } from '../../types';
+import { AuthOutput, AuthPlugin, AuthStep, ReAuthCradle, AuthInput, RootStepHooks } from '../../types';
 import { checkDependsOn, createAuthPlugin } from '../utils';
 import { type } from 'arktype';
 
@@ -21,6 +21,16 @@ interface OrgConfig {
    * Whether users can create organizations (default: true)
    */
   allowOrgCreation?: boolean;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 }
 
 export const organizationPluginDependsOn = ['admin'];

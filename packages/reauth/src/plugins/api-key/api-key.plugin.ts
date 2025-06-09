@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import { AuthPlugin, AuthStep, Entity } from '../../types';
+import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { createAuthPlugin } from '../utils/create-plugin';
 import { generateSessionToken } from '../../lib/osolo';
 
@@ -392,4 +392,14 @@ interface ApiKeyConfig {
    * @returns Generated API key string
    */
   generateApiKey?: () => string;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 } 

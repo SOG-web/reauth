@@ -6,11 +6,16 @@
     "web": "0.1.0",
     "@repo/eslint-config": "0.0.0",
     "@repo/typescript-config": "0.0.0",
-    "@repo/ui": "0.0.0"
+    "@repo/ui": "0.0.0",
+    "@re-auth/http-adapters": "0.1.0-alpha.0",
+    "@re-auth/sdk-generator": "0.0.1"
   },
   "changesets": [
     "floppy-coins-boil",
     "nice-poets-jog",
-    "public-worlds-tan"
+    "public-worlds-tan",
+    "sixty-oranges-judge",
+    "spicy-bugs-punch",
+    "whole-beans-repair"
   ]
 }

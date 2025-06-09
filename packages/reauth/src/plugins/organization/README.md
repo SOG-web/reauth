@@ -10,7 +10,6 @@ The Organization plugin extends ReAuth with multi-tenant organization capabiliti
 - ✅ **Team Support**: Organize members into teams within organizations
 - ✅ **Session Enhancement**: Automatically inject organization data into user sessions
 - ✅ **Database Migration**: Complete database schema generation
-- ✅ **Knex Integration**: Ready-to-use Knex.js service implementation
 
 ## Installation
 

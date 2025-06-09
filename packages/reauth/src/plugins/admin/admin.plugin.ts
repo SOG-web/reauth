@@ -5,6 +5,7 @@ import {
   AuthOutput,
   ReAuthCradle,
   AuthStep,
+  RootStepHooks,
 } from '../../types';
 import { type } from 'arktype';
 import { extractEntityId, performBanCheck } from './ban-interceptor';
@@ -51,6 +52,16 @@ interface AdminConfig {
   ) => Promise<void>;
 
   adminEntity: AdminEntityService;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 }
 
 interface BanInfo {

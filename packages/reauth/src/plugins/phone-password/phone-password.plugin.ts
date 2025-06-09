@@ -1,4 +1,4 @@
-import { AuthPlugin, AuthStep, Entity } from '../../types';
+import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { createAuthPlugin } from '../utils/create-plugin';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { type } from 'arktype';
@@ -503,6 +503,15 @@ export interface PhonePasswordConfig {
    * @throws {Error} If not provided - this is a required configuration
    */
   sendCode: (entity: Entity, code: string, phone: string) => Promise<void>;
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 }
 
 declare module '../../types' {

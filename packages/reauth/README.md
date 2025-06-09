@@ -189,14 +189,6 @@ const auth = new ReAuthEngine({
 ## 📝 License
 
 MIT
-    this.emailService = this.container.resolve('emailService');
-  }
-
-  steps = [...];
-}
-```
-
----
 
 ## 🧱 Plugin Interface
 
@@ -210,8 +202,6 @@ interface AuthPlugin {
   initialize?(container?: AwilixContainer): void | Promise<void>;
 }
 ```
-
----
 
 ## 🪜 Step Structure
 
@@ -231,8 +221,6 @@ interface AuthStep {
 }
 ```
 
----
-
 ## 📑 Validation Schema
 
 ```ts
@@ -240,8 +228,6 @@ type ValidationSchema = Record<string, ((value: any, input: AuthInput) => string
 ```
 
 You can also use Standard Schema compliant validators (see [Standard Schema Support](#standard-schema-support) below).
-
----
 
 ## ✅ Required Input Flags
 
@@ -257,36 +243,17 @@ interface RequiredInputShape {
 }
 ```
 
----
-
 ## 🪝 Hook Types
 
 ```ts
 type HookFunction = (input: AuthInput, output?: any) => Promise<void>;
 ```
 
----
-
 ## 🚦Plugin Lifecycle
 
-```mermaid
-flowchart TD
-  A[Plugin Registered] --> B[Initialize Called]
-  B --> C[DI Container Injected (optional)]
-  C --> D[Steps Available]
+The lifecycle of a plugin follows these steps:
 
-  D --> E[Step Invoked]
-  E --> F[Run Before Hooks]
-  F --> G[Validate Input]
-  G --> H[Run Step Logic]
-  H --> I[Run After Hooks]
-  H --> J[Error Thrown?]
-
-  J -- Yes --> K[Run onError Hook]
-  J -- No --> L[Return Success]
-```
-
----
+[![](https://mermaid.ink/img/pako:eNpdkm9v2jAQxr-K5dcUyB-SkBebINBC100TrSZtCS9Mckk8EjtybDqK8t1nGzpVyyv7fvc8d-fcBee8ABzjsuGveU2ERC-rjCG0SL83qqIM7aCivQQBxR7d3X1Cy3TLqKSkoW-AEtI0GhjB0tIkXW1RwpkklIFAW_YbcnnLSGzGKn2W0PVocSK0IYcGNDN0ZenaUq078eNNtrbgPt0phpZQcgFow_mxt_Dewof0h-6nIBK0slPSogeLNlZnTZ94RXOLNhZtLVqUergPjlf2eFkLwQV6qQV_ZZ-Ha4-PmqEM_4Q-wzbti7Xg7JpsTPYf8r7xW9pTugOphO5D5Tn0_R6PcCVogWMpFIxwC6Il5oovRp5hWUMLGY71sSDimOGMDVrTEfaL8_ZdJriqahyXpOn1TXXmAVaUVIK0_0XXBZVc_AsSJfnzmeXvRg0nBWh8wfLcmW0wv1zXyzkraWXiSjQ6XEvZ9fFkYvC4orJWh3HO20lPC7M69WkeTAI3iIjrQRB6ZOZ5RX5w5lHp-k5ZhFPHJXgYdOfAdMGEKyZx7Ll2MlPmD46dIBo73nzmBl4QOlE4G-EzjmfOOIhCP_JD33Gd6dzXJm_2KaZjHZ_rbxp5YeS4vnYDO-7X62bbBR_-AguQ6Wg?type=png)](https://mermaid.live/edit#pako:eNpdkm9v2jAQxr-K5dcUyB-SkBebINBC100TrSZtCS9Mckk8EjtybDqK8t1nGzpVyyv7fvc8d-fcBee8ABzjsuGveU2ERC-rjCG0SL83qqIM7aCivQQBxR7d3X1Cy3TLqKSkoW-AEtI0GhjB0tIkXW1RwpkklIFAW_YbcnnLSGzGKn2W0PVocSK0IYcGNDN0ZenaUq078eNNtrbgPt0phpZQcgFow_mxt_Dewof0h-6nIBK0slPSogeLNlZnTZ94RXOLNhZtLVqUergPjlf2eFkLwQV6qQV_ZZ-Ha4-PmqEM_4Q-wzbti7Xg7JpsTPYf8r7xW9pTugOphO5D5Tn0_R6PcCVogWMpFIxwC6Il5oovRp5hWUMLGY71sSDimOGMDVrTEfaL8_ZdJriqahyXpOn1TXXmAVaUVIK0_0XXBZVc_AsSJfnzmeXvRg0nBWh8wfLcmW0wv1zXyzkraWXiSjQ6XEvZ9fFkYvC4orJWh3HO20lPC7M69WkeTAI3iIjrQRB6ZOZ5RX5w5lHp-k5ZhFPHJXgYdOfAdMGEKyZx7Ll2MlPmD46dIBo73nzmBl4QOlE4G-EzjmfOOIhCP_JD33Gd6dzXJm_2KaZjHZ_rbxp5YeS4vnYDO-7X62bbBR_-AguQ6Wg)
 
 ## ⚠️ Object Plugin Restrictions
 
@@ -294,15 +261,11 @@ flowchart TD
 - ✅ Capture context using top-level variables or closures.
 - ⚠️ If plugin requires internal state, switch to class format.
 
----
-
 ## 🧪 Example Registry
 
 ```ts
 export const authPlugins: AuthPlugin[] = [emailPasswordPlugin, new MagicLinkPlugin(), new OauthPlugin()];
 ```
-
----
 
 ## ✅ Summary
 
@@ -310,8 +273,6 @@ export const authPlugins: AuthPlugin[] = [emailPasswordPlugin, new MagicLinkPlug
 | ------------ | -------------- | ----------------- | --------------------------- |
 | Object-based | ❌ No          | ✅ Yes            | Lightweight plugins         |
 | Class-based  | ✅ Yes         | ✅ Yes            | Stateful or complex plugins |
-
----
 
 ## 🔄 Standard Schema Support
 

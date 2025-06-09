@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import { AuthPlugin, AuthStep, Entity } from '../../types';
+import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { createAuthPlugin } from '../utils/create-plugin';
 import { generateSessionToken } from '../../lib/osolo';
 
@@ -606,4 +606,14 @@ interface AnonymousConfig {
    * Validation function for anonymous data
    */
   validateAnonymousData?: (data: Record<string, any>) => boolean;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks;
 } 
