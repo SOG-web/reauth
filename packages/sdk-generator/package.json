@@ -1,6 +1,6 @@
 {
   "name": "@re-auth/sdk-generator",
-  "version": "0.0.1",
+  "version": "0.0.2-alpha.0",
   "private": false,
   "description": "TypeScript SDK generator for ReAuth",
   "bin": {
@@ -57,4 +57,4 @@
     "zod": "^3.0.0"
   },
   "license": "MIT"
-} 
+}
