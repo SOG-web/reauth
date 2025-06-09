@@ -1,5 +1,12 @@
 # @re-auth/http-adapters
 
+## 1.0.0-alpha.4
+
+### Patch Changes
+
+- Updated dependencies [[`b36d961`](https://github.com/SOG-web/reauth/commit/b36d961f8c9f960f8ef5a8d3647af70525df5def)]:
+  - @re-auth/reauth@0.1.0-alpha.7
+
 ## 1.0.0-alpha.3
 
 ### Minor Changes
