@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.5
+
+### Minor Changes
+
+- [`f4482ba`](https://github.com/SOG-web/reauth/commit/f4482ba30164c2bb2a7cf7313e91663ad1633453) Thanks [@SOG-web](https://github.com/SOG-web)! - added root hooks
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes

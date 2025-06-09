@@ -1,6 +1,6 @@
 {
   "name": "@re-auth/http-adapters",
-  "version": "0.1.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "HTTP adapters for ReAuth authentication framework",
   "type": "module",
   "main": "./dist/cjs/src/index.js",
