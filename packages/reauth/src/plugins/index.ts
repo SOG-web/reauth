@@ -5,6 +5,7 @@ import adminPlugin from './admin/admin.plugin';
 import usernamePasswordAuth from './username/username.plugin';
 import apiKeyAuth from './api-key/api-key.plugin';
 import anonymousAuth from './anonymous/anonymous.plugin';
+import sessionPlugin from './session/session.plugin';
 
 // OAuth plugins
 import {
@@ -19,10 +20,11 @@ export * from './passwordless/passwordless.plugin';
 export * from './admin';
 export * from './oauth';
 
-export { 
-  emailPasswordAuth, 
+export {
+  emailPasswordAuth,
   phonePasswordAuth,
-  // passwordlessAuth, 
+  sessionPlugin,
+  // passwordlessAuth,
   adminPlugin,
   usernamePasswordAuth,
   apiKeyAuth,

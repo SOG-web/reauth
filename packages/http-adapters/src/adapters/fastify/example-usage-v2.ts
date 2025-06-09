@@ -17,7 +17,7 @@ import {
  */
 export async function createBasicFastifyAdapter(
   fastify: FastifyInstance,
-  reAuthEngine: ReAuthEngine
+  reAuthEngine: ReAuthEngine,
 ) {
   const config: FastifyAdapterConfig = {
     basePath: '/auth',
@@ -39,10 +39,15 @@ export async function createBasicFastifyAdapter(
   });
 
   // Add protected route
-  adapter.addRoute('GET', '/profile', async (request: any, reply) => {
-    const user = request.user;
-    return reply.send({ user });
-  }, { requireAuth: true });
+  adapter.addRoute(
+    'GET',
+    '/profile',
+    async (request: any, reply) => {
+      const user = request.user;
+      return reply.send({ user });
+    },
+    { requireAuth: true },
+  );
 
   return adapter;
 }
@@ -52,7 +57,7 @@ export async function createBasicFastifyAdapter(
  */
 export async function createOAuthFastifyAdapter(
   fastify: FastifyInstance,
-  reAuthEngine: ReAuthEngine
+  reAuthEngine: ReAuthEngine,
 ) {
   const config: FastifyAdapterConfig = {
     basePath: '/auth',
@@ -63,7 +68,7 @@ export async function createOAuthFastifyAdapter(
       OAuth2ContextRules.start('oauth-github'),
       OAuth2ContextRules.callback('oauth-google'),
       OAuth2ContextRules.start('oauth-google'),
-      
+
       // Custom context rule for API keys
       createContextRule('api-auth', {
         stepName: 'verify-key',
@@ -79,20 +84,24 @@ export async function createOAuthFastifyAdapter(
         },
       }),
     ],
-    
+
     // Custom routes for OAuth flows
     customRoutes: [
-      createCustomRoute('GET', '/auth/callback', async (request: any, reply: any) => {
-        const code = request.query.code;
-        const state = request.query.state;
-        
-        if (!code || !state) {
-          return reply.status(400).send({ error: 'Missing code or state' });
-        }
+      createCustomRoute(
+        'GET',
+        '/auth/callback',
+        async (request: any, reply: any) => {
+          const code = request.query.code;
+          const state = request.query.state;
 
-        // Handle OAuth callback
-        return reply.send({ success: true, redirectTo: '/dashboard' });
-      }),
+          if (!code || !state) {
+            return reply.status(400).send({ error: 'Missing code or state' });
+          }
+
+          // Handle OAuth callback
+          return reply.send({ success: true, redirectTo: '/dashboard' });
+        },
+      ),
     ],
   };
 
@@ -109,13 +118,14 @@ export async function createOAuthFastifyAdapter(
  */
 export async function createMultiTenantFastifyAdapter(
   fastify: FastifyInstance,
-  reAuthEngine: ReAuthEngine
+  reAuthEngine: ReAuthEngine,
 ) {
   const config: FastifyAdapterConfig = {
     basePath: '/api/v1/auth',
     contextRules: [
       // Extract tenant information from headers and subdomains
-      createContextRule('*', { // Apply to all plugins
+      createContextRule('*', {
+        // Apply to all plugins
         extractHeaders: {
           'x-tenant-id': 'tenantId',
           'x-workspace': 'workspaceId',
@@ -153,9 +163,9 @@ export async function createMultiTenantFastifyAdapter(
 
   // Add tenant-aware hook
   fastify.addHook('onRequest', async (request: any, reply) => {
-    const tenantId = request.headers['x-tenant-id'] || 
-                    request.headers.host?.split('.')[0];
-    
+    const tenantId =
+      request.headers['x-tenant-id'] || request.headers.host?.split('.')[0];
+
     if (tenantId) {
       request.tenantId = tenantId;
     }
@@ -165,7 +175,7 @@ export async function createMultiTenantFastifyAdapter(
   adapter.addRoute('GET', '/tenant/info', async (request: any, reply) => {
     const tenantId = request.tenantId;
     const user = request.user;
-    
+
     return reply.send({
       tenant: tenantId,
       user: user?.id,
@@ -181,7 +191,7 @@ export async function createMultiTenantFastifyAdapter(
  */
 export async function createProductionFastifyAdapter(
   fastify: FastifyInstance,
-  reAuthEngine: ReAuthEngine
+  reAuthEngine: ReAuthEngine,
 ) {
   const config: FastifyAdapterConfig = {
     basePath: '/auth',
@@ -192,7 +202,7 @@ export async function createProductionFastifyAdapter(
       sameSite: 'strict',
       maxAge: 60 * 60 * 24 * 30, // 30 days
     },
-    
+
     // Auto-introspection configuration
     autoIntrospection: {
       enabled: true,
@@ -207,7 +217,7 @@ export async function createProductionFastifyAdapter(
         return `${basePath}/${pluginName}/${stepName}`;
       },
     },
-    
+
     // Comprehensive context rules
     contextRules: [
       // OAuth flows
@@ -215,7 +225,7 @@ export async function createProductionFastifyAdapter(
       OAuth2ContextRules.start('oauth-github'),
       OAuth2ContextRules.callback('oauth-google'),
       OAuth2ContextRules.start('oauth-google'),
-      
+
       // Security headers and CSRF protection
       createContextRule('*', {
         extractHeaders: {
@@ -230,7 +240,7 @@ export async function createProductionFastifyAdapter(
         },
       }),
     ],
-    
+
     // Route overrides for custom behavior
     routeOverrides: [
       createRouteOverride('email-password', 'register', {
@@ -242,48 +252,69 @@ export async function createProductionFastifyAdapter(
         ],
       }),
     ],
-    
+
     // Custom routes
     customRoutes: [
-      createCustomRoute('GET', '/auth/status', async (request: any, reply: any) => {
-        return reply.send({
-          authenticated: request.isAuthenticated,
-          user: request.user?.id || null,
-          timestamp: new Date().toISOString(),
-        });
-      }),
-      
-      createCustomRoute('POST', '/auth/logout', async (request: any, reply: any) => {
-        // Clear all auth cookies
-        reply.clearCookie('secure_session');
-        return reply.send({ success: true, message: 'Logged out successfully' });
-      }),
+      createCustomRoute(
+        'GET',
+        '/auth/status',
+        async (request: any, reply: any) => {
+          return reply.send({
+            authenticated: request.isAuthenticated,
+            user: request.user?.id || null,
+            timestamp: new Date().toISOString(),
+          });
+        },
+      ),
+
+      createCustomRoute(
+        'POST',
+        '/auth/logout',
+        async (request: any, reply: any) => {
+          // Clear all auth cookies
+          reply.clearCookie('secure_session');
+          return reply.send({
+            success: true,
+            message: 'Logged out successfully',
+          });
+        },
+      ),
     ],
-    
+
     // Global middleware (using Fastify hooks)
     globalMiddleware: [
       // CORS middleware
       async (request: any, reply: any) => {
-        reply.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
-        reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');
+        reply.header(
+          'Access-Control-Allow-Origin',
+          process.env.FRONTEND_URL || '*',
+        );
+        reply.header(
+          'Access-Control-Allow-Methods',
+          'GET, POST, PUT, DELETE, OPTIONS',
+        );
+        reply.header(
+          'Access-Control-Allow-Headers',
+          'Content-Type, Authorization, X-CSRF-Token',
+        );
         reply.header('Access-Control-Allow-Credentials', 'true');
-        
+
         if (request.method === 'OPTIONS') {
           return reply.status(204).send();
         }
       },
     ],
-    
+
     // Custom error handler
     errorHandler: (error, context) => {
       console.error('ReAuth Error:', error);
-      
+
       return (context as any).status(500).send({
         success: false,
-        message: process.env.NODE_ENV === 'production' 
-          ? 'An error occurred' 
-          : error.message,
+        message:
+          process.env.NODE_ENV === 'production'
+            ? 'An error occurred'
+            : error.message,
         timestamp: new Date().toISOString(),
       });
     },
@@ -302,13 +333,18 @@ export async function createProductionFastifyAdapter(
   });
 
   // Add admin routes with protection
-  adapter.addRoute('GET', '/admin/users', async (request, reply) => {
-    // Admin-only user management
-    return reply.send({ users: [] });
-  }, { 
-    middleware: [adminProtection],
-    requireAuth: true,
-  });
+  adapter.addRoute(
+    'GET',
+    '/admin/users',
+    async (request, reply) => {
+      // Admin-only user management
+      return reply.send({ users: [] });
+    },
+    {
+      middleware: [adminProtection],
+      requireAuth: true,
+    },
+  );
 
   return adapter;
 }
@@ -353,7 +389,7 @@ export async function createCompleteFastifyApp(reAuthEngine: ReAuthEngine) {
     if (!request.isAuthenticated) {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
-    
+
     return {
       message: 'Protected resource',
       userId: request.user.id,
@@ -361,4 +397,4 @@ export async function createCompleteFastifyApp(reAuthEngine: ReAuthEngine) {
   });
 
   return fastify;
-} 
+}

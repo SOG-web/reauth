@@ -7,148 +7,25 @@ import type {
   Entity,
 } from '@re-auth/reauth';
 import { showRoutes } from 'hono/dev';
-import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
-import knex from 'knex';
 import reAuth from './reauth/auth';
+import { createHonoAdapter } from '@re-auth/http-adapters/adapters/hono/index';
 
 const app = new Hono();
 
 // Set the introspection auth key for testing
 process.env.REAUTH_INTROSPECTION_KEY = 'test-key-123';
 
-app.use(async (c, next) => {
-  c.set('entity', null);
-  c.set('token', null);
-  const token = getCookie(c, 'token');
-  console.log(token);
-  if (token) {
-    const container = reAuth.getContainer();
-    const sessionService = container.cradle.sessionService;
-    const { entity, token: newToken } = await sessionService.verifySession(
-      token as string,
-    );
-
-    console.log(entity, newToken);
-
-    if (!entity || !newToken) {
-      // Invalid session, clear cookie
-      deleteCookie(c, 'token');
-      return next();
-    }
-
-    c.set('entity', entity);
-    c.set('token', newToken);
-    setCookie(c, 'token', newToken);
-  }
-  await next();
+const authAdapter = createHonoAdapter(reAuth, {
+  cookieName: 'reauth_session',
+  cookieOptions: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+  },
 });
 
-const auth = new Hono();
-
-// list of plugins and there names with steps
-const authRoutes = reAuth.getAllPlugins().map((plugin: AuthPlugin) => {
-  return {
-    name: plugin.name,
-    steps: plugin.steps.map((step) => ({
-      name: step.name,
-      protocol: step.protocol,
-    })),
-  };
-});
-
-// each step is a route
-authRoutes.forEach((route) => {
-  route.steps.forEach((step) => {
-    // If no http protocol, skip
-    if (!step.protocol?.http) return;
-    auth.on(
-      [step.protocol.http.method],
-      `/${route.name}/${step.name}`,
-      async (c) => {
-        try {
-          const expectedInputs = reAuth.getStepInputs(route.name, step.name);
-          let inputs: Record<string, any> = {};
-          const body: Record<string, any> = await c.req.json();
-
-          //1. find the expected inputs in the body
-          expectedInputs.forEach((input) => {
-            if (body[input]) {
-              inputs[input] = body[input];
-            }
-          });
-
-          //2. find the expected inputs in the query params
-          expectedInputs.forEach((input) => {
-            if (c.req.query(input)) {
-              inputs[input] = c.req.query(input);
-            }
-          });
-
-          if (step.protocol.http && step.protocol.http.auth) {
-            const entity = c.get('entity');
-            const token = c.get('token');
-            if (!entity) {
-              return c.json({ error: 'Unauthorized' }, 401);
-            }
-            inputs.entity = entity;
-            inputs.token = token;
-          }
-
-          if (Object.keys(inputs).length !== expectedInputs.length) {
-            return c.json({ error: 'Missing inputs' }, 400);
-          }
-
-          const {
-            token,
-            redirect: rd,
-            success,
-            status,
-            ...rest
-          }: AuthOutput = await reAuth.executeStep(
-            route.name,
-            step.name,
-            inputs,
-          );
-
-          const st: any | undefined = step.protocol.http
-            ? step.protocol.http[status]
-            : undefined;
-
-          if (!success) {
-            return c.json(
-              {
-                success,
-                ...rest,
-              },
-              { status: st || 400 },
-            );
-          }
-          if (token) {
-            // save cookie
-            setCookie(c, 'token', token);
-          }
-
-          if (rd) {
-            return c.redirect(rd);
-          }
-
-          return c.json(
-            {
-              success,
-              ...rest,
-            },
-            { status: st || 200 },
-          );
-        } catch (error) {
-          console.log(error);
-          return c.json({ error }, 500);
-        }
-      },
-    );
-  });
-});
-
-app.route('/auth', auth);
+app.route('/', authAdapter.getApp());
 
 app.get('/', (c) => {
   const entity = c.get('entity');
@@ -166,10 +43,13 @@ app.get('/test-introspection', async (c) => {
     });
   } catch (error) {
     console.error('Introspection test error:', error);
-    return c.json({
-      error: 'Failed to get introspection data',
-      details: error instanceof Error ? error.message : String(error),
-    }, 500);
+    return c.json(
+      {
+        error: 'Failed to get introspection data',
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
   }
 });
 

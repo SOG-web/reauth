@@ -29,7 +29,7 @@ export function createBasicHonoAdapter(reAuthEngine: ReAuthEngine) {
 
   // Using the convenience wrapper class
   const adapter = createHonoAdapter(reAuthEngine, config);
-  
+
   // Get the Hono app
   const app = adapter.getApp();
 
@@ -39,10 +39,15 @@ export function createBasicHonoAdapter(reAuthEngine: ReAuthEngine) {
   });
 
   // Add protected route
-  adapter.addRoute('GET', '/profile', async (c) => {
-    const user = (c as any).get('user');
-    return c.json({ user });
-  }, { requireAuth: true });
+  adapter.addRoute(
+    'GET',
+    '/profile',
+    async (c) => {
+      const user = (c as any).get('user');
+      return c.json({ user });
+    },
+    { requireAuth: true },
+  );
 
   return app;
 }
@@ -60,7 +65,7 @@ export function createOAuthHonoAdapter(reAuthEngine: ReAuthEngine) {
       OAuth2ContextRules.start('oauth-github'),
       OAuth2ContextRules.callback('oauth-google'),
       OAuth2ContextRules.start('oauth-google'),
-      
+
       // Custom context rule for API keys
       createContextRule('api-auth', {
         stepName: 'verify-key',
@@ -80,7 +85,7 @@ export function createOAuthHonoAdapter(reAuthEngine: ReAuthEngine) {
 
   // Using the factory function directly
   const frameworkAdapter = new HonoFrameworkAdapter();
-  const app = createHonoAdapterV2(reAuthEngine, config,frameworkAdapter);
+  const app = createHonoAdapterV2(reAuthEngine, config, frameworkAdapter);
 
   return app;
 }
@@ -93,7 +98,8 @@ export function createMultiTenantHonoAdapter(reAuthEngine: ReAuthEngine) {
     basePath: '/api/v1/auth',
     contextRules: [
       // Extract tenant information from headers and subdomains
-      createContextRule('*', { // Apply to all plugins
+      createContextRule('*', {
+        // Apply to all plugins
         extractHeaders: {
           'x-tenant-id': 'tenantId',
           'x-workspace': 'workspaceId',
@@ -132,13 +138,13 @@ export function createMultiTenantHonoAdapter(reAuthEngine: ReAuthEngine) {
 
   // Add tenant-aware middleware
   app.use('*', async (c, next) => {
-    const tenantId = c.req.header('x-tenant-id') || 
-                    c.req.header('host')?.split('.')[0];
-    
+    const tenantId =
+      c.req.header('x-tenant-id') || c.req.header('host')?.split('.')[0];
+
     if (tenantId) {
       // c.set('tenantId', tenantId);
     }
-    
+
     await next();
   });
 
@@ -146,7 +152,7 @@ export function createMultiTenantHonoAdapter(reAuthEngine: ReAuthEngine) {
   adapter.addRoute('GET', '/tenant/info', async (c) => {
     const tenantId = c.get('tenantId');
     const user = c.get('user');
-    
+
     return c.json({
       tenant: tenantId,
       user: user?.id,
@@ -170,7 +176,7 @@ export function createProductionHonoAdapter(reAuthEngine: ReAuthEngine) {
       sameSite: 'strict',
       maxAge: 60 * 60 * 24 * 30, // 30 days
     },
-    
+
     // Auto-introspection configuration
     autoIntrospection: {
       enabled: true,
@@ -185,14 +191,14 @@ export function createProductionHonoAdapter(reAuthEngine: ReAuthEngine) {
         return `${basePath}/${pluginName}/${stepName}`;
       },
     },
-    
+
     // Context rules for OAuth and security
     contextRules: [
       OAuth2ContextRules.callback('oauth-github'),
       OAuth2ContextRules.start('oauth-github'),
       OAuth2ContextRules.callback('oauth-google'),
       OAuth2ContextRules.start('oauth-google'),
-      
+
       // Security headers and CSRF protection
       createContextRule('*', {
         extractHeaders: {
@@ -207,7 +213,7 @@ export function createProductionHonoAdapter(reAuthEngine: ReAuthEngine) {
         },
       }),
     ],
-    
+
     // Route overrides for custom behavior
     routeOverrides: [
       createRouteOverride('email-password', 'register', {
@@ -220,7 +226,7 @@ export function createProductionHonoAdapter(reAuthEngine: ReAuthEngine) {
         ],
       }),
     ],
-    
+
     // Custom routes
     customRoutes: [
       createCustomRoute('GET', '/auth/status', async (c: any) => {
@@ -230,42 +236,55 @@ export function createProductionHonoAdapter(reAuthEngine: ReAuthEngine) {
           timestamp: new Date().toISOString(),
         });
       }),
-      
+
       createCustomRoute('POST', '/auth/logout', async (c: any) => {
         // Clear all auth cookies
         c.header('Set-Cookie', 'secure_session=; Max-Age=0; Path=/; HttpOnly');
         return c.json({ success: true, message: 'Logged out successfully' });
       }),
     ],
-    
+
     // Global middleware
     globalMiddleware: [
       // CORS middleware
       async (c: any, next: any) => {
-        c.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
-        c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');
+        c.header(
+          'Access-Control-Allow-Origin',
+          process.env.FRONTEND_URL || '*',
+        );
+        c.header(
+          'Access-Control-Allow-Methods',
+          'GET, POST, PUT, DELETE, OPTIONS',
+        );
+        c.header(
+          'Access-Control-Allow-Headers',
+          'Content-Type, Authorization, X-CSRF-Token',
+        );
         c.header('Access-Control-Allow-Credentials', 'true');
-        
+
         if (c.req.method === 'OPTIONS') {
           return c.text('', 204);
         }
-        
+
         await next();
       },
     ],
-    
+
     // Custom error handler
     errorHandler: (error, context) => {
       console.error('ReAuth Error:', error);
-      
-      return (context as any).json({
-        success: false,
-        message: process.env.NODE_ENV === 'production' 
-          ? 'An error occurred' 
-          : error.message,
-        timestamp: new Date().toISOString(),
-      }, 500);
+
+      return (context as any).json(
+        {
+          success: false,
+          message:
+            process.env.NODE_ENV === 'production'
+              ? 'An error occurred'
+              : error.message,
+          timestamp: new Date().toISOString(),
+        },
+        500,
+      );
     },
   };
 
@@ -283,13 +302,18 @@ export function createProductionHonoAdapter(reAuthEngine: ReAuthEngine) {
   });
 
   // Add admin routes with protection
-  adapter.addRoute('GET', '/admin/users', async (c) => {
-    // Admin-only user management
-    return c.json({ users: [] });
-  }, { 
-    middleware: [adminProtection],
-    requireAuth: true,
-  });
+  adapter.addRoute(
+    'GET',
+    '/admin/users',
+    async (c) => {
+      // Admin-only user management
+      return c.json({ users: [] });
+    },
+    {
+      middleware: [adminProtection],
+      requireAuth: true,
+    },
+  );
 
   return app;
 }
@@ -299,25 +323,25 @@ export function createProductionHonoAdapter(reAuthEngine: ReAuthEngine) {
  */
 export function createCompleteHonoApp(reAuthEngine: ReAuthEngine) {
   const app = new Hono();
-  
+
   // Create and mount the auth adapter
   const authAdapter = createProductionHonoAdapter(reAuthEngine);
   app.route('/', authAdapter);
-  
+
   // Add other application routes
   app.get('/', (c) => c.json({ message: 'ReAuth Hono App', version: '1.0.0' }));
-  
+
   app.get('/api/protected', async (c) => {
     const user = (c as any).get('user');
     if (!user) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
-    
-    return c.json({ 
+
+    return c.json({
       message: 'Protected resource',
       userId: user.id,
     });
   });
-  
+
   return app;
-} 
+}

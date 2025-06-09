@@ -50,7 +50,10 @@ export function createOAuthExample(database: Knex) {
       };
     },
     onAccountLink: async (oauthUser, existingEntity, container) => {
-      console.log('Linking Google account to existing user:', existingEntity.email);
+      console.log(
+        'Linking Google account to existing user:',
+        existingEntity.email,
+      );
       const extended = existingEntity as ExtendedEntity;
       return {
         ...extended,
@@ -80,9 +83,10 @@ export function createOAuthExample(database: Knex) {
 
       const user = await userResponse.json();
       const emails = await emailsResponse.json();
-      
+
       // Find primary email
-      const primaryEmail = emails.find((email: any) => email.primary) || emails[0];
+      const primaryEmail =
+        emails.find((email: any) => email.primary) || emails[0];
 
       return {
         id: user.id.toString(),
@@ -119,10 +123,11 @@ export function createOAuthExample(database: Knex) {
     onAccountCreate: async (oauthUser, container) => {
       console.log('Creating new account from Facebook OAuth:', oauthUser.email);
       // Handle Facebook picture which can be either string or object
-      const pictureUrl = typeof oauthUser.picture === 'string' 
-        ? oauthUser.picture 
-        : (oauthUser.picture as any)?.data?.url;
-      
+      const pictureUrl =
+        typeof oauthUser.picture === 'string'
+          ? oauthUser.picture
+          : (oauthUser.picture as any)?.data?.url;
+
       return {
         email: oauthUser.email,
         name: oauthUser.name,
@@ -182,17 +187,17 @@ export function createExpressRoutes(reAuth: any) {
 
   router.post('/google/callback', async (req: any, res: any) => {
     const { code, state } = req.body;
-    const result = await reAuth.executeStep('google-oauth', 'callback', { 
-      code, 
+    const result = await reAuth.executeStep('google-oauth', 'callback', {
+      code,
       state,
       oauth_state: req.cookies.oauth_state,
       oauth_code_verifier: req.cookies.oauth_code_verifier,
     });
-    
+
     if (result.success && result.token) {
       res.cookie('auth_token', result.token, { httpOnly: true });
     }
-    
+
     return res.json(result);
   });
 
@@ -207,69 +212,78 @@ export function createExpressRoutes(reAuth: any) {
 
   router.post('/github/callback', async (req: any, res: any) => {
     const { code, state } = req.body;
-    const result = await reAuth.executeStep('github-oauth', 'callback', { 
-      code, 
+    const result = await reAuth.executeStep('github-oauth', 'callback', {
+      code,
       state,
       oauth_state: req.cookies.oauth_state,
     });
-    
+
     if (result.success && result.token) {
       res.cookie('auth_token', result.token, { httpOnly: true });
     }
-    
+
     return res.json(result);
   });
 
   // Account linking routes (require authentication)
   router.post('/google/link', authenticateUser, async (req: any, res: any) => {
     const { code, state } = req.body;
-    const result = await reAuth.executeStep('google-oauth', 'link', { 
-      code, 
+    const result = await reAuth.executeStep('google-oauth', 'link', {
+      code,
       state,
       oauth_state: req.cookies.oauth_state,
       oauth_code_verifier: req.cookies.oauth_code_verifier,
       entity: req.user,
     });
-    
+
     return res.json(result);
   });
 
   router.post('/github/link', authenticateUser, async (req: any, res: any) => {
     const { code, state } = req.body;
-    const result = await reAuth.executeStep('github-oauth', 'link', { 
-      code, 
+    const result = await reAuth.executeStep('github-oauth', 'link', {
+      code,
       state,
       oauth_state: req.cookies.oauth_state,
       entity: req.user,
     });
-    
+
     return res.json(result);
   });
 
   // Account unlinking routes
-  router.post('/google/unlink', authenticateUser, async (req: any, res: any) => {
-    const result = await reAuth.executeStep('google-oauth', 'unlink', { 
-      entity: req.user,
-    });
-    
-    return res.json(result);
-  });
+  router.post(
+    '/google/unlink',
+    authenticateUser,
+    async (req: any, res: any) => {
+      const result = await reAuth.executeStep('google-oauth', 'unlink', {
+        entity: req.user,
+      });
 
-  router.post('/github/unlink', authenticateUser, async (req: any, res: any) => {
-    const result = await reAuth.executeStep('github-oauth', 'unlink', { 
-      entity: req.user,
-    });
-    
-    return res.json(result);
-  });
+      return res.json(result);
+    },
+  );
+
+  router.post(
+    '/github/unlink',
+    authenticateUser,
+    async (req: any, res: any) => {
+      const result = await reAuth.executeStep('github-oauth', 'unlink', {
+        entity: req.user,
+      });
+
+      return res.json(result);
+    },
+  );
 
   return router;
 }
 
 // Example middleware for authentication
 function authenticateUser(req: any, res: any, next: any) {
-  const token = req.cookies.auth_token || req.headers.authorization?.replace('Bearer ', '');
-  
+  const token =
+    req.cookies.auth_token || req.headers.authorization?.replace('Bearer ', '');
+
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
@@ -287,7 +301,9 @@ export const frontendHelpers = {
   },
 
   // Helper function to handle OAuth callback
-  handleOAuthCallback: async (provider: 'google' | 'github' | 'facebook' | 'linkedin') => {
+  handleOAuthCallback: async (
+    provider: 'google' | 'github' | 'facebook' | 'linkedin',
+  ) => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const state = urlParams.get('state');
@@ -303,7 +319,7 @@ export const frontendHelpers = {
     });
 
     const result = await response.json();
-    
+
     if (result.success && result.token) {
       // Store token and redirect to dashboard
       localStorage.setItem('auth_token', result.token);
@@ -314,12 +330,14 @@ export const frontendHelpers = {
   },
 
   // Helper function to link OAuth account
-  linkOAuthAccount: async (provider: 'google' | 'github' | 'facebook' | 'linkedin') => {
+  linkOAuthAccount: async (
+    provider: 'google' | 'github' | 'facebook' | 'linkedin',
+  ) => {
     return new Promise((resolve, reject) => {
       const authWindow = window.open(
         `/auth/${provider}-oauth/start`,
         'oauth',
-        'width=500,height=600,scrollbars=yes,resizable=yes'
+        'width=500,height=600,scrollbars=yes,resizable=yes',
       );
 
       const handleMessage = async (event: MessageEvent) => {
@@ -334,7 +352,7 @@ export const frontendHelpers = {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
               },
               body: JSON.stringify({
                 code: event.data.code,
@@ -343,7 +361,7 @@ export const frontendHelpers = {
             });
 
             const result = await response.json();
-            
+
             if (result.success) {
               resolve(result);
             } else {
@@ -369,16 +387,18 @@ export const frontendHelpers = {
   },
 
   // Helper function to unlink OAuth account
-  unlinkOAuthAccount: async (provider: 'google' | 'github' | 'facebook' | 'linkedin') => {
+  unlinkOAuthAccount: async (
+    provider: 'google' | 'github' | 'facebook' | 'linkedin',
+  ) => {
     const response = await fetch(`/auth/${provider}-oauth/unlink`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
       },
     });
 
     const result = await response.json();
-    
+
     if (!result.success) {
       throw new Error(result.message || 'Account unlinking failed');
     }
@@ -393,7 +413,9 @@ export const useOAuth = () => {
     frontendHelpers.startOAuthFlow(provider);
   };
 
-  const link = async (provider: 'google' | 'github' | 'facebook' | 'linkedin') => {
+  const link = async (
+    provider: 'google' | 'github' | 'facebook' | 'linkedin',
+  ) => {
     try {
       const result = await frontendHelpers.linkOAuthAccount(provider);
       console.log('Account linked successfully:', result);
@@ -404,7 +426,9 @@ export const useOAuth = () => {
     }
   };
 
-  const unlink = async (provider: 'google' | 'github' | 'facebook' | 'linkedin') => {
+  const unlink = async (
+    provider: 'google' | 'github' | 'facebook' | 'linkedin',
+  ) => {
     try {
       const result = await frontendHelpers.unlinkOAuthAccount(provider);
       console.log('Account unlinked successfully:', result);
@@ -416,4 +440,4 @@ export const useOAuth = () => {
   };
 
   return { login, link, unlink };
-}; 
+};

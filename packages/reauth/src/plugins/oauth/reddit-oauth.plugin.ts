@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Reddit OAuth configuration
@@ -19,13 +22,9 @@ export interface RedditOAuthConfig extends BaseOAuthConfig {
 export const redditOAuthPlugin = createOAuthPlugin<RedditOAuthConfig>(
   'Reddit',
   'regular', // Reddit uses regular OAuth
-  (config: RedditOAuthConfig) => 
-    new arctic.Reddit(
-      config.clientId, 
-      config.clientSecret, 
-      config.redirectUri
-    ),
+  (config: RedditOAuthConfig) =>
+    new arctic.Reddit(config.clientId, config.clientSecret, config.redirectUri),
   ['identity'], // Default scopes
 );
 
-export default redditOAuthPlugin; 
+export default redditOAuthPlugin;

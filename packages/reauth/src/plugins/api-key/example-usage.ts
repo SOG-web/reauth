@@ -21,7 +21,8 @@ export function createApiKeyAuthExample(knex: Knex) {
       // Add API key plugin
       apiKeyAuth({
         maxKeysPerUser: 5, // Limit users to 5 API keys
-        generateApiKey: () => `ak_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+        generateApiKey: () =>
+          `ak_${Date.now()}_${Math.random().toString(36).substring(2)}`,
       }),
     ],
     entity: entityService,
@@ -41,21 +42,29 @@ export async function apiKeyAuthWorkflow() {
 
   try {
     // 1. First, register a user (API keys are for authenticated users)
-    const registerResult = await reAuth.executeStep('email-password', 'register', {
-      email: 'developer@example.com',
-      password: 'StrongPassword123!',
-    });
+    const registerResult = await reAuth.executeStep(
+      'email-password',
+      'register',
+      {
+        email: 'developer@example.com',
+        password: 'StrongPassword123!',
+      },
+    );
 
     console.log('User registration result:', registerResult);
 
     if (registerResult.success) {
       // 2. Create an API key for the user
-      const createKeyResult = await reAuth.executeStep('api-key', 'create-api-key', {
-        entity: registerResult.entity,
-        name: 'Development API Key',
-        permissions: ['read', 'write'],
-        expiresIn: 30 * 24 * 60 * 60 * 1000, // 30 days
-      });
+      const createKeyResult = await reAuth.executeStep(
+        'api-key',
+        'create-api-key',
+        {
+          entity: registerResult.entity,
+          name: 'Development API Key',
+          permissions: ['read', 'write'],
+          expiresIn: 30 * 24 * 60 * 60 * 1000, // 30 days
+        },
+      );
 
       console.log('API key creation result:', createKeyResult);
 
@@ -72,23 +81,30 @@ export async function apiKeyAuthWorkflow() {
 
         if (authResult.success) {
           // 4. List all API keys for the user
-          const listResult = await reAuth.executeStep('api-key', 'list-api-keys', {
-            entity: authResult.entity,
-          });
+          const listResult = await reAuth.executeStep(
+            'api-key',
+            'list-api-keys',
+            {
+              entity: authResult.entity,
+            },
+          );
 
           console.log('API keys list:', listResult);
 
           // 5. Revoke an API key
-          const revokeResult = await reAuth.executeStep('api-key', 'revoke-api-key', {
-            entity: authResult.entity,
-            keyName: 'Development API Key',
-          });
+          const revokeResult = await reAuth.executeStep(
+            'api-key',
+            'revoke-api-key',
+            {
+              entity: authResult.entity,
+              keyName: 'Development API Key',
+            },
+          );
 
           console.log('API key revocation result:', revokeResult);
         }
       }
     }
-
   } catch (error) {
     console.error('Error in API key auth workflow:', error);
   }
@@ -104,7 +120,7 @@ export function createExpressApiKeyRoutes(reAuth: any) {
   // Middleware to authenticate API key
   const authenticateApiKey = async (req: any, res: any, next: any) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    
+
     if (!apiKey) {
       return res.status(401).json({ error: 'API key required' });
     }
@@ -130,7 +146,7 @@ export function createExpressApiKeyRoutes(reAuth: any) {
     try {
       const { name, permissions, expiresIn } = req.body;
       const user = req.user; // From auth middleware
-      
+
       if (!user) {
         return res.status(401).json({ error: 'Authentication required' });
       }
@@ -162,7 +178,7 @@ export function createExpressApiKeyRoutes(reAuth: any) {
   router.get('/api-keys', async (req: any, res: any) => {
     try {
       const user = req.user;
-      
+
       if (!user) {
         return res.status(401).json({ error: 'Authentication required' });
       }
@@ -191,7 +207,7 @@ export function createExpressApiKeyRoutes(reAuth: any) {
     try {
       const { keyName } = req.params;
       const user = req.user;
-      
+
       if (!user) {
         return res.status(401).json({ error: 'Authentication required' });
       }
@@ -231,13 +247,17 @@ export function createExpressApiKeyRoutes(reAuth: any) {
  * Frontend usage example for API key management
  */
 export const useApiKeyManagement = () => {
-  const createApiKey = async (name: string, permissions: string[], expiresIn?: number) => {
+  const createApiKey = async (
+    name: string,
+    permissions: string[],
+    expiresIn?: number,
+  ) => {
     const response = await fetch('/auth/api-keys', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         // Include session token for user authentication
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
       },
       body: JSON.stringify({ name, permissions, expiresIn }),
     });
@@ -254,7 +274,7 @@ export const useApiKeyManagement = () => {
   const listApiKeys = async () => {
     const response = await fetch('/auth/api-keys', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
       },
     });
 
@@ -271,7 +291,7 @@ export const useApiKeyManagement = () => {
     const response = await fetch(`/auth/api-keys/${keyName}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
       },
     });
 
@@ -349,4 +369,4 @@ export class ApiClient {
 
 // Usage example:
 // const client = new ApiClient('ak_your_api_key_here');
-// client.getData().then(console.log).catch(console.error); 
+// client.getData().then(console.log).catch(console.error);

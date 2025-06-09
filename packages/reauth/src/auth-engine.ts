@@ -234,7 +234,11 @@ export class ReAuthEngine {
       );
 
       if (plugin.rootHooks?.before) {
-        input = await plugin.rootHooks.before(processedInput, this.container, step);
+        input = await plugin.rootHooks.before(
+          processedInput,
+          this.container,
+          step,
+        );
       } else {
         input = processedInput;
       }
@@ -257,7 +261,11 @@ export class ReAuthEngine {
       );
 
       if (plugin.rootHooks?.after) {
-        output = await plugin.rootHooks.after(processedOutput as AuthOutput, this.container, step);
+        output = await plugin.rootHooks.after(
+          processedOutput as AuthOutput,
+          this.container,
+          step,
+        );
       } else {
         output = processedOutput as AuthOutput;
       }
@@ -352,12 +360,14 @@ export class ReAuthEngine {
       })),
     }));
 
-    return JSON.parse(JSON.stringify({
-      entity: entitySchema,
-      plugins,
-      generatedAt: new Date().toISOString(),
-      version: '1.0.0',
-    }));
+    return JSON.parse(
+      JSON.stringify({
+        entity: entitySchema,
+        plugins,
+        generatedAt: new Date().toISOString(),
+        version: '1.0.0',
+      }),
+    );
   }
 
   /**
@@ -365,10 +375,24 @@ export class ReAuthEngine {
    */
   private extractEntitySchema(migrationConfig: MigrationConfig): EntitySchema {
     const baseEntityFields: Record<string, FieldSchema> = {
-      id: { type: 'string', required: true, description: 'Unique entity identifier' },
+      id: {
+        type: 'string',
+        required: true,
+        description: 'Unique entity identifier',
+      },
       role: { type: 'string', required: true, description: 'Entity role' },
-      created_at: { type: 'string', format: 'date-time', required: true, description: 'Creation timestamp' },
-      updated_at: { type: 'string', format: 'date-time', required: true, description: 'Last update timestamp' },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+        required: true,
+        description: 'Creation timestamp',
+      },
+      updated_at: {
+        type: 'string',
+        format: 'date-time',
+        required: true,
+        description: 'Last update timestamp',
+      },
     };
 
     // Collect all fields from plugin extensions
@@ -378,14 +402,16 @@ export class ReAuthEngine {
       if (pluginConfig.extendTables) {
         pluginConfig.extendTables.forEach((tableExtension) => {
           if (tableExtension.tableName === 'entities') {
-            Object.entries(tableExtension.columns).forEach(([fieldName, column]) => {
-              extendedFields[fieldName] = {
-                type: this.mapColumnTypeToTsType(column.type),
-                format: this.getColumnFormat(column.type),
-                required: !column.nullable,
-                description: `${fieldName} field from ${pluginConfig.pluginName} plugin`,
-              };
-            });
+            Object.entries(tableExtension.columns).forEach(
+              ([fieldName, column]) => {
+                extendedFields[fieldName] = {
+                  type: this.mapColumnTypeToTsType(column.type),
+                  format: this.getColumnFormat(column.type),
+                  required: !column.nullable,
+                  description: `${fieldName} field from ${pluginConfig.pluginName} plugin`,
+                };
+              },
+            );
           }
         });
       }

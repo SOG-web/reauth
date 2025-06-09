@@ -30,6 +30,7 @@ The organization plugin requires the following plugins to be installed first:
 The plugin creates two tables:
 
 ### Organizations Table
+
 ```sql
 CREATE TABLE organizations (
   id UUID PRIMARY KEY DEFAULT UUID(),
@@ -42,6 +43,7 @@ CREATE TABLE organizations (
 ```
 
 ### Organization Members Table
+
 ```sql
 CREATE TABLE organization_members (
   id UUID PRIMARY KEY DEFAULT UUID(),
@@ -97,10 +99,10 @@ const reAuth = createReAuthEngine({
 ```typescript
 interface OrgConfig {
   orgService: OrgService;
-  defaultRole?: string;              // Default: 'member'
-  defaultPermissions?: string[];     // Default: []
-  maxOrganizations?: number;         // Default: unlimited
-  allowOrgCreation?: boolean;        // Default: true
+  defaultRole?: string; // Default: 'member'
+  defaultPermissions?: string[]; // Default: []
+  maxOrganizations?: number; // Default: unlimited
+  allowOrgCreation?: boolean; // Default: true
 }
 ```
 
@@ -111,10 +113,12 @@ interface OrgConfig {
 Creates a new organization with the authenticated user as owner.
 
 **Inputs:**
+
 - `name` (string, required): Organization name
 - `description` (string, required): Organization description
 
 **Example:**
+
 ```typescript
 const result = await reAuth.executeStep('organization', 'create-organization', {
   name: 'Acme Corp',
@@ -125,6 +129,7 @@ const result = await reAuth.executeStep('organization', 'create-organization', {
 ```
 
 **HTTP Protocol:**
+
 - Method: `POST`
 - Auth: Required
 - Success: 201
@@ -135,11 +140,13 @@ const result = await reAuth.executeStep('organization', 'create-organization', {
 Adds a user to an existing organization.
 
 **Inputs:**
+
 - `organization_id` (string, required): Organization ID to join
 - `role` (string, optional): Role in the organization (defaults to config.defaultRole)
 - `permissions` (string[], optional): Permissions array (defaults to config.defaultPermissions)
 
 **Example:**
+
 ```typescript
 const result = await reAuth.executeStep('organization', 'join-organization', {
   organization_id: 'org-123',
@@ -151,6 +158,7 @@ const result = await reAuth.executeStep('organization', 'join-organization', {
 ```
 
 **HTTP Protocol:**
+
 - Method: `POST`
 - Auth: Required
 - Success: 200
@@ -163,6 +171,7 @@ Retrieves all organizations the authenticated user belongs to.
 **Inputs:** None (uses authenticated user from entity/token)
 
 **Example:**
+
 ```typescript
 const result = await reAuth.executeStep('organization', 'get-organizations', {
   entity: authenticatedUser,
@@ -173,6 +182,7 @@ const result = await reAuth.executeStep('organization', 'get-organizations', {
 ```
 
 **HTTP Protocol:**
+
 - Method: `GET`
 - Auth: Required
 - Success: 200
@@ -231,21 +241,18 @@ Use the enhanced session data for authorization:
 function requireOrgRole(organizationId: string, requiredRole: string) {
   return (req, res, next) => {
     const user = req.user; // From authentication middleware
-    
-    const membership = user.organizations?.find(org => org.id === organizationId);
+
+    const membership = user.organizations?.find((org) => org.id === organizationId);
     if (!membership || !hasRequiredRole(membership.role, requiredRole)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    
+
     next();
   };
 }
 
 // Usage
-app.delete('/organizations/:id', 
-  requireOrgRole(req.params.id, 'admin'),
-  deleteOrganizationHandler
-);
+app.delete('/organizations/:id', requireOrgRole(req.params.id, 'admin'), deleteOrganizationHandler);
 ```
 
 ### Teams and Permissions
@@ -277,7 +284,7 @@ app.use('/auth', adapter.getRouter());
 
 // Routes available:
 // POST /auth/organization/create-organization
-// POST /auth/organization/join-organization  
+// POST /auth/organization/join-organization
 // GET  /auth/organization/get-organizations
 ```
 
@@ -326,12 +333,15 @@ describe('Organization Plugin', () => {
 ### Common Issues
 
 1. **"orgService is missing" error**
+
    - Ensure you provide a valid `OrgService` implementation in the plugin config
 
 2. **"depends on admin plugin" error**
+
    - Make sure the admin plugin is installed and configured before the organization plugin
 
 3. **Database migration issues**
+
    - Ensure your database supports the required column types (UUID, JSON)
    - Check foreign key constraints are properly set up
 
@@ -347,4 +357,4 @@ describe('Organization Plugin', () => {
 
 ## Contributing
 
-The organization plugin is part of the ReAuth monorepo. See the main README for contribution guidelines. 
+The organization plugin is part of the ReAuth monorepo. See the main README for contribution guidelines.

@@ -179,15 +179,15 @@ export function createMultiProviderOAuthExample(database: Knex) {
       createAuth0OAuthExample(),
       createSpotifyOAuthExample(),
       createMicrosoftOAuthExample(),
-      
+
       // Social media
       createTwitterOAuthExample(),
       createTwitchOAuthExample(),
       createRedditOAuthExample(),
-      
+
       // Enterprise
       createWorkOSOAuthExample(),
-      
+
       // Mobile
       createAppleOAuthExample(),
     ],
@@ -215,7 +215,7 @@ export function createPKCEOAuthExample(database: Knex) {
 
   const discordPKCE = discordOAuthPlugin({
     clientId: process.env.DISCORD_CLIENT_ID!,
-    clientSecret: '', // Empty string for public clients  
+    clientSecret: '', // Empty string for public clients
     redirectUri: 'http://localhost:3000/auth/discord/callback',
     usePKCE: true,
   });
@@ -245,12 +245,14 @@ export function createCustomUserInfoExample() {
         },
       });
       const user = await response.json();
-      
+
       return {
         id: user.id,
         email: user.email,
         name: user.username,
-        picture: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : undefined,
+        picture: user.avatar
+          ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+          : undefined,
         verified_email: user.verified,
         // Add custom Discord-specific fields
         discriminator: user.discriminator,
@@ -266,30 +268,12 @@ export function createCustomUserInfoExample() {
  * Environment Variables Guide
  */
 export const REQUIRED_ENV_VARS = {
-  DISCORD: [
-    'DISCORD_CLIENT_ID',
-    'DISCORD_CLIENT_SECRET',
-  ],
-  AUTH0: [
-    'AUTH0_CLIENT_ID',
-    'AUTH0_CLIENT_SECRET',
-  ],
-  SPOTIFY: [
-    'SPOTIFY_CLIENT_ID',
-    'SPOTIFY_CLIENT_SECRET',
-  ],
-  MICROSOFT: [
-    'MICROSOFT_CLIENT_ID',
-    'MICROSOFT_CLIENT_SECRET',
-  ],
-  TWITTER: [
-    'TWITTER_CLIENT_ID',
-    'TWITTER_CLIENT_SECRET',
-  ],
-  TWITCH: [
-    'TWITCH_CLIENT_ID',
-    'TWITCH_CLIENT_SECRET',
-  ],
+  DISCORD: ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET'],
+  AUTH0: ['AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET'],
+  SPOTIFY: ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET'],
+  MICROSOFT: ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'],
+  TWITTER: ['TWITTER_CLIENT_ID', 'TWITTER_CLIENT_SECRET'],
+  TWITCH: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET'],
   APPLE: [
     'APPLE_CLIENT_ID',
     'APPLE_CLIENT_SECRET',
@@ -297,12 +281,6 @@ export const REQUIRED_ENV_VARS = {
     'APPLE_KEY_ID',
     'APPLE_PRIVATE_KEY', // PEM format
   ],
-  WORKOS: [
-    'WORKOS_CLIENT_ID',
-    'WORKOS_CLIENT_SECRET',
-  ],
-  REDDIT: [
-    'REDDIT_CLIENT_ID',
-    'REDDIT_CLIENT_SECRET',
-  ],
-}; 
+  WORKOS: ['WORKOS_CLIENT_ID', 'WORKOS_CLIENT_SECRET'],
+  REDDIT: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET'],
+};

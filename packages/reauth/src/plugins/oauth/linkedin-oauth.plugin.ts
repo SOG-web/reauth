@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * LinkedIn OAuth configuration
@@ -19,9 +22,13 @@ export interface LinkedInOAuthConfig extends BaseOAuthConfig {
 export const linkedinOAuthPlugin = createOAuthPlugin<LinkedInOAuthConfig>(
   'LinkedIn',
   'regular',
-  (config: LinkedInOAuthConfig) => 
-    new arctic.LinkedIn(config.clientId, config.clientSecret, config.redirectUri),
+  (config: LinkedInOAuthConfig) =>
+    new arctic.LinkedIn(
+      config.clientId,
+      config.clientSecret,
+      config.redirectUri,
+    ),
   ['openid', 'profile', 'email'], // Default scopes
 );
 
-export default linkedinOAuthPlugin; 
+export default linkedinOAuthPlugin;

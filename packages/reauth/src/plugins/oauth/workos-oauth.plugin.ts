@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * WorkOS OAuth configuration
@@ -24,13 +27,13 @@ export interface WorkOSOAuthConfig extends BaseOAuthConfig {
 export const workosOAuthPlugin = createOAuthPlugin<WorkOSOAuthConfig>(
   'WorkOS',
   'pkce', // WorkOS supports PKCE
-  (config: WorkOSOAuthConfig) => 
+  (config: WorkOSOAuthConfig) =>
     new arctic.WorkOS(
-      config.clientId, 
-      config.usePKCE ? null : config.clientSecret, 
-      config.redirectUri
+      config.clientId,
+      config.usePKCE ? null : config.clientSecret,
+      config.redirectUri,
     ),
   ['openid', 'profile', 'email'], // Default scopes
 );
 
-export default workosOAuthPlugin; 
+export default workosOAuthPlugin;

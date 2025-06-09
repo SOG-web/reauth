@@ -37,8 +37,8 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "entity?": 'object',
-        "keyData?": 'object',
+        'entity?': 'object',
+        'keyData?': 'object',
       }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
@@ -51,19 +51,33 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         );
 
         if (!entities) {
-          return { success: false, message: 'Invalid API key', status: 'invalid' };
+          return {
+            success: false,
+            message: 'Invalid API key',
+            status: 'invalid',
+          };
         }
 
         // Check if API key is active
         if (entities.api_keys) {
-          const keyData = entities.api_keys.find((key: any) => key.key === apiKey);
+          const keyData = entities.api_keys.find(
+            (key: any) => key.key === apiKey,
+          );
           if (!keyData || !keyData.active) {
-            return { success: false, message: 'API key is inactive', status: 'inactive' };
+            return {
+              success: false,
+              message: 'API key is inactive',
+              status: 'inactive',
+            };
           }
 
           // Check expiration if set
           if (keyData.expires_at && new Date(keyData.expires_at) < new Date()) {
-            return { success: false, message: 'API key has expired', status: 'expired' };
+            return {
+              success: false,
+              message: 'API key has expired',
+              status: 'expired',
+            };
           }
 
           // Update last used timestamp
@@ -106,15 +120,19 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "apiKey?": 'string',
-        "keyData?": 'object',
+        'apiKey?': 'string',
+        'keyData?': 'object',
       }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { entity, name, permissions, expiresIn } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'unauthorized' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'unauthorized',
+          };
         }
 
         const currentEntity = await container.cradle.entityService.findEntity(
@@ -123,13 +141,17 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         );
 
         if (!currentEntity) {
-          return { success: false, message: 'User not found', status: 'not_found' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'not_found',
+          };
         }
 
         // Generate new API key
-        const apiKey = config.generateApiKey ? 
-          config.generateApiKey() : 
-          `ak_${generateSessionToken()}`;
+        const apiKey = config.generateApiKey
+          ? config.generateApiKey()
+          : `ak_${generateSessionToken()}`;
 
         const keyData = {
           key: apiKey,
@@ -144,7 +166,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
 
         // Add to entity's API keys
         const apiKeys = currentEntity.api_keys || [];
-        
+
         // Check max keys limit
         if (config.maxKeysPerUser && apiKeys.length >= config.maxKeysPerUser) {
           return {
@@ -199,14 +221,18 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "apiKeys?": 'object[]',
+        'apiKeys?': 'object[]',
       }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
         const { entity } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'unauthorized' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'unauthorized',
+          };
         }
 
         const currentEntity = await container.cradle.entityService.findEntity(
@@ -215,7 +241,11 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         );
 
         if (!currentEntity) {
-          return { success: false, message: 'User not found', status: 'not_found' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'not_found',
+          };
         }
 
         const apiKeys = (currentEntity.api_keys || []).map((key: any) => ({
@@ -262,7 +292,11 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         const { entity, name } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'unauthorized' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'unauthorized',
+          };
         }
 
         const currentEntity = await container.cradle.entityService.findEntity(
@@ -271,14 +305,22 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         );
 
         if (!currentEntity) {
-          return { success: false, message: 'User not found', status: 'not_found' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'not_found',
+          };
         }
 
         const apiKeys = currentEntity.api_keys || [];
         const keyIndex = apiKeys.findIndex((key: any) => key.name === name);
 
         if (keyIndex === -1) {
-          return { success: false, message: 'API key not found', status: 'key_not_found' };
+          return {
+            success: false,
+            message: 'API key not found',
+            status: 'key_not_found',
+          };
         }
 
         // Remove the key
@@ -327,7 +369,9 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
     // - Key usage analytics and monitoring
     // - Backup and recovery procedures
     // - Multi-environment configuration support
-    throw new Error('API Key plugin is not yet ready for production use. This is a work in progress.');
+    throw new Error(
+      'API Key plugin is not yet ready for production use. This is a work in progress.',
+    );
 
     // This code will be enabled when the plugin is ready:
     /*
@@ -386,7 +430,7 @@ interface ApiKeyConfig {
    * Maximum number of API keys per user (default: 10)
    */
   maxKeysPerUser?: number;
-  
+
   /**
    * Custom API key generator function
    * @returns Generated API key string
@@ -402,4 +446,4 @@ interface ApiKeyConfig {
    *  }
    */
   rootHooks?: RootStepHooks;
-} 
+}

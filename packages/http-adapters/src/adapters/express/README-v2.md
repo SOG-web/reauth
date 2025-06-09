@@ -5,22 +5,26 @@ The Express Adapter V2 is a completely rewritten version of the Express HTTP ada
 ## Key Improvements over V1
 
 ### 🏗️ **Factory Pattern Architecture**
+
 - **Framework-agnostic design**: Core logic separated from Express-specific implementations
 - **Shared instances**: Memory-efficient shared framework adapter instances
 - **Consistent interface**: All framework adapters implement the same `FrameworkAdapter<T>` interface
 
 ### 🎯 **Plugin-Aware Status Codes**
+
 - **Respects plugin HTTP configs**: Automatically uses status codes defined in ReAuth plugins
 - **Proper fallback hierarchy**: Plugin codes → generic success/error → standard HTTP codes
 - **Custom status handling**: Supports plugin-specific status codes like `unf: 401`, `ip: 400`, `eq: 300`
 
 ### 🔧 **Configurable Context Management**
+
 - **Cookie/header extraction**: Automatically extract values from requests based on rules
 - **Response context setting**: Set cookies and headers in responses based on plugin outputs
 - **OAuth2 context rules**: Built-in support for OAuth flows with state management
 - **Transform functions**: Custom input/output transformations
 
 ### 🛡️ **True Framework Agnostic**
+
 - **No framework assumptions**: Factory doesn't make Express-specific calls
 - **Reusable utilities**: Shared context rules and helper functions
 - **Easy extensibility**: Add new frameworks by implementing the interface
@@ -60,7 +64,7 @@ const adapter = createExpressAdapter(reAuthEngine, {
     // OAuth state and redirect handling
     ...OAuth2ContextRules.github('oauth-github'),
     ...OAuth2ContextRules.google('oauth-google'),
-    
+
     // Custom API key handling
     createContextRule('api-auth', {
       stepName: 'verify-key',
@@ -108,11 +112,11 @@ const adapter = createExpressAdapter(reAuthEngine, {
       middleware: [rateLimitingMiddleware],
       extractInputs: async (req, pluginName, stepName) => {
         // Custom input extraction logic
-        return { ...await defaultExtraction(req), customField: req.body.custom };
+        return { ...(await defaultExtraction(req)), customField: req.body.custom };
       },
     }),
   ],
-  
+
   customRoutes: [
     createCustomRoute('GET', '/auth/status', (req, res) => {
       res.json({
@@ -127,6 +131,7 @@ const adapter = createExpressAdapter(reAuthEngine, {
 ## Migration from V1
 
 ### Before (V1)
+
 ```typescript
 import { ExpressAuthAdapter } from '@re-auth/http-adapters';
 
@@ -139,6 +144,7 @@ app.use('/auth', adapter.getRouter());
 ```
 
 ### After (V2)
+
 ```typescript
 import { createExpressAdapter } from '@re-auth/http-adapters';
 
@@ -154,6 +160,7 @@ app.use('/', adapter.getRouter()); // basePath is handled internally
 ```
 
 ### Key Changes
+
 1. **Import**: `ExpressAuthAdapter` → `createExpressAdapter`
 2. **Config**: `path` → `basePath`
 3. **Mounting**: Mount at root, adapter handles basePath internally
@@ -166,6 +173,7 @@ app.use('/', adapter.getRouter()); // basePath is handled internally
 Creates a new Express adapter V2 instance.
 
 **Parameters:**
+
 - `engine: ReAuthEngine` - The ReAuth engine instance
 - `config: ExpressAdapterConfig` - Configuration options
 
@@ -208,10 +216,10 @@ The adapter includes pre-built context rules for common OAuth providers:
 
 ```typescript
 // Available OAuth2 context rules
-OAuth2ContextRules.github(pluginName)   // GitHub OAuth flow
-OAuth2ContextRules.google(pluginName)   // Google OAuth flow
-OAuth2ContextRules.facebook(pluginName) // Facebook OAuth flow
-OAuth2ContextRules.linkedin(pluginName) // LinkedIn OAuth flow
+OAuth2ContextRules.github(pluginName); // GitHub OAuth flow
+OAuth2ContextRules.google(pluginName); // Google OAuth flow
+OAuth2ContextRules.facebook(pluginName); // Facebook OAuth flow
+OAuth2ContextRules.linkedin(pluginName); // LinkedIn OAuth flow
 
 // Each provides: start, callback, and error handling rules
 const githubRules = [
@@ -226,7 +234,8 @@ const githubRules = [
 ```typescript
 const adapter = createExpressAdapter(reAuthEngine, {
   contextRules: [
-    createContextRule('*', { // Apply to all plugins
+    createContextRule('*', {
+      // Apply to all plugins
       extractHeaders: {
         'x-tenant-id': 'tenantId',
         'x-workspace': 'workspaceId',
@@ -250,12 +259,10 @@ const adapter = createExpressAdapter(reAuthEngine, {
 const adapter = createExpressAdapter(reAuthEngine, {
   errorHandler: (error, context) => {
     console.error('ReAuth Error:', error);
-    
+
     return context.response.status(500).json({
       success: false,
-      message: process.env.NODE_ENV === 'production' 
-        ? 'An error occurred' 
-        : error.message,
+      message: process.env.NODE_ENV === 'production' ? 'An error occurred' : error.message,
       timestamp: new Date().toISOString(),
     });
   },
@@ -319,4 +326,4 @@ app.get('/profile', (req: Request, res: Response) => {
 
 - See [example-usage-v2.ts](./example-usage-v2.ts) for comprehensive examples
 - Check out [Fastify Adapter V2](../fastify/README-v2.md) and [Hono Adapter V2](../hono/README-v2.md)
-- Explore the [HTTP Adapter Factory](../../utils/http-adapter-factory.ts) for advanced customization 
+- Explore the [HTTP Adapter Factory](../../utils/http-adapter-factory.ts) for advanced customization

@@ -33,15 +33,22 @@ export async function usernameAuthWorkflow() {
 
   try {
     // 1. Register a new user with username and password
-    const registerResult = await reAuth.executeStep('username-password', 'register', {
-      username: 'john_doe',
-      password: 'StrongPassword123!',
-    });
+    const registerResult = await reAuth.executeStep(
+      'username-password',
+      'register',
+      {
+        username: 'john_doe',
+        password: 'StrongPassword123!',
+      },
+    );
 
     console.log('Registration result:', registerResult);
 
     if (registerResult.success) {
-      console.log('User registered successfully with token:', registerResult.token);
+      console.log(
+        'User registered successfully with token:',
+        registerResult.token,
+      );
       console.log('User entity:', registerResult.entity);
     }
 
@@ -55,17 +62,20 @@ export async function usernameAuthWorkflow() {
 
     if (loginResult.success) {
       console.log('User logged in successfully with token:', loginResult.token);
-      
+
       // 3. Change password (requires authentication)
-      const changePasswordResult = await reAuth.executeStep('username-password', 'change-password', {
-        entity: loginResult.entity,
-        currentPassword: 'StrongPassword123!',
-        newPassword: 'NewStrongPassword456!',
-      });
+      const changePasswordResult = await reAuth.executeStep(
+        'username-password',
+        'change-password',
+        {
+          entity: loginResult.entity,
+          currentPassword: 'StrongPassword123!',
+          newPassword: 'NewStrongPassword456!',
+        },
+      );
 
       console.log('Change password result:', changePasswordResult);
     }
-
   } catch (error) {
     console.error('Error in username auth workflow:', error);
   }
@@ -82,7 +92,7 @@ export function createExpressUsernameRoutes(reAuth: any) {
   router.post('/register', async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
-      
+
       const result = await reAuth.executeStep('username-password', 'register', {
         username,
         password,
@@ -95,7 +105,7 @@ export function createExpressUsernameRoutes(reAuth: any) {
           secure: process.env.NODE_ENV === 'production',
           maxAge: 24 * 60 * 60 * 1000, // 24 hours
         });
-        
+
         res.status(201).json({
           message: result.message,
           user: result.entity,
@@ -114,7 +124,7 @@ export function createExpressUsernameRoutes(reAuth: any) {
   router.post('/login', async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
-      
+
       const result = await reAuth.executeStep('username-password', 'login', {
         username,
         password,
@@ -126,7 +136,7 @@ export function createExpressUsernameRoutes(reAuth: any) {
           secure: process.env.NODE_ENV === 'production',
           maxAge: 24 * 60 * 60 * 1000,
         });
-        
+
         res.json({
           message: result.message,
           user: result.entity,
@@ -146,16 +156,20 @@ export function createExpressUsernameRoutes(reAuth: any) {
     try {
       const { currentPassword, newPassword } = req.body;
       const user = req.user; // Assuming you have auth middleware
-      
+
       if (!user) {
         return res.status(401).json({ error: 'Authentication required' });
       }
 
-      const result = await reAuth.executeStep('username-password', 'change-password', {
-        entity: user,
-        currentPassword,
-        newPassword,
-      });
+      const result = await reAuth.executeStep(
+        'username-password',
+        'change-password',
+        {
+          entity: user,
+          currentPassword,
+          newPassword,
+        },
+      );
 
       if (result.success) {
         res.json({
@@ -214,7 +228,10 @@ export const useUsernameAuth = () => {
     }
   };
 
-  const changePassword = async (currentPassword: string, newPassword: string) => {
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string,
+  ) => {
     const response = await fetch('/auth/change-password', {
       method: 'POST',
       headers: {
@@ -233,4 +250,4 @@ export const useUsernameAuth = () => {
   };
 
   return { register, login, changePassword };
-}; 
+};

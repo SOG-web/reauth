@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Google OAuth configuration
@@ -19,9 +22,9 @@ export interface GoogleOAuthConfig extends BaseOAuthConfig {
 export const googleOAuthPlugin = createOAuthPlugin<GoogleOAuthConfig>(
   'Google',
   'pkce',
-  (config: GoogleOAuthConfig) => 
+  (config: GoogleOAuthConfig) =>
     new arctic.Google(config.clientId, config.clientSecret, config.redirectUri),
   ['openid', 'email', 'profile'], // Default scopes
 );
 
-export default googleOAuthPlugin; 
+export default googleOAuthPlugin;

@@ -73,7 +73,8 @@ interface BanInfo {
 
 const createAdminSchema = type({
   email: 'string.email',
-  password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
+  password:
+    'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
 });
 
 const plugin: AuthPlugin<AdminConfig> = {

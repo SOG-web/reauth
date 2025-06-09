@@ -2,17 +2,16 @@ import { type } from 'arktype';
 import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { createAuthPlugin } from '../utils/create-plugin';
+import { passwordSchema } from '../shared/validation';
 
 const loginSchema = type({
   email: 'string.email',
-  password: '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
-  others: 'object?'
-})
-
-
+  password: passwordSchema,
+  others: 'object?',
+});
 
 const plugin: AuthPlugin<EmailPasswordConfig> = {
-  name: 'emailAuthPlugin',
+  name: 'email',
   getSensitiveFields: () => [
     'password_hash',
     'email_verification_code',
@@ -26,7 +25,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       validationSchema: loginSchema,
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
-        const { email, password } = input;
+        const { email, password, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           email,
@@ -34,7 +33,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (config.verifyEmail && !entity.email_verified) {
@@ -63,6 +67,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: false,
             message: 'User Email verification is requred',
             status: 'eq',
+            others,
           };
         }
 
@@ -71,6 +76,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: false,
             message: 'This user does not have a password',
             status: 'unf',
+            others,
           };
         }
 
@@ -80,7 +86,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         );
 
         if (!passwordMatch) {
-          return { success: false, message: 'Invalid password', status: 'ip' };
+          return {
+            success: false,
+            message: 'Invalid password',
+            status: 'ip',
+            others,
+          };
         }
 
         const token = await container.cradle.reAuthEngine.createSession(
@@ -94,6 +105,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             message: token.message!,
             error: token.error!,
             status: 'ic',
+            others,
           };
         }
 
@@ -105,19 +117,20 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           message: 'Login successful',
           token: token.token,
           entity: serializedEntity,
+          others,
           status: 'su',
         };
       },
       outputs: type({
         success: 'boolean',
         message: 'string',
-        "error?": 'string | object',
+        'error?': 'string | object',
         status: 'string',
-        "token?": 'string',
-        "entity?": 'object',
+        'token?': 'string',
+        'entity?': 'object',
       }),
       hooks: {},
-      inputs: ['email', 'password'],
+      inputs: ['email', 'password', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -135,7 +148,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       validationSchema: loginSchema,
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
-        const { email, password } = input;
+        const { email, password, others } = input;
 
         const en = await container.cradle.entityService.findEntity(
           email,
@@ -147,6 +160,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: false,
             message: 'User already exist',
             status: 'ip',
+            others,
           };
         }
 
@@ -157,6 +171,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: false,
             message: 'Password has been pawned',
             status: 'ip',
+            others,
           };
         }
 
@@ -199,6 +214,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             message: token.message!,
             error: token.error!,
             status: 'ic',
+            others,
           };
         }
 
@@ -209,11 +225,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           message: 'Register successful',
           token: token?.token,
           entity: serializedEntity,
+          others,
           status: 'su',
         };
       },
       hooks: {},
-      inputs: ['email', 'password'],
+      inputs: ['email', 'password', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -228,11 +245,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       description: 'Verify email',
       validationSchema: type({
         email: 'string.email',
-        code: "number.safe | string",
+        code: 'number.safe | string',
+        others: 'object?',
       }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
-        const { email, code } = input;
+        const { email, code, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           email,
@@ -240,7 +258,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (entity.email_verified) {
@@ -248,11 +271,17 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: true,
             message: 'Email already verified',
             status: 'su',
+            others,
           };
         }
 
         if (entity.email_verification_code !== code) {
-          return { success: false, message: 'Invalid code', status: 'ic' };
+          return {
+            success: false,
+            message: 'Invalid code',
+            status: 'ic',
+            others,
+          };
         }
 
         entity.email_verified = true;
@@ -267,6 +296,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           success: true,
           message: 'Email verified',
           status: 'su',
+          others,
         };
       },
       outputs: type({
@@ -275,7 +305,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         status: 'string',
       }),
       hooks: {},
-      inputs: ['email', 'code'],
+      inputs: ['email', 'code', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -290,10 +320,11 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       description: 'Resend verify email',
       validationSchema: type({
         email: 'string.email',
+        others: 'object?',
       }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
-        const { email } = input;
+        const { email, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           email,
@@ -301,7 +332,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (entity.email_verified) {
@@ -309,6 +345,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: true,
             message: 'Email already verified',
             status: 'su',
+            others,
           };
         }
 
@@ -317,6 +354,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: false,
             message: 'No verification code',
             status: 'nc',
+            others,
           };
         }
 
@@ -344,6 +382,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           success: true,
           message: 'Verification code resent',
           status: 'su',
+          others,
         };
       },
       hooks: {},
@@ -352,7 +391,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         message: 'string',
         status: 'string',
       }),
-      inputs: ['email'],
+      inputs: ['email', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -367,10 +406,11 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       description: 'Send reset password',
       validationSchema: type({
         email: 'string.email',
+        others: 'object?',
       }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
-        const { email } = input;
+        const { email, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           email,
@@ -378,7 +418,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (!entity.email_verified) {
@@ -386,6 +431,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: false,
             message: 'Email not verified',
             status: 'ev',
+            others,
           };
         }
 
@@ -407,7 +453,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             reset_password_code: code,
             reset_password_code_expires_at: new Date(
               Date.now() +
-                (config.resetPasswordCodeExpiresIn || 30 * 60 * 1000),
+              (config.resetPasswordCodeExpiresIn || 30 * 60 * 1000),
             ),
           },
         );
@@ -418,6 +464,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           success: true,
           message: 'Reset password code sent',
           status: 'su',
+          others,
         };
       },
       hooks: {},
@@ -426,7 +473,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         message: 'string',
         status: 'string',
       }),
-      inputs: ['email'],
+      inputs: ['email', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -441,12 +488,13 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       description: 'Reset password',
       validationSchema: type({
         email: 'string.email',
-        password: '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
-        code: "number.safe | string",
+        password: passwordSchema,
+        code: 'number.safe | string',
+        others: 'object?',
       }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
-        const { email, password, code } = input;
+        const { email, password, code, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           email,
@@ -454,7 +502,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         const savePassword = await haveIbeenPawned(password);
@@ -464,6 +517,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             success: false,
             message: 'Password has been pawned',
             status: 'ip',
+            others,
           };
         }
 
@@ -480,7 +534,12 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
               reset_password_code_expires_at: undefined,
             },
           );
-          return { success: false, message: 'Invalid code', status: 'ic' };
+          return {
+            success: false,
+            message: 'Invalid code',
+            status: 'ic',
+            others,
+          };
         }
 
         await container.cradle.entityService.updateEntity(
@@ -498,6 +557,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           success: true,
           message: 'Password reset successful',
           status: 'su',
+          others,
         };
       },
       hooks: {},
@@ -506,7 +566,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         message: 'string',
         status: 'string',
       }),
-      inputs: ['email', 'password', 'code'],
+      inputs: ['email', 'password', 'code', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -560,7 +620,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       },
     ],
   },
-  config: {}
+  config: {},
 };
 
 const emailPasswordAuth = (

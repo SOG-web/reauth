@@ -1,0 +1,21 @@
+meta {
+  name: register
+  type: http
+  seq: 4
+}
+
+post {
+  url: http://localhost:3001/auth/emailAuthPlugin/register
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "email": "rrr3@gmal.com",
+    "password": "rnijhv3u4jf!bnQ",
+    "others": {
+      "username": "test_user"
+    }
+  }
+}

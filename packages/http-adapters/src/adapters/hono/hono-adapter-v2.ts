@@ -1,5 +1,5 @@
 import { Context, Hono } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { ReAuthEngine, AuthOutput, Entity, AuthToken } from '@re-auth/reauth';
 import {
   createHttpAdapter,
@@ -96,6 +96,12 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
             c.set('user', session.entity);
             c.set('token', session.token);
             c.set('authenticated', true);
+          } else {
+            c.set('authenticated', false);
+            c.set('user', undefined);
+            c.set('token', null);
+            // clear cookie
+            deleteCookie(c, this.adapterConfig.cookieName);
           }
         } catch (error) {
           console.warn('Invalid token:', error);
@@ -140,6 +146,8 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
     // Extract from body
     try {
       const body = await context.req.json();
+      // console.dir(body, { depth: null });
+      // console.log('expectedInputs', expectedInputs);
       expectedInputs.forEach((inputName: string) => {
         if (body && body[inputName] !== undefined) {
           inputs[inputName] = body[inputName];
@@ -165,6 +173,16 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
       }
     });
 
+    if (expectedInputs.includes('token')) {
+      console.log('token', expectedInputs);
+      // Token from cookie or header
+      const token = this.extractToken(context);
+      console.log('token', token);
+      if (token) {
+        inputs.token = token;
+      }
+    }
+
     return inputs;
   }
 
@@ -179,8 +197,9 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
     contextRules: ContextExtractionRule[],
   ): void {
     // Use stored context rules instead of parameter (for compatibility)
-    const rulesToUse = contextRules.length > 0 ? contextRules : this.contextRules;
-    
+    const rulesToUse =
+      contextRules.length > 0 ? contextRules : this.contextRules;
+
     // Find applicable context extraction rules
     const applicableRules = findContextRules(pluginName, stepName, rulesToUse);
 
@@ -247,11 +266,16 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
     result: AuthOutput,
     httpConfig: any,
   ): Response {
-    const { token, redirect, success, status, cookies, ...data } = result;
+    const { redirect, success, status, cookies, ...data } = result;
 
     // Handle token (set cookie) using stored adapter config
-    if (token) {
-      setCookie(context, this.adapterConfig.cookieName, token, this.adapterConfig.cookieOptions);
+    if (data.token) {
+      setCookie(
+        context,
+        this.adapterConfig.cookieName,
+        data.token,
+        this.adapterConfig.cookieOptions,
+      );
     }
 
     // Handle additional cookies from result.cookies
@@ -270,10 +294,13 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
     const statusCode = this.getStatusCode(result, httpConfig);
 
     // Send response
-    return context.json({
-      success,
-      ...data,
-    }, statusCode);
+    return context.json(
+      {
+        success,
+        ...data,
+      },
+      statusCode,
+    );
   }
 
   /**
@@ -288,8 +315,9 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
     contextRules: ContextExtractionRule[],
   ): void {
     // Use stored context rules instead of parameter (for compatibility)
-    const rulesToUse = contextRules.length > 0 ? contextRules : this.contextRules;
-    
+    const rulesToUse =
+      contextRules.length > 0 ? contextRules : this.contextRules;
+
     // Find applicable context extraction rules
     const applicableRules = findContextRules(pluginName, stepName, rulesToUse);
 
@@ -306,7 +334,11 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
             }
 
             // Handle complex cookie options
-            if (typeof value === 'object' && value !== null && 'value' in value) {
+            if (
+              typeof value === 'object' &&
+              value !== null &&
+              'value' in value
+            ) {
               // Value is a cookie options object
               const { value: cookieValue, ...cookieOptions } = value;
               setCookie(context, cookieName, cookieValue, cookieOptions);
@@ -331,7 +363,12 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
 
               // Apply transform if provided
               if (rule.transformOutput) {
-                value = rule.transformOutput(headerName, value, result, context);
+                value = rule.transformOutput(
+                  headerName,
+                  value,
+                  result,
+                  context,
+                );
               }
 
               context.header(headerName, value);
@@ -345,7 +382,12 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
 
               // Apply transform if provided
               if (rule.transformOutput) {
-                value = rule.transformOutput(headerName, value, result, context);
+                value = rule.transformOutput(
+                  headerName,
+                  value,
+                  result,
+                  context,
+                );
               }
 
               context.header(headerName, value);
@@ -356,7 +398,10 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
     });
   }
 
-  private getStatusCode(result: AuthOutput, httpConfig: any): ContentfulStatusCode {
+  private getStatusCode(
+    result: AuthOutput,
+    httpConfig: any,
+  ): ContentfulStatusCode {
     // First, check if the plugin step defines a specific status code for the result status
     if (result.status && httpConfig[result.status]) {
       return httpConfig[result.status];
@@ -384,7 +429,7 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
 
   extractToken(context: Context): string | null {
     // From cookie
-    const cookieToken = getCookie(context, 'auth_token');
+    const cookieToken = getCookie(context, this.adapterConfig.cookieName);
     if (cookieToken) {
       return cookieToken;
     }
@@ -407,13 +452,16 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
     };
   }
 
-  errorResponse(context: Context, error: Error): Response {
+  errorResponse(context: any, error: Error): Response {
     console.error('HTTP Adapter Error:', error);
-    return context.json({
-      success: false,
-      message: error.message || 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    }, 500);
+    return context.request.json(
+      {
+        success: false,
+        message: error.message || 'Internal server error',
+        error: process.env.NODE_ENV !== 'production' ? error : undefined,
+      },
+      500,
+    );
   }
 
   getAdapter(): Hono {
@@ -424,8 +472,11 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
 /**
  * Create Hono adapter using the factory pattern with shared instance
  */
-export const createHonoAdapterV2 = (engine: ReAuthEngine, config: HonoAdapterConfig, frameworkAdapter: HonoFrameworkAdapter) => {
-  
+export const createHonoAdapterV2 = (
+  engine: ReAuthEngine,
+  config: HonoAdapterConfig,
+  frameworkAdapter: HonoFrameworkAdapter,
+) => {
   return createHttpAdapter(frameworkAdapter)(engine, config);
 };
 
@@ -438,10 +489,15 @@ export class HonoAdapterV2 {
   private config: HonoAdapterConfig;
   private frameworkAdapter: HonoFrameworkAdapter;
 
-  constructor(engine: ReAuthEngine, config: HonoAdapterConfig = {}, frameworkAdapter?: HonoFrameworkAdapter) {
+  constructor(
+    engine: ReAuthEngine,
+    config: HonoAdapterConfig = {},
+    frameworkAdapter?: HonoFrameworkAdapter,
+  ) {
     this.engine = engine;
     this.config = config;
-    this.frameworkAdapter = frameworkAdapter || new HonoFrameworkAdapter(engine);
+    this.frameworkAdapter =
+      frameworkAdapter || new HonoFrameworkAdapter(engine);
     // Set the engine on the shared adapter before creating the HTTP adapter
     this.frameworkAdapter.setEngine(engine);
     // Create the app using the factory
@@ -567,4 +623,4 @@ export type {
   AutoGeneratedRoute,
   AutoIntrospectionConfig,
   ContextExtractionRule,
-}; 
+};

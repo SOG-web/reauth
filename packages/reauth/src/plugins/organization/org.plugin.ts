@@ -1,5 +1,12 @@
 import { asValue, AwilixContainer } from 'awilix';
-import { AuthOutput, AuthPlugin, AuthStep, ReAuthCradle, AuthInput, RootStepHooks } from '../../types';
+import {
+  AuthOutput,
+  AuthPlugin,
+  AuthStep,
+  ReAuthCradle,
+  AuthInput,
+  RootStepHooks,
+} from '../../types';
 import { checkDependsOn, createAuthPlugin } from '../utils';
 import { type } from 'arktype';
 
@@ -61,7 +68,7 @@ const plugin: AuthPlugin<OrgConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "organization?": 'object',
+        'organization?': 'object',
       }),
       async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
         const { container, config } = pluginProperties!;
@@ -85,11 +92,12 @@ const plugin: AuthPlugin<OrgConfig> = {
         }
 
         try {
-          const organization = await container.cradle.orgService.createOrganization({
-            name,
-            description,
-            owner_id: entity.id,
-          });
+          const organization =
+            await container.cradle.orgService.createOrganization({
+              name,
+              description,
+              owner_id: entity.id,
+            });
 
           // Add creator as owner member
           await container.cradle.orgService.addMember({
@@ -132,7 +140,7 @@ const plugin: AuthPlugin<OrgConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "membership?": 'object',
+        'membership?': 'object',
       }),
       async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
         const { container, config } = pluginProperties!;
@@ -148,7 +156,8 @@ const plugin: AuthPlugin<OrgConfig> = {
 
         try {
           // Check if organization exists
-          const organization = await container.cradle.orgService.findOrganization(organizationId);
+          const organization =
+            await container.cradle.orgService.findOrganization(organizationId);
           if (!organization) {
             return {
               success: false,
@@ -158,7 +167,10 @@ const plugin: AuthPlugin<OrgConfig> = {
           }
 
           // Check if user is already a member
-          const existingMember = await container.cradle.orgService.findMember(organizationId, entity.id);
+          const existingMember = await container.cradle.orgService.findMember(
+            organizationId,
+            entity.id,
+          );
           if (existingMember) {
             return {
               success: false,
@@ -168,7 +180,8 @@ const plugin: AuthPlugin<OrgConfig> = {
           }
 
           const memberRole = role || config.defaultRole || 'member';
-          const memberPermissions = permissions || config.defaultPermissions || [];
+          const memberPermissions =
+            permissions || config.defaultPermissions || [];
 
           const member = await container.cradle.orgService.addMember({
             organization_id: organizationId,
@@ -214,7 +227,7 @@ const plugin: AuthPlugin<OrgConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "organizations?": 'object[]',
+        'organizations?': 'object[]',
       }),
       async run(input: AuthInput, pluginProperties): Promise<AuthOutput> {
         const { container } = pluginProperties!;
@@ -229,7 +242,8 @@ const plugin: AuthPlugin<OrgConfig> = {
         }
 
         try {
-          const organizations = await container.cradle.orgService.getUserOrganizations(entity.id);
+          const organizations =
+            await container.cradle.orgService.getUserOrganizations(entity.id);
 
           return {
             success: true,
@@ -262,14 +276,16 @@ const plugin: AuthPlugin<OrgConfig> = {
   async initialize(container: AwilixContainer<ReAuthCradle>) {
     // TODO: Organization plugin is not yet complete. Missing features:
     // - Complete testing and validation
-    // - Error handling improvements  
+    // - Error handling improvements
     // - Performance optimizations
     // - Additional security measures
     // - Integration with other plugins
     // - Documentation updates
     // - Role-based access control refinements
     // - Audit logging capabilities
-    throw new Error('Organization plugin is not yet ready for production use. This is a work in progress.');
+    throw new Error(
+      'Organization plugin is not yet ready for production use. This is a work in progress.',
+    );
 
     // This code will be enabled when the plugin is ready:
     /*
@@ -305,7 +321,7 @@ const plugin: AuthPlugin<OrgConfig> = {
     //     try {
     //       // Get user's organizations
     //       const organizations = await container.cradle.orgService.getUserOrganizations(entity.id);
-          
+
     //       // Extract teams from all organizations
     //       const teams: string[] = [];
     //       for (const org of organizations) {
@@ -498,20 +514,39 @@ export type OrgService = {
   // Organization management
   createOrganization(org: Partial<Organization>): Promise<Organization>;
   findOrganization(id: string): Promise<Organization | null>;
-  updateOrganization(id: string, updates: Partial<Organization>): Promise<Organization>;
+  updateOrganization(
+    id: string,
+    updates: Partial<Organization>,
+  ): Promise<Organization>;
   deleteOrganization(id: string): Promise<void>;
-  getUserOrganizations(entityId: string): Promise<Array<Organization & { role: string; permissions: string[] }>>;
+  getUserOrganizations(
+    entityId: string,
+  ): Promise<Array<Organization & { role: string; permissions: string[] }>>;
 
   // Member management
   addMember(member: Partial<OrganizationMember>): Promise<OrganizationMember>;
-  findMember(organizationId: string, entityId: string): Promise<OrganizationMember | null>;
-  updateMember(organizationId: string, entityId: string, updates: Partial<OrganizationMember>): Promise<OrganizationMember>;
+  findMember(
+    organizationId: string,
+    entityId: string,
+  ): Promise<OrganizationMember | null>;
+  updateMember(
+    organizationId: string,
+    entityId: string,
+    updates: Partial<OrganizationMember>,
+  ): Promise<OrganizationMember>;
   removeMember(organizationId: string, entityId: string): Promise<void>;
-  getOrganizationMembers(organizationId: string, role?: string): Promise<OrganizationMember[]>;
+  getOrganizationMembers(
+    organizationId: string,
+    role?: string,
+  ): Promise<OrganizationMember[]>;
 
   // Legacy support for admin plugin compatibility
   findEntity(id: string, field: string): Promise<OrgUser | null>;
   createEntity(entity: Partial<OrgUser>): Promise<OrgUser>;
-  updateEntity(id: string, field: string, entity: Partial<OrgUser>): Promise<OrgUser>;
+  updateEntity(
+    id: string,
+    field: string,
+    entity: Partial<OrgUser>,
+  ): Promise<OrgUser>;
   deleteEntity(id: string, field: string): Promise<void>;
 };

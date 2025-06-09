@@ -41,6 +41,9 @@ export async function executeStep(
     throw new StepNotFound(stepName, pluginName);
   }
 
+  // console.log('executeStep', stepName);
+  // console.dir(input, { depth: null });
+
   try {
     // Validate input if schema is provided
     if (step.validationSchema) {

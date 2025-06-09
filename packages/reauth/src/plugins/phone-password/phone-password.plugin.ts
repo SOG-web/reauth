@@ -2,19 +2,16 @@ import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { createAuthPlugin } from '../utils/create-plugin';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { type } from 'arktype';
-
-const phoneSchema = type('/^\\+?[1-9]\\d{1,14}$/');
-const passwordSchema = type(
-  '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/'
-);
+import { passwordSchema, phoneSchema } from '../shared/validation';
 
 const loginValidation = type({
   phone: phoneSchema,
   password: passwordSchema,
+  others: 'object?',
 });
 
 const plugin: AuthPlugin<PhonePasswordConfig> = {
-  name: 'phoneAuthPlugin',
+  name: 'phone',
   getSensitiveFields: () => [
     'phone_verification_code_expires_at',
     'phone_verification_code',
@@ -26,7 +23,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       validationSchema: loginValidation,
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
-        const { phone, password } = input;
+        const { phone, password, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           phone,
@@ -34,7 +31,12 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (!entity.password_hash) {
@@ -42,6 +44,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             success: false,
             message: 'This user does not have a password',
             status: 'unf',
+            others,
           };
         }
 
@@ -50,6 +53,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             success: false,
             message: 'Phone not verified',
             status: 'ev',
+            others,
           };
         }
 
@@ -59,7 +63,12 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
         );
 
         if (!passwordMatch) {
-          return { success: false, message: 'Invalid password', status: 'ip' };
+          return {
+            success: false,
+            message: 'Invalid password',
+            status: 'ip',
+            others,
+          };
         }
 
         const token = await container.cradle.reAuthEngine.createSession(
@@ -73,6 +82,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             message: token.message!,
             error: token.error!,
             status: 'ic',
+            others,
           };
         }
 
@@ -84,10 +94,11 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
           token: token.token,
           entity: serializedEntity,
           status: 'su',
+          others,
         };
       },
       hooks: {},
-      inputs: ['phone', 'password'],
+      inputs: ['phone', 'password', 'others'],
       outputs: type({
         success: 'boolean',
         message: 'string',
@@ -112,7 +123,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       validationSchema: loginValidation,
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
-        const { phone, password } = input;
+        const { phone, password, others } = input;
 
         const savePassword = await haveIbeenPawned(password);
 
@@ -121,6 +132,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             success: false,
             message: 'Password has been pawned',
             status: 'ip',
+            others,
           };
         }
 
@@ -161,6 +173,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             success: true,
             message: 'Phone verification code sent',
             status: 'su',
+            others,
           };
         }
 
@@ -174,6 +187,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             message: token.message!,
             error: token.error!,
             status: 'ic',
+            others,
           };
         }
 
@@ -185,10 +199,11 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
           token: token?.token,
           entity: serializedEntity,
           status: 'su',
+          others,
         };
       },
       hooks: {},
-      inputs: ['phone', 'password'],
+      inputs: ['phone', 'password', 'others'],
       outputs: type({
         success: 'boolean',
         message: 'string',
@@ -211,10 +226,11 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       validationSchema: type({
         phone: phoneSchema,
         code: 'string',
+        others: 'object?',
       }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
-        const { phone, code } = input;
+        const { phone, code, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           phone,
@@ -222,7 +238,12 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (entity.phone_verified) {
@@ -230,11 +251,17 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             success: true,
             message: 'Phone already verified',
             status: 'su',
+            others,
           };
         }
 
         if (entity.phone_verification_code !== code) {
-          return { success: false, message: 'Invalid code', status: 'ic' };
+          return {
+            success: false,
+            message: 'Invalid code',
+            status: 'ic',
+            others,
+          };
         }
 
         await container.cradle.entityService.updateEntity(
@@ -258,6 +285,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             message: token.message!,
             error: token.error!,
             status: 'ic',
+            others,
           };
         }
 
@@ -269,10 +297,11 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
           token: token.token,
           entity: serializedEntity,
           status: 'su',
+          others,
         };
       },
       hooks: {},
-      inputs: ['phone', 'code'],
+      inputs: ['phone', 'code', 'others'],
       outputs: type({
         success: 'boolean',
         message: 'string',
@@ -295,6 +324,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       description: 'Reset password',
       validationSchema: type({
         phone: phoneSchema,
+        others: 'object?',
       }),
       outputs: type({
         success: 'boolean',
@@ -302,10 +332,10 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
         status: 'string',
       }),
       hooks: {},
-      inputs: ['phone'],
+      inputs: ['phone', 'others'],
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
-        const { phone } = input;
+        const { phone, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           phone,
@@ -313,7 +343,12 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
         );
 
         if (!entity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (!entity.phone_verified) {
@@ -321,6 +356,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             success: false,
             message: 'Phone not verified',
             status: 'ev',
+            others,
           };
         }
 
@@ -349,7 +385,12 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
           },
         );
 
-        return { success: true, message: 'Reset code sent', status: 'su' };
+        return {
+          success: true,
+          message: 'Reset code sent',
+          status: 'su',
+          others,
+        };
       },
       protocol: {
         http: {

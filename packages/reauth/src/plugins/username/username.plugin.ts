@@ -2,28 +2,28 @@ import { type } from 'arktype';
 import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { createAuthPlugin } from '../utils/create-plugin';
-
-// ArkType schemas for validation
-const usernameSchema = type('string.regex|/^[a-zA-Z0-9_]{3,20}$/');
-const passwordSchema = type('string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/');
+import { usernameSchema, passwordSchema } from '../shared/validation';
 
 const loginSchema = type({
   username: usernameSchema,
   password: passwordSchema,
+  others: 'object?',
 });
 
 const registerSchema = type({
   username: usernameSchema,
   password: passwordSchema,
+  others: 'object?',
 });
 
 const changePasswordSchema = type({
   currentPassword: passwordSchema,
   newPassword: passwordSchema,
+  others: 'object?',
 });
 
 const plugin: AuthPlugin<UsernamePasswordConfig> = {
-  name: 'usernameAuthPlugin',
+  name: 'username',
   getSensitiveFields: () => ['password_hash'],
   steps: [
     {
@@ -34,13 +34,12 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "token?": 'string',
-        "entity?": 'object',
+        'token?': 'string',
+        'entity?': 'object',
       }),
       run: async function (input, pluginProperties) {
-
         const { container, config } = pluginProperties!;
-        const { username, password } = input;
+        const { username, password, others } = input;
 
         const entity = await container.cradle.entityService.findEntity(
           username,
@@ -93,7 +92,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         };
       },
       hooks: {},
-      inputs: ['username', 'password'],
+      inputs: ['username', 'password', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -111,13 +110,12 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "token?": 'string',
-        "entity?": 'object',
+        'token?': 'string',
+        'entity?': 'object',
       }),
       run: async function (input, pluginProperties) {
-
         const { container, config } = pluginProperties!;
-        const { username, password } = input;
+        const { username, password, others } = input;
 
         const existingEntity = await container.cradle.entityService.findEntity(
           username,
@@ -129,6 +127,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
             success: false,
             message: 'Username already exists',
             status: 'ue',
+            others,
           };
         }
 
@@ -139,6 +138,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
             success: false,
             message: 'Password has been compromised in a data breach',
             status: 'ip',
+            others,
           };
         }
 
@@ -157,6 +157,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
             message: token.message!,
             error: token.error!,
             status: 'ic',
+            others,
           };
         }
 
@@ -168,10 +169,11 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
           token: token?.token,
           entity: serializedEntity,
           status: 'su',
+          others,
         };
       },
       hooks: {},
-      inputs: ['username', 'password'],
+      inputs: ['username', 'password', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -192,12 +194,16 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         status: 'string',
       }),
       run: async function (input, pluginProperties) {
-
         const { container } = pluginProperties!;
-        const { entity, currentPassword, newPassword } = input;
+        const { entity, currentPassword, newPassword, others } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'auth' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'auth',
+            others,
+          };
         }
 
         const currentEntity = await container.cradle.entityService.findEntity(
@@ -206,7 +212,12 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         );
 
         if (!currentEntity) {
-          return { success: false, message: 'User not found', status: 'unf' };
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
         }
 
         if (!currentEntity.password_hash) {
@@ -214,6 +225,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
             success: false,
             message: 'This user does not have a password',
             status: 'np',
+            others,
           };
         }
 
@@ -223,7 +235,12 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         );
 
         if (!passwordMatch) {
-          return { success: false, message: 'Current password is incorrect', status: 'ip' };
+          return {
+            success: false,
+            message: 'Current password is incorrect',
+            status: 'ip',
+            others,
+          };
         }
 
         const safePassword = await haveIbeenPawned(newPassword);
@@ -233,6 +250,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
             success: false,
             message: 'New password has been compromised in a data breach',
             status: 'cp',
+            others,
           };
         }
 
@@ -241,6 +259,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
             success: false,
             message: 'New password must be different from current password',
             status: 'sp',
+            others,
           };
         }
 
@@ -257,10 +276,11 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
           success: true,
           message: 'Password changed successfully',
           status: 'su',
+          others,
         };
       },
       hooks: {},
-      inputs: ['currentPassword', 'newPassword'],
+      inputs: ['currentPassword', 'newPassword', 'others'],
       protocol: {
         http: {
           method: 'POST',
@@ -286,7 +306,9 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
     // - Username uniqueness constraint testing
     // - Multi-environment configuration support
     // - Brute force protection validation
-    throw new Error('Username plugin is not yet ready for production use. This is a work in progress.');
+    throw new Error(
+      'Username plugin is not yet ready for production use. This is a work in progress.',
+    );
 
     // This code will be enabled when the plugin is ready:
     /*
@@ -352,5 +374,4 @@ interface UsernamePasswordConfig {
    *  }
    */
   rootHooks?: RootStepHooks;
-} 
-
+}

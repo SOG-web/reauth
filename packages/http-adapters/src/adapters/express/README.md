@@ -45,7 +45,7 @@ app.use(
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 days
     },
-  })
+  }),
 );
 
 // Protected route example
@@ -120,7 +120,8 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: err.message });
   }
   // Handle other errors
-  res.status(500).json({ error: 'Internal Server Error' });});
+  res.status(500).json({ error: 'Internal Server Error' });
+});
 ```
 
 ## License

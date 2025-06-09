@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * GitHub OAuth configuration
@@ -17,11 +20,11 @@ export interface GitHubOAuthConfig extends BaseOAuthConfig {
  * GitHub uses regular OAuth 2.0 flow (not PKCE)
  */
 export const githubOAuthPlugin = createOAuthPlugin<GitHubOAuthConfig>(
-  'GitHub',
+  'gitHub',
   'regular',
-  (config: GitHubOAuthConfig) => 
+  (config: GitHubOAuthConfig) =>
     new arctic.GitHub(config.clientId, config.clientSecret, config.redirectUri),
   ['user:email', 'read:user'], // Default scopes
 );
 
-export default githubOAuthPlugin; 
+export default githubOAuthPlugin;

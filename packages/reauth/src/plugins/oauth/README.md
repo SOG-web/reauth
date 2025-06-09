@@ -5,26 +5,31 @@ This directory contains OAuth plugins for various popular providers, built on to
 ## Available Providers
 
 ### Social Media & Communication
+
 - **Discord** - Discord OAuth with support for PKCE flow
 - **Twitter/X** - Twitter OAuth for social media authentication
 - **Reddit** - Reddit OAuth for social platform integration
 - **Twitch** - Twitch OAuth for streaming platform authentication
 
 ### Business & Enterprise
+
 - **Microsoft** - Microsoft Entra ID (Azure AD) OAuth with PKCE support
 - **Auth0** - Auth0 OAuth with both confidential and public client support
 - **WorkOS** - WorkOS OAuth for enterprise authentication
 - **LinkedIn** - LinkedIn OAuth for professional networking
 
 ### Entertainment & Media
+
 - **Spotify** - Spotify OAuth with PKCE support for music platform integration
 - **Apple** - Apple OAuth for iOS and macOS applications
 
 ### Development & Tech
+
 - **GitHub** - GitHub OAuth for developer platform authentication
 - **Google** - Google OAuth with PKCE support
 
 ### General
+
 - **Facebook** - Facebook OAuth for social platform integration
 
 ## Installation
@@ -191,7 +196,7 @@ const customDiscord = discordOAuthPlugin({
       },
     });
     const user = await response.json();
-    
+
     return {
       id: user.id,
       email: user.email,
@@ -209,30 +214,37 @@ const customDiscord = discordOAuthPlugin({
 ## Required Environment Variables
 
 ### Discord
+
 - `DISCORD_CLIENT_ID`
 - `DISCORD_CLIENT_SECRET`
 
 ### Auth0
+
 - `AUTH0_CLIENT_ID`
 - `AUTH0_CLIENT_SECRET`
 
 ### Spotify
+
 - `SPOTIFY_CLIENT_ID`
 - `SPOTIFY_CLIENT_SECRET`
 
 ### Microsoft
+
 - `MICROSOFT_CLIENT_ID`
 - `MICROSOFT_CLIENT_SECRET`
 
 ### Twitter
+
 - `TWITTER_CLIENT_ID`
 - `TWITTER_CLIENT_SECRET`
 
 ### Twitch
+
 - `TWITCH_CLIENT_ID`
 - `TWITCH_CLIENT_SECRET`
 
 ### Apple
+
 - `APPLE_CLIENT_ID`
 - `APPLE_CLIENT_SECRET`
 - `APPLE_TEAM_ID`
@@ -240,10 +252,12 @@ const customDiscord = discordOAuthPlugin({
 - `APPLE_PRIVATE_KEY` (PEM format)
 
 ### WorkOS
+
 - `WORKOS_CLIENT_ID`
 - `WORKOS_CLIENT_SECRET`
 
 ### Reddit
+
 - `REDDIT_CLIENT_ID`
 - `REDDIT_CLIENT_SECRET`
 
@@ -251,13 +265,7 @@ const customDiscord = discordOAuthPlugin({
 
 ```typescript
 import { createReAuthEngine } from '@re-auth/reauth';
-import {
-  googleOAuthPlugin,
-  discordOAuthPlugin,
-  githubOAuthPlugin,
-  spotifyOAuthPlugin,
-  microsoftOAuthPlugin,
-} from '@re-auth/reauth/plugins/oauth';
+import { googleOAuthPlugin, discordOAuthPlugin, githubOAuthPlugin, spotifyOAuthPlugin, microsoftOAuthPlugin } from '@re-auth/reauth/plugins/oauth';
 
 const reAuth = createReAuthEngine({
   plugins: [
@@ -298,39 +306,39 @@ const reAuth = createReAuthEngine({
 
 Each provider comes with sensible default scopes, but you can customize them:
 
-| Provider | Default Scopes |
-|----------|----------------|
-| Google | `['openid', 'email', 'profile']` |
-| Discord | `['identify', 'email']` |
-| GitHub | `['user:email', 'read:user']` |
-| LinkedIn | `['openid', 'profile', 'email']` |
-| Facebook | `['email', 'public_profile']` |
-| Spotify | `['user-read-email', 'user-read-private']` |
+| Provider  | Default Scopes                                |
+| --------- | --------------------------------------------- |
+| Google    | `['openid', 'email', 'profile']`              |
+| Discord   | `['identify', 'email']`                       |
+| GitHub    | `['user:email', 'read:user']`                 |
+| LinkedIn  | `['openid', 'profile', 'email']`              |
+| Facebook  | `['email', 'public_profile']`                 |
+| Spotify   | `['user-read-email', 'user-read-private']`    |
 | Microsoft | `['openid', 'profile', 'email', 'User.Read']` |
-| Twitter | `['tweet.read', 'users.read']` |
-| Twitch | `['user:read:email']` |
-| Apple | `['name', 'email']` |
-| Auth0 | `['openid', 'profile', 'email']` |
-| WorkOS | `['openid', 'profile', 'email']` |
-| Reddit | `['identity']` |
+| Twitter   | `['tweet.read', 'users.read']`                |
+| Twitch    | `['user:read:email']`                         |
+| Apple     | `['name', 'email']`                           |
+| Auth0     | `['openid', 'profile', 'email']`              |
+| WorkOS    | `['openid', 'profile', 'email']`              |
+| Reddit    | `['identity']`                                |
 
 ## Provider Support Matrix
 
-| Provider | Regular OAuth | PKCE Support | Custom Domains | Notes |
-|----------|---------------|--------------|----------------|-------|
-| Google | ✅ | ✅ | ❌ | |
-| Discord | ✅ | ✅ | ❌ | |
-| GitHub | ✅ | ❌ | ❌ | |
-| LinkedIn | ✅ | ❌ | ❌ | |
-| Facebook | ✅ | ❌ | ❌ | |
-| Spotify | ✅ | ✅ | ❌ | |
-| Microsoft | ✅ | ✅ | ❌ | Multi-tenant support |
-| Twitter | ✅ | ❌ | ❌ | |
-| Twitch | ✅ | ❌ | ❌ | |
-| Apple | ✅ | ❌ | ❌ | Requires private key |
-| Auth0 | ✅ | ✅ | ✅ | Custom domains |
-| WorkOS | ✅ | ✅ | ❌ | Enterprise SSO |
-| Reddit | ✅ | ❌ | ❌ | |
+| Provider  | Regular OAuth | PKCE Support | Custom Domains | Notes                |
+| --------- | ------------- | ------------ | -------------- | -------------------- |
+| Google    | ✅            | ✅           | ❌             |                      |
+| Discord   | ✅            | ✅           | ❌             |                      |
+| GitHub    | ✅            | ❌           | ❌             |                      |
+| LinkedIn  | ✅            | ❌           | ❌             |                      |
+| Facebook  | ✅            | ❌           | ❌             |                      |
+| Spotify   | ✅            | ✅           | ❌             |                      |
+| Microsoft | ✅            | ✅           | ❌             | Multi-tenant support |
+| Twitter   | ✅            | ❌           | ❌             |                      |
+| Twitch    | ✅            | ❌           | ❌             |                      |
+| Apple     | ✅            | ❌           | ❌             | Requires private key |
+| Auth0     | ✅            | ✅           | ✅             | Custom domains       |
+| WorkOS    | ✅            | ✅           | ❌             | Enterprise SSO       |
+| Reddit    | ✅            | ❌           | ❌             |                      |
 
 ## Migration from Arctic.js v2 to v3
 
@@ -349,7 +357,7 @@ try {
   const result = await reAuth.executeStep('Discord', 'authorize', {
     /* inputs */
   });
-  
+
   if (result.success) {
     // Handle success
     const { entity, token } = result;
@@ -386,4 +394,4 @@ To add a new OAuth provider:
 - [Arctic.js Documentation](https://arcticjs.dev/)
 - [OAuth 2.0 Specification](https://tools.ietf.org/html/rfc6749)
 - [PKCE Specification](https://tools.ietf.org/html/rfc7636)
-- [ReAuth Documentation](../../README.md) 
+- [ReAuth Documentation](../../README.md)

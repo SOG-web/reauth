@@ -35,6 +35,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.2
         version: 1.14.2(hono@4.7.10)
+      '@re-auth/http-adapters':
+        specifier: workspace:*
+        version: link:../../packages/http-adapters
       '@re-auth/reauth':
         specifier: workspace:*
         version: link:../../packages/reauth
@@ -112,31 +115,6 @@ importers:
       typescript:
         specifier: 5.8.2
         version: 5.8.2
-
-  packages/client:
-    dependencies:
-      axios:
-        specifier: ^1.6.8
-        version: 1.9.0
-      zod:
-        specifier: ^3.22.4
-        version: 3.25.56
-    devDependencies:
-      '@repo/eslint-config':
-        specifier: workspace:*
-        version: link:../eslint-config
-      '@repo/typescript-config':
-        specifier: workspace:*
-        version: link:../typescript-config
-      '@types/node':
-        specifier: ^20.11.24
-        version: 20.17.50
-      eslint:
-        specifier: ^8.57.0
-        version: 8.57.1
-      typescript:
-        specifier: ^5.3.3
-        version: 5.8.3
 
   packages/eslint-config:
     devDependencies:

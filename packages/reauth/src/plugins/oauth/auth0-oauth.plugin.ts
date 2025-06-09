@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Auth0 OAuth configuration
@@ -26,16 +29,16 @@ export interface Auth0OAuthConfig extends BaseOAuthConfig {
  * Auth0 supports both regular and PKCE flows
  */
 export const auth0OAuthPlugin = createOAuthPlugin<Auth0OAuthConfig>(
-  'Auth0',
+  'authO',
   'pkce', // Auth0 supports PKCE
-  (config: Auth0OAuthConfig) => 
+  (config: Auth0OAuthConfig) =>
     new arctic.Auth0(
       config.domain,
-      config.clientId, 
-      config.usePKCE ? null : config.clientSecret, 
-      config.redirectUri
+      config.clientId,
+      config.usePKCE ? null : config.clientSecret,
+      config.redirectUri,
     ),
   ['openid', 'profile', 'email'], // Default scopes
 );
 
-export default auth0OAuthPlugin; 
+export default auth0OAuthPlugin;

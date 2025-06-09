@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Twitch OAuth configuration
@@ -19,13 +22,9 @@ export interface TwitchOAuthConfig extends BaseOAuthConfig {
 export const twitchOAuthPlugin = createOAuthPlugin<TwitchOAuthConfig>(
   'Twitch',
   'regular', // Twitch uses regular OAuth
-  (config: TwitchOAuthConfig) => 
-    new arctic.Twitch(
-      config.clientId, 
-      config.clientSecret, 
-      config.redirectUri
-    ),
+  (config: TwitchOAuthConfig) =>
+    new arctic.Twitch(config.clientId, config.clientSecret, config.redirectUri),
   ['user:read:email'], // Default scopes
 );
 
-export default twitchOAuthPlugin; 
+export default twitchOAuthPlugin;

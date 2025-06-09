@@ -1,0 +1,169 @@
+// a plugin for getting current user
+
+import { type } from 'arktype';
+import { AuthPlugin, AuthStep } from '../../types';
+import { createAuthPlugin } from '../utils';
+
+const plugin: AuthPlugin<SessionPluginConfig> = {
+    name: 'session',
+    steps: [
+        {
+            name: 'getSession',
+            description: 'Get current session',
+            validationSchema: type({
+                token: 'string',
+                others: 'object?',
+            }),
+            inputs: ['token', 'others'],
+            run: async (input, pluginProperties) => {
+                const { container } = pluginProperties!;
+                const { token, others } = input;
+                if (!token) {
+                    return {
+                        success: false,
+                        message: 'Token is required',
+                        status: 'unf',
+                        others,
+                    };
+                }
+                const engine = container.cradle.reAuthEngine;
+                const session = await engine.checkSession(token!);
+                if (!session.valid) {
+                    return {
+                        success: false,
+                        message: 'Invalid token',
+                        status: 'unf',
+                        others,
+                    };
+                }
+                return {
+                    success: true,
+                    message: 'Session retrieved',
+                    status: 'su',
+                    entity: container.cradle.serializeEntity(session.entity!),
+                    others,
+                };
+            },
+            protocol: {
+                http: {
+                    method: 'POST',
+                    unf: 401,
+                    ip: 400,
+                    ic: 400,
+                    su: 200,
+                    ev: 400,
+                },
+            },
+            outputs: type({
+                success: 'boolean',
+                message: 'string',
+                status: 'string',
+                entity: 'object',
+            }),
+        },
+        {
+            name: 'logout',
+            description: 'Logout current session',
+            validationSchema: type({
+                token: 'string',
+                others: 'object?',
+            }),
+            inputs: ['token', 'others'],
+            run: async (input, pluginProperties) => {
+                const { container } = pluginProperties!;
+                const { token, others } = input;
+                if (!token) {
+                    return {
+                        success: false,
+                        message: 'Token is required',
+                        status: 'unf',
+                        others,
+                    };
+                }
+                const { sessionService } = container.cradle;
+                await sessionService.destroySession(token!);
+                return {
+                    success: true,
+                    message: 'Session destroyed',
+                    status: 'su',
+                    others,
+                };
+            },
+            protocol: {
+                http: {
+                    method: 'POST',
+                    unf: 401,
+                    ip: 400,
+                    ic: 400,
+                    su: 200,
+                    ev: 400,
+                },
+            },
+            outputs: type({
+                success: 'boolean',
+                message: 'string',
+                status: 'string',
+            }),
+        },
+        {
+            name: 'logoutAll',
+            description: 'Logout all sessions',
+            validationSchema: type({
+                token: 'string',
+                others: 'object?',
+            }),
+            inputs: ['token', 'others'],
+            run: async (input, pluginProperties) => {
+                const { container } = pluginProperties!;
+                const { token, others } = input;
+                if (!token) {
+                    return {
+                        success: false,
+                        message: 'Token is required',
+                        status: 'unf',
+                        others,
+                    };
+                }
+                const { sessionService } = container.cradle;
+                await sessionService.destroyAllSessions(token!);
+                return {
+                    success: true,
+                    message: 'All sessions destroyed',
+                    status: 'su',
+                    others,
+                };
+            },
+            protocol: {
+                http: {
+                    method: 'POST',
+                    unf: 401,
+                    ip: 400,
+                    ic: 400,
+                    su: 200,
+                    ev: 400,
+                },
+            },
+            outputs: type({
+                success: 'boolean',
+                message: 'string',
+                status: 'string',
+            }),
+        },
+    ],
+    initialize: async function (container) {
+        this.container = container;
+    },
+    config: {},
+};
+
+export interface SessionPluginConfig { }
+
+export default function sessionPlugin(
+    config: SessionPluginConfig,
+    overrideStep?: {
+        name: string;
+        override: Partial<AuthStep<SessionPluginConfig>>;
+    }[],
+): AuthPlugin<SessionPluginConfig> {
+    return createAuthPlugin(config, plugin, overrideStep);
+}

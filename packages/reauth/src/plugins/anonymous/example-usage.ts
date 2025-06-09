@@ -37,7 +37,7 @@
 //           // Transfer cart items from anonymous user to registered user
 //           if (anonymousUser.anonymous_data?.cart?.length) {
 //             console.log(`Transferring ${anonymousUser.anonymous_data.cart.length} cart items`);
-            
+
 //             // Example: Transfer cart items to user's cart
 //             const extendedNewUser = newUser as ExampleEntity;
 //             const updatedUser = {
@@ -47,20 +47,20 @@
 //                 ...anonymousUser.anonymous_data.cart,
 //               ],
 //             };
-            
+
 //             await container.cradle.entityService.updateEntity(
 //               newUser.id,
 //               'id',
 //               updatedUser,
 //             );
 //           }
-          
+
 //           // Transfer preferences
 //           if (anonymousUser.anonymous_data?.preferences) {
 //             console.log('Transferring user preferences');
 //             // await userService.updatePreferences(newUser.id, anonymousUser.anonymous_data.preferences);
 //           }
-          
+
 //           // Log the visit count
 //           console.log(`Anonymous user had ${anonymousUser.anonymous_data?.visits || 0} visits`);
 //         },
@@ -110,7 +110,7 @@
 
 //     if (anonymousResult.success) {
 //       const anonymousUser = anonymousResult.entity;
-      
+
 //       // 2. Update anonymous data (simulate user activity)
 //       const updateDataResult = await reAuth.executeStep('anonymous', 'update-anonymous-data', {
 //         entity: anonymousUser,
@@ -189,7 +189,7 @@
 //           secure: process.env.NODE_ENV === 'production',
 //           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 //         });
-        
+
 //         res.status(201).json({
 //           message: result.message,
 //           anonymousId: result.anonymousId,
@@ -210,7 +210,7 @@
 //     try {
 //       const { data } = req.body;
 //       const user = req.user; // From auth middleware
-      
+
 //       if (!user || !user.is_anonymous) {
 //         return res.status(400).json({ error: 'Anonymous user required' });
 //       }
@@ -240,7 +240,7 @@
 //     try {
 //       const { targetEntityId } = req.body;
 //       const user = req.user;
-      
+
 //       if (!user || !user.is_anonymous) {
 //         return res.status(400).json({ error: 'Anonymous user required' });
 //       }
@@ -270,7 +270,7 @@
 //     try {
 //       const { email, password, username } = req.body;
 //       const user = req.user;
-      
+
 //       if (!user || !user.is_anonymous) {
 //         return res.status(400).json({ error: 'Anonymous user required' });
 //       }
@@ -286,7 +286,7 @@
 //         // Clear anonymous token and set user token
 //         res.clearCookie('anonymous_token');
 //         // Note: You'd need to create a new session for the converted user
-        
+
 //         res.json({
 //           message: result.message,
 //           user: result.entity,
@@ -408,10 +408,10 @@
 
 //     const currentData = entity.anonymous_data || {};
 //     const cart = currentData.cart || [];
-    
+
 //     // Check if product already in cart
 //     const existingItem = cart.find((item: any) => item.id === productId);
-    
+
 //     if (existingItem) {
 //       existingItem.quantity += quantity;
 //     } else {
@@ -460,4 +460,4 @@
 
 // // Usage example:
 // // const cartManager = new AnonymousCartManager(reAuth);
-// // await cartManager.addToCart(anonymousUser, 'product-123', 2); 
+// // await cartManager.addToCart(anonymousUser, 'product-123', 2);

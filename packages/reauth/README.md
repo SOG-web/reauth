@@ -40,7 +40,7 @@ const emailPassword = emailPasswordAuth({
   async sendCode(entity, code, email, type) {
     // Implement your email sending logic here
     console.log(`Sending ${type} code ${code} to ${email}`);
-  }
+  },
 });
 
 // Initialize the auth engine
@@ -50,8 +50,8 @@ const auth = new ReAuthEngine({
   session: sessionService,
   sensitiveFields: {
     password: true,
-    token: true
-  }
+    token: true,
+  },
 });
 ```
 
@@ -68,17 +68,17 @@ const emailPassword = emailPasswordAuth({
   codeType: 'numeric', // Code type for verification/reset ('numeric' | 'alphanumeric' | 'alphabet')
   codeLenght: 6, // Length of the verification code
   resetPasswordCodeExpiresIn: 30 * 60 * 1000, // 30 minutes
-  
+
   // Required for email verification and password reset
   async sendCode(entity, code, email, type) {
     // Send email with the code
     console.log(`Sending ${type} code ${code} to ${email}`);
   },
-  
+
   // Optional: Custom code generator
   async generateCode(email, entity) {
     return Math.floor(100000 + Math.random() * 900000); // 6-digit code
-  }
+  },
 });
 ```
 
@@ -94,7 +94,7 @@ import { AuthPlugin } from '@re-auth/reauth';
 const myPlugin: AuthPlugin = {
   name: 'my-auth-plugin',
   version: '1.0.0',
-  
+
   steps: [
     {
       name: 'authenticate',
@@ -104,20 +104,20 @@ const myPlugin: AuthPlugin = {
         return {
           success: true,
           message: 'Authenticated successfully',
-          status: 'authenticated'
+          status: 'authenticated',
         };
       },
-      inputs: ['username', 'password']
-    }
+      inputs: ['username', 'password'],
+    },
   ],
-  
+
   initialize(container) {
     // Initialize your plugin here
   },
-  
+
   getSensitiveFields() {
     return ['password', 'token'];
-  }
+  },
 };
 ```
 
@@ -130,31 +130,31 @@ export class MyAuthPlugin implements AuthPlugin {
   name = 'my-auth-plugin';
   version = '1.0.0';
   steps: AuthStep[] = [];
-  
+
   constructor(private container: any) {
     this.steps = [
       {
         name: 'authenticate',
         description: 'Custom authentication step',
         run: this.authenticate.bind(this),
-        inputs: ['username', 'password']
-      }
+        inputs: ['username', 'password'],
+      },
     ];
   }
-  
+
   private async authenticate(input: any) {
     // Your authentication logic here
     return {
       success: true,
       message: 'Authenticated successfully',
-      status: 'authenticated'
+      status: 'authenticated',
     };
   }
-  
+
   async initialize() {
     // Initialize your plugin here
   }
-  
+
   getSensitiveFields() {
     return ['password', 'token'];
   }

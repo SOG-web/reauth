@@ -29,7 +29,9 @@ export interface ExpressAdapterConfig extends BaseHttpConfig {
 /**
  * Express framework adapter implementation
  */
-class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> {
+class ExpressFrameworkAdapter
+  implements FrameworkAdapter<ExpressAdapterConfig>
+{
   private router: Router;
   private engine?: ReAuthEngine;
   private contextRules: ContextExtractionRule[] = [];
@@ -174,8 +176,9 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
     contextRules: ContextExtractionRule[],
   ): void {
     // Use stored context rules instead of parameter (for compatibility)
-    const rulesToUse = contextRules.length > 0 ? contextRules : this.contextRules;
-    
+    const rulesToUse =
+      contextRules.length > 0 ? contextRules : this.contextRules;
+
     // Find applicable context extraction rules
     const applicableRules = findContextRules(pluginName, stepName, rulesToUse);
 
@@ -185,12 +188,12 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
         rule.extractCookies.forEach((cookieName) => {
           if (request.cookies[cookieName]) {
             let value = request.cookies[cookieName];
-            
+
             // Apply transform if provided
             if (rule.transformInput) {
               value = rule.transformInput(cookieName, value, request);
             }
-            
+
             inputs[cookieName] = value;
           }
         });
@@ -199,19 +202,19 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
       // Extract headers
       if (rule.extractHeaders && request.headers) {
         const headerConfig = rule.extractHeaders;
-        
+
         if (Array.isArray(headerConfig)) {
           // Simple array format: ['header-name']
           headerConfig.forEach((headerName) => {
             const headerValue = request.headers[headerName.toLowerCase()];
             if (headerValue) {
               let value = headerValue;
-              
+
               // Apply transform if provided
               if (rule.transformInput) {
                 value = rule.transformInput(headerName, value, request);
               }
-              
+
               inputs[headerName.replace(/-/g, '_')] = value; // Convert header-name to header_name
             }
           });
@@ -221,12 +224,12 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
             const headerValue = request.headers[headerName.toLowerCase()];
             if (headerValue) {
               let value = headerValue;
-              
+
               // Apply transform if provided
               if (rule.transformInput) {
                 value = rule.transformInput(inputName, value, request);
               }
-              
+
               inputs[inputName] = value;
             }
           });
@@ -245,7 +248,11 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
 
     // Handle token (set cookie) using stored adapter config
     if (token) {
-      response.cookie(this.adapterConfig.cookieName, token, this.adapterConfig.cookieOptions);
+      response.cookie(
+        this.adapterConfig.cookieName,
+        token,
+        this.adapterConfig.cookieOptions,
+      );
     }
 
     // Handle additional cookies from result.cookies
@@ -254,8 +261,6 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
         response.cookie(name, value as string);
       });
     }
-
-
 
     // Handle redirect
     if (redirect) {
@@ -285,8 +290,9 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
     contextRules: ContextExtractionRule[],
   ): void {
     // Use stored context rules instead of parameter (for compatibility)
-    const rulesToUse = contextRules.length > 0 ? contextRules : this.contextRules;
-    
+    const rulesToUse =
+      contextRules.length > 0 ? contextRules : this.contextRules;
+
     // Find applicable context extraction rules
     const applicableRules = findContextRules(pluginName, stepName, rulesToUse);
 
@@ -296,14 +302,18 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
         rule.setCookies.forEach((cookieName) => {
           if (result[cookieName] !== undefined) {
             let value = result[cookieName];
-            
+
             // Apply transform if provided
             if (rule.transformOutput) {
               value = rule.transformOutput(cookieName, value, result, request);
             }
-            
+
             // Handle complex cookie options
-            if (typeof value === 'object' && value !== null && 'value' in value) {
+            if (
+              typeof value === 'object' &&
+              value !== null &&
+              'value' in value
+            ) {
               // Value is a cookie options object
               const { value: cookieValue, ...cookieOptions } = value;
               response.cookie(cookieName, cookieValue, cookieOptions);
@@ -318,19 +328,24 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
       // Set headers from result
       if (rule.setHeaders && response.setHeader) {
         const headerConfig = rule.setHeaders;
-        
+
         if (Array.isArray(headerConfig)) {
           // Simple array format: ['header-name']
           headerConfig.forEach((headerName) => {
             const inputName = headerName.replace(/-/g, '_'); // Convert header-name to header_name
             if (result[inputName] !== undefined) {
               let value = result[inputName];
-              
+
               // Apply transform if provided
               if (rule.transformOutput) {
-                value = rule.transformOutput(headerName, value, result, request);
+                value = rule.transformOutput(
+                  headerName,
+                  value,
+                  result,
+                  request,
+                );
               }
-              
+
               response.setHeader(headerName, value);
             }
           });
@@ -339,12 +354,17 @@ class ExpressFrameworkAdapter implements FrameworkAdapter<ExpressAdapterConfig> 
           Object.entries(headerConfig).forEach(([headerName, resultKey]) => {
             if (result[resultKey] !== undefined) {
               let value = result[resultKey];
-              
+
               // Apply transform if provided
               if (rule.transformOutput) {
-                value = rule.transformOutput(headerName, value, result, request);
+                value = rule.transformOutput(
+                  headerName,
+                  value,
+                  result,
+                  request,
+                );
               }
-              
+
               response.setHeader(headerName, value);
             }
           });
@@ -425,7 +445,11 @@ const sharedExpressFrameworkAdapter = new ExpressFrameworkAdapter();
 /**
  * Create Express adapter using the factory pattern with shared instance
  */
-export const createExpressAdapterV2 = (engine: ReAuthEngine, config: ExpressAdapterConfig, frameworkAdapter: ExpressFrameworkAdapter) => {
+export const createExpressAdapterV2 = (
+  engine: ReAuthEngine,
+  config: ExpressAdapterConfig,
+  frameworkAdapter: ExpressFrameworkAdapter,
+) => {
   return createHttpAdapter(frameworkAdapter)(engine, config);
 };
 
@@ -438,10 +462,15 @@ export class ExpressAdapterV2 {
   private config: ExpressAdapterConfig;
   private frameworkAdapter: ExpressFrameworkAdapter;
 
-  constructor(engine: ReAuthEngine, config: ExpressAdapterConfig = {}, frameworkAdapter?: ExpressFrameworkAdapter) {
+  constructor(
+    engine: ReAuthEngine,
+    config: ExpressAdapterConfig = {},
+    frameworkAdapter?: ExpressFrameworkAdapter,
+  ) {
     this.engine = engine;
     this.config = config;
-    this.frameworkAdapter = frameworkAdapter || new ExpressFrameworkAdapter(engine);
+    this.frameworkAdapter =
+      frameworkAdapter || new ExpressFrameworkAdapter(engine);
     // Set the engine on the shared adapter before creating the HTTP adapter
     this.frameworkAdapter.setEngine(engine);
     // Create the router using the factory
@@ -463,14 +492,18 @@ export class ExpressAdapterV2 {
   addRoute(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
     path: string,
-    handler: (req: Request, res: Response, next: NextFunction) => void | Promise<void>,
+    handler: (
+      req: Request,
+      res: Response,
+      next: NextFunction,
+    ) => void | Promise<void>,
     options: {
       middleware?: any[];
       requireAuth?: boolean;
     } = {},
   ): void {
     const middleware = options.middleware || [];
-    
+
     if (options.requireAuth) {
       middleware.push(this.frameworkAdapter.requireAuth());
     }
@@ -502,7 +535,12 @@ export class ExpressAdapterV2 {
       // Custom authorization
       if (options.authorize) {
         try {
-          const isAuthorized = await options.authorize(req.user, req, res, next);
+          const isAuthorized = await options.authorize(
+            req.user,
+            req,
+            res,
+            next,
+          );
           if (!isAuthorized) {
             return res.status(403).json({ error: 'Access denied' });
           }
@@ -552,18 +590,18 @@ declare global {
 }
 
 // Export utility functions
-export { 
-  createRouteOverride, 
-  createCustomRoute, 
+export {
+  createRouteOverride,
+  createCustomRoute,
   createAutoIntrospectionConfig,
   introspectReAuthEngine,
   createContextRule,
   OAuth2ContextRules,
 };
-export type { 
-  RouteOverride, 
-  CustomRoute, 
+export type {
+  RouteOverride,
+  CustomRoute,
   AutoGeneratedRoute,
   AutoIntrospectionConfig,
   ContextExtractionRule,
-}; 
+};

@@ -138,14 +138,14 @@ app.setErrorHandler((error, request, reply) => {
       details: error.validation,
     });
   }
-  
+
   if (error.statusCode === 401) {
     return reply.status(401).send({ error: 'Unauthorized' });
   }
-  
+
   // Log error
   request.log.error(error);
-  
+
   // Send error response
   reply.status(500).send({ error: 'Internal Server Error' });
 });

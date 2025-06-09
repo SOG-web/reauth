@@ -1,5 +1,13 @@
 import * as arctic from 'arctic';
-import { AuthPlugin, AuthStep, AuthInput, AuthOutput, PluginProp, Entity, RootStepHooks } from '../../../types';
+import {
+  AuthPlugin,
+  AuthStep,
+  AuthInput,
+  AuthOutput,
+  PluginProp,
+  Entity,
+  RootStepHooks,
+} from '../../../types';
 import { type } from 'arktype';
 
 /**
@@ -26,7 +34,10 @@ export interface BaseOAuthConfig {
    * Custom function to fetch user info from the provider
    * Should return user data that can be used to create/link accounts
    */
-  getUserInfo?: (accessToken: string, idToken?: string) => Promise<OAuthUserInfo>;
+  getUserInfo?: (
+    accessToken: string,
+    idToken?: string,
+  ) => Promise<OAuthUserInfo>;
   /**
    * Custom function to handle account linking
    * Called when a user with OAuth account tries to link with existing account
@@ -85,7 +96,10 @@ export type OAuthClientFactory<T extends BaseOAuthConfig> = (config: T) => any;
 /**
  * Default user info fetchers for common providers
  */
-export const defaultUserInfoFetchers: Record<string, (accessToken: string, idToken?: string) => Promise<OAuthUserInfo>> = {
+export const defaultUserInfoFetchers: Record<
+  string,
+  (accessToken: string, idToken?: string) => Promise<OAuthUserInfo>
+> = {
   google: async (accessToken: string, idToken?: string) => {
     if (idToken) {
       const claims = arctic.decodeIdToken(idToken) as OAuthIDTokenClaims;
@@ -97,16 +111,22 @@ export const defaultUserInfoFetchers: Record<string, (accessToken: string, idTok
         verified_email: claims.email_verified,
       };
     }
-    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const response = await fetch(
+      'https://www.googleapis.com/oauth2/v2/userinfo',
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     return await response.json();
   },
 
   facebook: async (accessToken: string) => {
-    const response = await fetch('https://graph.facebook.com/me?fields=id,name,email,picture', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const response = await fetch(
+      'https://graph.facebook.com/me?fields=id,name,email,picture',
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     return await response.json();
   },
 
@@ -145,7 +165,9 @@ export const defaultUserInfoFetchers: Record<string, (accessToken: string, idTok
       id: user.id,
       email: user.email,
       name: user.username,
-      picture: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : undefined,
+      picture: user.avatar
+        ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+        : undefined,
       verified_email: user.verified,
       username: user.username,
       discriminator: user.discriminator,
@@ -217,9 +239,12 @@ export const defaultUserInfoFetchers: Record<string, (accessToken: string, idTok
   },
 
   twitter: async (accessToken: string) => {
-    const response = await fetch('https://api.twitter.com/2/users/me?user.fields=profile_image_url,verified', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const response = await fetch(
+      'https://api.twitter.com/2/users/me?user.fields=profile_image_url,verified',
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     if (!response.ok) {
       throw new Error(`Twitter API error: ${response.status}`);
     }
@@ -236,7 +261,7 @@ export const defaultUserInfoFetchers: Record<string, (accessToken: string, idTok
 
   twitch: async (accessToken: string) => {
     const response = await fetch('https://api.twitch.tv/helix/users', {
-      headers: { 
+      headers: {
         Authorization: `Bearer ${accessToken}`,
         'Client-Id': process.env.TWITCH_CLIENT_ID || '',
       },
@@ -280,9 +305,12 @@ export const defaultUserInfoFetchers: Record<string, (accessToken: string, idTok
         verified_email: claims.email_verified,
       };
     }
-    const response = await fetch('https://api.workos.com/user_management/users/me', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const response = await fetch(
+      'https://api.workos.com/user_management/users/me',
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     if (!response.ok) {
       throw new Error(`WorkOS API error: ${response.status}`);
     }
@@ -299,7 +327,7 @@ export const defaultUserInfoFetchers: Record<string, (accessToken: string, idTok
 
   reddit: async (accessToken: string) => {
     const response = await fetch('https://oauth.reddit.com/api/v1/me', {
-      headers: { 
+      headers: {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': 'ReAuth/1.0',
       },
@@ -330,11 +358,12 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
   return (config: T): AuthPlugin<T> => {
     const client = clientFactory(config);
     const scopes = config.scopes || defaultScopes;
-    const getUserInfo = config.getUserInfo || defaultUserInfoFetchers[providerName.toLowerCase()];
+    const getUserInfo =
+      config.getUserInfo || defaultUserInfoFetchers[providerName.toLowerCase()];
     const linkField = config.linkField || 'email';
 
     const steps: AuthStep<T>[] = [];
-    
+
     // extract root hooks from config
     const rootHooks = config.rootHooks;
     delete config.rootHooks;
@@ -350,7 +379,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           success: 302, // Redirect
         },
       },
-      async run(input: AuthInput, { container }: PluginProp<T>): Promise<AuthOutput> {
+      async run(
+        input: AuthInput,
+        { container }: PluginProp<T>,
+      ): Promise<AuthOutput> {
         try {
           const state = arctic.generateState();
           let url: string;
@@ -397,7 +429,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           error: 400,
         },
       },
-      async run(input: AuthInput, { container }: PluginProp<T>): Promise<AuthOutput> {
+      async run(
+        input: AuthInput,
+        { container }: PluginProp<T>,
+      ): Promise<AuthOutput> {
         try {
           const { code, state, oauth_state, oauth_code_verifier } = input;
 
@@ -420,7 +455,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
                 status: 'error',
               };
             }
-            tokens = await client.validateAuthorizationCode(code, oauth_code_verifier);
+            tokens = await client.validateAuthorizationCode(
+              code,
+              oauth_code_verifier,
+            );
           } else {
             tokens = await client.validateAuthorizationCode(code);
           }
@@ -430,7 +468,9 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
 
           // Get user info from provider
           if (!getUserInfo) {
-            throw new Error(`No getUserInfo function provided for ${providerName}`);
+            throw new Error(
+              `No getUserInfo function provided for ${providerName}`,
+            );
           }
           const oauthUser = await getUserInfo(accessToken, idToken);
 
@@ -448,23 +488,26 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
             if (config.onAccountLink) {
               entity = await config.onAccountLink(oauthUser, entity, container);
             }
-            
+
             // Update entity with OAuth data
-            const updatedEntity = await container.cradle.entityService.updateEntity(
-              entity.id,
-              'id',
-              {
-                ...entity,
-                [`${providerName.toLowerCase()}_id`]: oauthUser.id,
-                [`${providerName.toLowerCase()}_data`]: JSON.stringify(oauthUser),
-              },
-            );
+            const updatedEntity =
+              await container.cradle.entityService.updateEntity(
+                entity.id,
+                'id',
+                {
+                  ...entity,
+                  [`${providerName.toLowerCase()}_id`]: oauthUser.id,
+                  [`${providerName.toLowerCase()}_data`]:
+                    JSON.stringify(oauthUser),
+                },
+              );
 
             // Create session
-            const sessionResult = await container.cradle.reAuthEngine.createSession(
-              updatedEntity,
-              `${providerName.toLowerCase()}-oauth.callback`,
-            );
+            const sessionResult =
+              await container.cradle.reAuthEngine.createSession(
+                updatedEntity,
+                `${providerName.toLowerCase()}-oauth.callback`,
+              );
 
             if (!sessionResult.success) {
               return {
@@ -474,7 +517,8 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
               };
             }
 
-            const serializedEntity = container.cradle.serializeEntity(updatedEntity);
+            const serializedEntity =
+              container.cradle.serializeEntity(updatedEntity);
 
             return {
               success: true,
@@ -494,17 +538,22 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           };
 
           if (config.onAccountCreate) {
-            const customData = await config.onAccountCreate(oauthUser, container);
+            const customData = await config.onAccountCreate(
+              oauthUser,
+              container,
+            );
             entityData = { ...entityData, ...customData };
           }
 
-          const newEntity = await container.cradle.entityService.createEntity(entityData);
+          const newEntity =
+            await container.cradle.entityService.createEntity(entityData);
 
           // Create session
-          const sessionResult = await container.cradle.reAuthEngine.createSession(
-            newEntity,
-            `${providerName.toLowerCase()}-oauth.callback`,
-          );
+          const sessionResult =
+            await container.cradle.reAuthEngine.createSession(
+              newEntity,
+              `${providerName.toLowerCase()}-oauth.callback`,
+            );
 
           if (!sessionResult.success) {
             return {
@@ -544,11 +593,11 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
         state: 'string',
       }),
       outputs: type({
-        "entity?": 'object',
-        "token?": 'string',
-        "message": 'string',
-        "status": 'string',
-        "success": 'boolean',
+        'entity?': 'object',
+        'token?': 'string',
+        message: 'string',
+        status: 'string',
+        success: 'boolean',
       }),
       protocol: {
         http: {
@@ -558,9 +607,13 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           error: 400,
         },
       },
-      async run(input: AuthInput, { container }: PluginProp<T>): Promise<AuthOutput> {
+      async run(
+        input: AuthInput,
+        { container }: PluginProp<T>,
+      ): Promise<AuthOutput> {
         try {
-          const { code, state, oauth_state, oauth_code_verifier, entity } = input;
+          const { code, state, oauth_state, oauth_code_verifier, entity } =
+            input;
 
           if (!entity) {
             return {
@@ -589,7 +642,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
                 status: 'error',
               };
             }
-            tokens = await client.validateAuthorizationCode(code, oauth_code_verifier);
+            tokens = await client.validateAuthorizationCode(
+              code,
+              oauth_code_verifier,
+            );
           } else {
             tokens = await client.validateAuthorizationCode(code);
           }
@@ -599,15 +655,18 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
 
           // Get user info from provider
           if (!getUserInfo) {
-            throw new Error(`No getUserInfo function provided for ${providerName}`);
+            throw new Error(
+              `No getUserInfo function provided for ${providerName}`,
+            );
           }
           const oauthUser = await getUserInfo(accessToken, idToken);
 
           // Check if OAuth account is already linked to another user
-          const existingEntity = await container.cradle.entityService.findEntity(
-            oauthUser.id,
-            `${providerName.toLowerCase()}_id`,
-          );
+          const existingEntity =
+            await container.cradle.entityService.findEntity(
+              oauthUser.id,
+              `${providerName.toLowerCase()}_id`,
+            );
 
           if (existingEntity && existingEntity.id !== entity.id) {
             return {
@@ -620,7 +679,11 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           // Link the account
           let updatedEntity = entity;
           if (config.onAccountLink) {
-            updatedEntity = await config.onAccountLink(oauthUser, entity, container);
+            updatedEntity = await config.onAccountLink(
+              oauthUser,
+              entity,
+              container,
+            );
           }
 
           // Update entity with OAuth data
@@ -634,7 +697,8 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
             },
           );
 
-          const serializedEntity = container.cradle.serializeEntity(finalEntity);
+          const serializedEntity =
+            container.cradle.serializeEntity(finalEntity);
 
           return {
             success: true,
@@ -662,10 +726,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
         entity: 'object',
       }),
       outputs: type({
-        "entity?": 'object',
-        "message": 'string',
-        "status": 'string',
-        "success": 'boolean',
+        'entity?': 'object',
+        message: 'string',
+        status: 'string',
+        success: 'boolean',
       }),
       protocol: {
         http: {
@@ -675,7 +739,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           error: 400,
         },
       },
-      async run(input: AuthInput, { container }: PluginProp<T>): Promise<AuthOutput> {
+      async run(
+        input: AuthInput,
+        { container }: PluginProp<T>,
+      ): Promise<AuthOutput> {
         try {
           const { entity } = input;
 
@@ -697,17 +764,15 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           }
 
           // Unlink the account
-          const updatedEntity = await container.cradle.entityService.updateEntity(
-            entity.id,
-            'id',
-            {
+          const updatedEntity =
+            await container.cradle.entityService.updateEntity(entity.id, 'id', {
               ...entity,
               [`${providerName.toLowerCase()}_id`]: null,
               [`${providerName.toLowerCase()}_data`]: null,
-            },
-          );
+            });
 
-          const serializedEntity = container.cradle.serializeEntity(updatedEntity);
+          const serializedEntity =
+            container.cradle.serializeEntity(updatedEntity);
 
           return {
             success: true,
@@ -727,10 +792,10 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
     });
 
     return {
-      name: `${providerName.toLowerCase()}OAuthPlugin`,
+      name: `${providerName.toLowerCase()}`,
       steps,
       config,
-      async initialize() {},
+      async initialize() { },
       getSensitiveFields() {
         return [`${providerName.toLowerCase()}_data`];
       },
@@ -762,4 +827,4 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
       rootHooks,
     };
   };
-} 
+}

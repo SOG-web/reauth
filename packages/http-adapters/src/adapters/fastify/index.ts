@@ -371,5 +371,4 @@ declare module 'fastify' {
 
 export default createFastifyAdapter;
 
-
 export * from './fastify-adapter-v2';

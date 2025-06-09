@@ -24,10 +24,7 @@ const updateAnonymousDataSchema = type({
 
 const plugin: AuthPlugin<AnonymousConfig> = {
   name: 'anonymousPlugin',
-  getSensitiveFields: () => [
-    'anonymous_id',
-    'linked_to_entity_id',
-  ],
+  getSensitiveFields: () => ['anonymous_id', 'linked_to_entity_id'],
   steps: [
     {
       name: 'create-anonymous',
@@ -37,18 +34,17 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "token?": 'string',
-        "entity?": 'object',
-        "anonymousId?": 'string',
+        'token?': 'string',
+        'entity?': 'object',
+        'anonymousId?': 'string',
       }),
       run: async function (input, pluginProperties) {
-
         const { container, config } = pluginProperties!;
-        
+
         // Generate anonymous ID
-        const anonymousId = config.generateAnonymousId ? 
-          config.generateAnonymousId() : 
-          `anon_${generateSessionToken()}`;
+        const anonymousId = config.generateAnonymousId
+          ? config.generateAnonymousId()
+          : `anon_${generateSessionToken()}`;
 
         // Create anonymous entity
         const entity = await container.cradle.entityService.createEntity({
@@ -103,15 +99,18 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "linkedEntity?": 'object',
+        'linkedEntity?': 'object',
       }),
       run: async function (input, pluginProperties) {
-
         const { container, config } = pluginProperties!;
         const { entity, targetEntityId } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'unauthorized' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'unauthorized',
+          };
         }
 
         // Verify this is an anonymous user
@@ -139,7 +138,11 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         );
 
         if (!targetEntity) {
-          return { success: false, message: 'Target user not found', status: 'target_not_found' };
+          return {
+            success: false,
+            message: 'Target user not found',
+            status: 'target_not_found',
+          };
         }
 
         // Prevent linking to another anonymous user
@@ -170,15 +173,11 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         }
 
         // Update anonymous entity to mark as linked
-        await container.cradle.entityService.updateEntity(
-          entity.id,
-          'id',
-          {
-            ...entity,
-            linked_to_entity_id: targetEntityId,
-            linked_at: new Date(),
-          },
-        );
+        await container.cradle.entityService.updateEntity(entity.id, 'id', {
+          ...entity,
+          linked_to_entity_id: targetEntityId,
+          linked_at: new Date(),
+        });
 
         // Optionally transfer data to target entity
         if (config.transferDataOnLink && entity.anonymous_data) {
@@ -186,7 +185,7 @@ const plugin: AuthPlugin<AnonymousConfig> = {
             entity.anonymous_data,
             targetEntity,
           );
-          
+
           await container.cradle.entityService.updateEntity(
             targetEntity.id,
             'id',
@@ -225,16 +224,19 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "token?": 'string',
-        "entity?": 'object',
+        'token?': 'string',
+        'entity?': 'object',
       }),
       run: async function (input, pluginProperties) {
-
         const { container, config } = pluginProperties!;
         const { entity, email, password, username } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'unauthorized' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'unauthorized',
+          };
         }
 
         // Verify this is an anonymous user
@@ -270,10 +272,11 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         }
 
         if (username) {
-          const existingByUsername = await container.cradle.entityService.findEntity(
-            username,
-            'username',
-          );
+          const existingByUsername =
+            await container.cradle.entityService.findEntity(
+              username,
+              'username',
+            );
 
           if (existingByUsername) {
             return {
@@ -322,7 +325,8 @@ const plugin: AuthPlugin<AnonymousConfig> = {
           convertedEntity,
         );
 
-        const serializedEntity = container.cradle.serializeEntity(convertedEntity);
+        const serializedEntity =
+          container.cradle.serializeEntity(convertedEntity);
 
         return {
           success: true,
@@ -355,15 +359,18 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "data?": 'Record<string, unknown>',
+        'data?': 'Record<string, unknown>',
       }),
       run: async function (input, pluginProperties) {
-
         const { container } = pluginProperties!;
         const { entity } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'unauthorized' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'unauthorized',
+          };
         }
 
         if (!entity.is_anonymous) {
@@ -403,15 +410,18 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        "data?": 'Record<string, unknown>',
+        'data?': 'Record<string, unknown>',
       }),
       run: async function (input, pluginProperties) {
-
         const { container, config } = pluginProperties!;
         const { entity, data } = input;
 
         if (!entity) {
-          return { success: false, message: 'Authentication required', status: 'unauthorized' };
+          return {
+            success: false,
+            message: 'Authentication required',
+            status: 'unauthorized',
+          };
         }
 
         if (!entity.is_anonymous) {
@@ -481,7 +491,9 @@ const plugin: AuthPlugin<AnonymousConfig> = {
     // - Anonymous user analytics and monitoring
     // - Data migration and backup procedures
     // - Multi-environment configuration support
-    throw new Error('Anonymous plugin is not yet ready for production use. This is a work in progress.');
+    throw new Error(
+      'Anonymous plugin is not yet ready for production use. This is a work in progress.',
+    );
 
     // This code will be enabled when the plugin is ready:
     /*
@@ -566,12 +578,12 @@ interface AnonymousConfig {
    * @returns Generated anonymous ID string
    */
   generateAnonymousId?: () => string;
-  
+
   /**
    * Default data to assign to new anonymous users
    */
   defaultData?: Record<string, any>;
-  
+
   /**
    * Callback function when linking anonymous account to registered account
    * Use this to transfer cart items, preferences, etc.
@@ -581,7 +593,7 @@ interface AnonymousConfig {
     newUser: Entity;
     container: any;
   }) => Promise<void>;
-  
+
   /**
    * Callback function when converting anonymous user to registered user
    */
@@ -592,7 +604,7 @@ interface AnonymousConfig {
     password?: string;
     container: any;
   }) => Promise<void>;
-  
+
   /**
    * Data transfer function when linking accounts
    * Return the updated target entity data
@@ -601,7 +613,7 @@ interface AnonymousConfig {
     anonymousData: Record<string, any>,
     targetEntity: Entity,
   ) => Entity;
-  
+
   /**
    * Validation function for anonymous data
    */
@@ -616,4 +628,4 @@ interface AnonymousConfig {
    *  }
    */
   rootHooks?: RootStepHooks;
-} 
+}

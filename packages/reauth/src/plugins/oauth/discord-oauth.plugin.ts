@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Discord OAuth configuration
@@ -22,15 +25,15 @@ export interface DiscordOAuthConfig extends BaseOAuthConfig {
  * Discord supports both regular and PKCE flows
  */
 export const discordOAuthPlugin = createOAuthPlugin<DiscordOAuthConfig>(
-  'Discord',
+  'discord',
   'pkce', // Discord supports PKCE
-  (config: DiscordOAuthConfig) => 
+  (config: DiscordOAuthConfig) =>
     new arctic.Discord(
-      config.clientId, 
-      config.usePKCE ? null : config.clientSecret, 
-      config.redirectUri
+      config.clientId,
+      config.usePKCE ? null : config.clientSecret,
+      config.redirectUri,
     ),
   ['identify', 'email'], // Default scopes
 );
 
-export default discordOAuthPlugin; 
+export default discordOAuthPlugin;

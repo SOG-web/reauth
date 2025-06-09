@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Spotify OAuth configuration
@@ -24,13 +27,13 @@ export interface SpotifyOAuthConfig extends BaseOAuthConfig {
 export const spotifyOAuthPlugin = createOAuthPlugin<SpotifyOAuthConfig>(
   'Spotify',
   'pkce', // Spotify supports PKCE
-  (config: SpotifyOAuthConfig) => 
+  (config: SpotifyOAuthConfig) =>
     new arctic.Spotify(
-      config.clientId, 
-      config.usePKCE ? null : config.clientSecret, 
-      config.redirectUri
+      config.clientId,
+      config.usePKCE ? null : config.clientSecret,
+      config.redirectUri,
     ),
   ['user-read-email', 'user-read-private'], // Default scopes
 );
 
-export default spotifyOAuthPlugin; 
+export default spotifyOAuthPlugin;

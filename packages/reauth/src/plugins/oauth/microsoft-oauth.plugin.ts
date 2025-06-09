@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Microsoft OAuth configuration
@@ -23,14 +26,14 @@ export interface MicrosoftOAuthConfig extends BaseOAuthConfig {
 export const microsoftOAuthPlugin = createOAuthPlugin<MicrosoftOAuthConfig>(
   'Microsoft',
   'pkce', // Microsoft Entra ID uses PKCE
-  (config: MicrosoftOAuthConfig) => 
+  (config: MicrosoftOAuthConfig) =>
     new arctic.MicrosoftEntraId(
       config.tenantId || 'common',
-      config.clientId, 
-      config.clientSecret, 
-      config.redirectUri
+      config.clientId,
+      config.clientSecret,
+      config.redirectUri,
     ),
   ['openid', 'profile', 'email', 'User.Read'], // Default scopes
 );
 
-export default microsoftOAuthPlugin; 
+export default microsoftOAuthPlugin;

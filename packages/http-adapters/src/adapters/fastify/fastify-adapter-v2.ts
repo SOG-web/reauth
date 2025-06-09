@@ -1,4 +1,10 @@
-import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginOptions, RouteShorthandOptions } from 'fastify';
+import {
+  FastifyInstance,
+  FastifyRequest,
+  FastifyReply,
+  FastifyPluginOptions,
+  RouteShorthandOptions,
+} from 'fastify';
 import { ReAuthEngine, AuthOutput, Entity, AuthToken } from '@re-auth/reauth';
 import {
   createHttpAdapter,
@@ -30,7 +36,9 @@ export interface FastifyAdapterConfig extends BaseHttpConfig {
 /**
  * Fastify framework adapter implementation
  */
-class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> {
+class FastifyFrameworkAdapter
+  implements FrameworkAdapter<FastifyAdapterConfig>
+{
   private fastify: FastifyInstance;
   private engine?: ReAuthEngine;
   private contextRules: ContextExtractionRule[] = [];
@@ -140,9 +148,9 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
     }
 
     const fastifyMethod = method.toLowerCase() as keyof FastifyInstance;
-    
+
     const routeOptions: RouteShorthandOptions = {};
-    
+
     if (middleware && middleware.length > 0) {
       routeOptions.preHandler = middleware;
     }
@@ -166,9 +174,15 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
     expectedInputs.forEach((inputName: string) => {
       if (request.body && (request.body as any)[inputName] !== undefined) {
         inputs[inputName] = (request.body as any)[inputName];
-      } else if (request.query && (request.query as any)[inputName] !== undefined) {
+      } else if (
+        request.query &&
+        (request.query as any)[inputName] !== undefined
+      ) {
         inputs[inputName] = (request.query as any)[inputName];
-      } else if (request.params && (request.params as any)[inputName] !== undefined) {
+      } else if (
+        request.params &&
+        (request.params as any)[inputName] !== undefined
+      ) {
         inputs[inputName] = (request.params as any)[inputName];
       }
     });
@@ -187,8 +201,9 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
     contextRules: ContextExtractionRule[],
   ): void {
     // Use stored context rules instead of parameter (for compatibility)
-    const rulesToUse = contextRules.length > 0 ? contextRules : this.contextRules;
-    
+    const rulesToUse =
+      contextRules.length > 0 ? contextRules : this.contextRules;
+
     // Find applicable context extraction rules
     const applicableRules = findContextRules(pluginName, stepName, rulesToUse);
 
@@ -198,12 +213,12 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
         rule.extractCookies.forEach((cookieName) => {
           if (request.cookies![cookieName]) {
             let value = request.cookies![cookieName];
-            
+
             // Apply transform if provided
             if (rule.transformInput) {
               value = rule.transformInput(cookieName, value, request);
             }
-            
+
             inputs[cookieName] = value;
           }
         });
@@ -212,19 +227,19 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
       // Extract headers
       if (rule.extractHeaders && request.headers) {
         const headerConfig = rule.extractHeaders;
-        
+
         if (Array.isArray(headerConfig)) {
           // Simple array format: ['header-name']
           headerConfig.forEach((headerName) => {
             const headerValue = request.headers[headerName.toLowerCase()];
             if (headerValue) {
               let value = headerValue;
-              
+
               // Apply transform if provided
               if (rule.transformInput) {
                 value = rule.transformInput(headerName, value, request);
               }
-              
+
               inputs[headerName.replace(/-/g, '_')] = value; // Convert header-name to header_name
             }
           });
@@ -234,12 +249,12 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
             const headerValue = request.headers[headerName.toLowerCase()];
             if (headerValue) {
               let value = headerValue;
-              
+
               // Apply transform if provided
               if (rule.transformInput) {
                 value = rule.transformInput(inputName, value, request);
               }
-              
+
               inputs[inputName] = value;
             }
           });
@@ -258,7 +273,11 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
 
     // Handle token (set cookie) using stored adapter config
     if (token) {
-      reply.cookie(this.adapterConfig.cookieName, token, this.adapterConfig.cookieOptions);
+      reply.cookie(
+        this.adapterConfig.cookieName,
+        token,
+        this.adapterConfig.cookieOptions,
+      );
     }
 
     // Handle additional cookies from result.cookies
@@ -295,8 +314,9 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
     contextRules: ContextExtractionRule[],
   ): void {
     // Use stored context rules instead of parameter (for compatibility)
-    const rulesToUse = contextRules.length > 0 ? contextRules : this.contextRules;
-    
+    const rulesToUse =
+      contextRules.length > 0 ? contextRules : this.contextRules;
+
     // Find applicable context extraction rules
     const applicableRules = findContextRules(pluginName, stepName, rulesToUse);
 
@@ -306,14 +326,18 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
         rule.setCookies.forEach((cookieName) => {
           if (result[cookieName] !== undefined) {
             let value = result[cookieName];
-            
+
             // Apply transform if provided
             if (rule.transformOutput) {
               value = rule.transformOutput(cookieName, value, result, request);
             }
-            
+
             // Handle complex cookie options
-            if (typeof value === 'object' && value !== null && 'value' in value) {
+            if (
+              typeof value === 'object' &&
+              value !== null &&
+              'value' in value
+            ) {
               // Value is a cookie options object
               const { value: cookieValue, ...cookieOptions } = value;
               reply.cookie(cookieName, cookieValue, cookieOptions);
@@ -328,19 +352,24 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
       // Set headers from result
       if (rule.setHeaders && reply.header) {
         const headerConfig = rule.setHeaders;
-        
+
         if (Array.isArray(headerConfig)) {
           // Simple array format: ['header-name']
           headerConfig.forEach((headerName) => {
             const inputName = headerName.replace(/-/g, '_'); // Convert header-name to header_name
             if (result[inputName] !== undefined) {
               let value = result[inputName];
-              
+
               // Apply transform if provided
               if (rule.transformOutput) {
-                value = rule.transformOutput(headerName, value, result, request);
+                value = rule.transformOutput(
+                  headerName,
+                  value,
+                  result,
+                  request,
+                );
               }
-              
+
               reply.header(headerName, value);
             }
           });
@@ -349,12 +378,17 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
           Object.entries(headerConfig).forEach(([headerName, resultKey]) => {
             if (result[resultKey] !== undefined) {
               let value = result[resultKey];
-              
+
               // Apply transform if provided
               if (rule.transformOutput) {
-                value = rule.transformOutput(headerName, value, result, request);
+                value = rule.transformOutput(
+                  headerName,
+                  value,
+                  result,
+                  request,
+                );
               }
-              
+
               reply.header(headerName, value);
             }
           });
@@ -426,13 +460,14 @@ class FastifyFrameworkAdapter implements FrameworkAdapter<FastifyAdapterConfig> 
   }
 }
 
-
-
 /**
  * Create Fastify adapter using the factory pattern with shared instance
  * Note: Fastify instance must be provided when calling this function
  */
-export function createFastifyAdapterV2(fastify: FastifyInstance, frameworkAdapter: FastifyFrameworkAdapter) {
+export function createFastifyAdapterV2(
+  fastify: FastifyInstance,
+  frameworkAdapter: FastifyFrameworkAdapter,
+) {
   return createHttpAdapter(frameworkAdapter);
 }
 
@@ -448,19 +483,23 @@ export class FastifyAdapterV2 {
 
   constructor(
     fastify: FastifyInstance,
-    engine: ReAuthEngine, 
+    engine: ReAuthEngine,
     config: FastifyAdapterConfig = {},
-    frameworkAdapter?: FastifyFrameworkAdapter
+    frameworkAdapter?: FastifyFrameworkAdapter,
   ) {
     this.fastify = fastify;
     this.engine = engine;
     this.config = config;
-    this.frameworkAdapter = frameworkAdapter || new FastifyFrameworkAdapter(fastify, engine);
+    this.frameworkAdapter =
+      frameworkAdapter || new FastifyFrameworkAdapter(fastify, engine);
     // Set the engine on the shared adapter before creating the HTTP adapter
     this.frameworkAdapter.setEngine(engine);
     // Create the adapter function using the factory
-    this.adapterFunction = createFastifyAdapterV2(fastify, this.frameworkAdapter);
-    
+    this.adapterFunction = createFastifyAdapterV2(
+      fastify,
+      this.frameworkAdapter,
+    );
+
     // Apply the adapter to the fastify instance
     this.adapterFunction(engine, config);
 
@@ -480,21 +519,24 @@ export class FastifyAdapterV2 {
   addRoute(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
     path: string,
-    handler: (request: FastifyRequest, reply: FastifyReply) => void | Promise<void>,
+    handler: (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => void | Promise<void>,
     options: {
       middleware?: any[];
       requireAuth?: boolean;
     } = {},
   ): void {
     const middleware = options.middleware || [];
-    
+
     if (options.requireAuth) {
       middleware.push(this.frameworkAdapter.requireAuth());
     }
 
     const fastifyMethod = method.toLowerCase() as keyof FastifyInstance;
     const routeOptions: RouteShorthandOptions = {};
-    
+
     if (middleware.length > 0) {
       routeOptions.preHandler = middleware;
     }
@@ -525,13 +567,19 @@ export class FastifyAdapterV2 {
       // Custom authorization
       if (options.authorize) {
         try {
-          const isAuthorized = await options.authorize(request.user, request, reply);
+          const isAuthorized = await options.authorize(
+            request.user,
+            request,
+            reply,
+          );
           if (!isAuthorized) {
             return reply.status(403).send({ error: 'Access denied' });
           }
         } catch (error) {
           console.error('Authorization error:', error);
-          return reply.status(500).send({ error: 'Authorization check failed' });
+          return reply
+            .status(500)
+            .send({ error: 'Authorization check failed' });
         }
       }
     };
@@ -542,11 +590,11 @@ export class FastifyAdapterV2 {
    */
   static async createPlugin(
     engine: ReAuthEngine,
-    config: FastifyAdapterConfig = {}
+    config: FastifyAdapterConfig = {},
   ) {
     return async function fastifyReAuthPlugin(
       fastify: FastifyInstance,
-      options: FastifyPluginOptions
+      options: FastifyPluginOptions,
     ) {
       new FastifyAdapterV2(fastify, engine, { ...config, ...options });
     };
@@ -586,19 +634,19 @@ declare module 'fastify' {
 }
 
 // Export utility functions
-export { 
-  createRouteOverride, 
-  createCustomRoute, 
+export {
+  createRouteOverride,
+  createCustomRoute,
   createAutoIntrospectionConfig,
   introspectReAuthEngine,
   createContextRule,
   OAuth2ContextRules,
   FastifyFrameworkAdapter,
 };
-export type { 
-  RouteOverride, 
-  CustomRoute, 
+export type {
+  RouteOverride,
+  CustomRoute,
   AutoGeneratedRoute,
   AutoIntrospectionConfig,
   ContextExtractionRule,
-}; 
+};

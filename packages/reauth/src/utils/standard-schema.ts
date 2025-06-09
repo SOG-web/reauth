@@ -1,4 +1,4 @@
-import { ValidationResult} from '../types';
+import { ValidationResult } from '../types';
 import { TraversalError, Type } from 'arktype';
 
 /**
@@ -18,9 +18,9 @@ export async function validateInputWithValidationSchema(
     const data = schema.assert(input);
   } catch (error) {
     if (error instanceof TraversalError) {
-    return {
-      isValid: false,
-      errors: {
+      return {
+        isValid: false,
+        errors: {
           _error: error.message,
         },
       };

@@ -1,5 +1,8 @@
 import * as arctic from 'arctic';
-import { createOAuthPlugin, BaseOAuthConfig } from './utils/oauth-plugin-factory';
+import {
+  createOAuthPlugin,
+  BaseOAuthConfig,
+} from './utils/oauth-plugin-factory';
 
 /**
  * Apple OAuth configuration
@@ -15,7 +18,7 @@ export interface AppleOAuthConfig extends BaseOAuthConfig {
   keyId: string;
   /**
    * Apple private key as Uint8Array (PKCS#8 format)
-   * You can convert PEM string to Uint8Array using: 
+   * You can convert PEM string to Uint8Array using:
    * new TextEncoder().encode(pemString.replace(/-----BEGIN PRIVATE KEY-----\n?/, '').replace(/\n?-----END PRIVATE KEY-----/, '').replace(/\n/g, ''))
    */
   privateKey: Uint8Array;
@@ -33,15 +36,15 @@ export interface AppleOAuthConfig extends BaseOAuthConfig {
 export const appleOAuthPlugin = createOAuthPlugin<AppleOAuthConfig>(
   'apple',
   'regular', // Apple uses regular OAuth
-  (config: AppleOAuthConfig) => 
+  (config: AppleOAuthConfig) =>
     new arctic.Apple(
-      config.clientId, 
+      config.clientId,
       config.teamId,
       config.keyId,
       config.privateKey,
-      config.redirectUri
+      config.redirectUri,
     ),
   ['name', 'email'], // Default scopes
 );
 
-export default appleOAuthPlugin; 
+export default appleOAuthPlugin;
