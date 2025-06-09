@@ -90,3 +90,41 @@ Creates a Fastify plugin that handles ReAuth HTTP requests.
 ## License
 
 MIT
+
+## Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant HonoAdapter
+    participant HttpAdapterFactory
+    participant HonoFrameworkAdapter
+    participant ReAuthEngine
+
+    User->>HonoAdapter: createHonoAdapter(engine, config)
+    note right of User: config contains contextRules
+
+    HonoAdapter->>HttpAdapterFactory: createHttpAdapter(frameworkAdapter)
+    HttpAdapterFactory->>HonoFrameworkAdapter: setupMiddleware(context)
+
+    User->>HonoApp: Request to /auth/{pluginName}/{stepName}
+    HonoApp->>HonoFrameworkAdapter: auto-generated step handler
+
+    HonoFrameworkAdapter->>HonoFrameworkAdapter: extractInputs(context, pluginName, stepName)
+
+    HonoFrameworkAdapter->>HonoFrameworkAdapter: addConfigurableContextInputs(context, inputs, pluginName, stepName, contextRules)
+    HonoFrameworkAdapter->>HttpAdapterFactory: findContextRules(pluginName, stepName, contextRules)
+    HttpAdapterFactory-->>HonoFrameworkAdapter: applicableRules
+    HonoFrameworkAdapter->>HonoFrameworkAdapter: Extract cookies/headers from request based on rules
+
+    HonoFrameworkAdapter->>ReAuthEngine: engine.executeStep(pluginName, stepName, inputs)
+    ReAuthEngine-->>HonoFrameworkAdapter: result: AuthOutput
+
+    HonoFrameworkAdapter->>HonoFrameworkAdapter: handleConfigurableContextOutputs(context, response, result, pluginName, stepName, contextRules)
+    HonoFrameworkAdapter->>HttpAdapterFactory: findContextRules(pluginName, stepName, contextRules)
+    HttpAdapterFactory-->>HonoFrameworkAdapter: applicableRules
+    HonoFrameworkAdapter->>HonoFrameworkAdapter: Set cookies/headers on response based on rules
+
+    HonoFrameworkAdapter->>HonoApp: handleStepResponse(context, response, result, httpConfig)
+    HonoApp-->>User: Response with data and cookies/headers
+```

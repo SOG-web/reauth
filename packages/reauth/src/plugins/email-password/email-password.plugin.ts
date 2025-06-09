@@ -46,10 +46,10 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             throw new Error('No generate code function');
           }
 
-          const code = await config.generateCode(entity.email, entity);
+          const code = await config.generateCode(entity.email!, entity);
 
           await container.cradle.entityService.updateEntity(
-            entity.email,
+            entity.email!,
             'email',
             {
               ...entity,
@@ -57,7 +57,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             },
           );
 
-          await config.sendCode(entity, code, entity.email, 'verify');
+          await config.sendCode(entity, code, entity.email!, 'verify');
 
           return {
             success: false,
@@ -175,10 +175,10 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             throw new Error('No generate code function');
           }
 
-          const code = await config.generateCode(entity.email, entity);
+          const code = await config.generateCode(entity.email!, entity);
 
           await container.cradle.entityService.updateEntity(
-            entity.email,
+            entity.email!,
             'email',
             {
               ...entity,
@@ -186,7 +186,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
             },
           );
 
-          await config.sendCode(entity, code, entity.email, 'verify');
+          await config.sendCode(entity, code, entity.email!, 'verify');
         }
 
         const token = config.loginOnRegister
@@ -258,7 +258,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         entity.email_verified = true;
         entity.email_verification_code = undefined;
         await container.cradle.entityService.updateEntity(
-          entity.email,
+          entity.email!,
           'email',
           entity,
         );
@@ -321,7 +321,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         }
 
         await container.cradle.entityService.updateEntity(
-          entity.email,
+          entity.email!,
           'email',
           {
             ...entity,
@@ -336,7 +336,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         await config.sendCode(
           entity,
           entity.email_verification_code,
-          entity.email,
+          entity.email!,
           'verify',
         );
 
@@ -397,10 +397,10 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           throw new Error('No generate code function');
         }
 
-        const code = await config.generateCode(entity.email, entity);
+        const code = await config.generateCode(entity.email!, entity);
 
         await container.cradle.entityService.updateEntity(
-          entity.email,
+          entity.email!,
           'email',
           {
             ...entity,
@@ -412,7 +412,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           },
         );
 
-        await config.sendCode(entity, code, entity.email, 'reset');
+        await config.sendCode(entity, code, entity.email!, 'reset');
 
         return {
           success: true,
@@ -472,7 +472,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           entity.reset_password_code_expires_at! < new Date()
         ) {
           await container.cradle.entityService.updateEntity(
-            entity.email,
+            entity.email!,
             'email',
             {
               ...entity,
@@ -484,7 +484,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         }
 
         await container.cradle.entityService.updateEntity(
-          entity.email,
+          entity.email!,
           'email',
           {
             ...entity,
@@ -622,12 +622,12 @@ export default emailPasswordAuth;
 
 declare module '../../types' {
   interface EntityExtension {
-    email: string;
-    password_hash: string;
+    email: string | null;
+    password_hash: string | null;
     email_verified: boolean;
-    email_verification_code?: string | number | undefined;
-    reset_password_code?: string | number | undefined;
-    reset_password_code_expires_at?: Date | undefined;
+    email_verification_code?: string | number | null;
+    reset_password_code?: string | number | null;
+    reset_password_code_expires_at?: Date | null;
   }
 }
 

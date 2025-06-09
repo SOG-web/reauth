@@ -560,6 +560,7 @@ export {
   OAuth2ContextRules,
   HonoFrameworkAdapter,
 };
+
 export type {
   RouteOverride,
   CustomRoute,
