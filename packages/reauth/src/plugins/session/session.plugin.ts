@@ -1,7 +1,7 @@
 // a plugin for getting current user
 
 import { type } from 'arktype';
-import { AuthPlugin, AuthStep } from '../../types';
+import { AuthPlugin, AuthStep, RootStepHooks } from '../../types';
 import { createAuthPlugin } from '../utils';
 
 const plugin: AuthPlugin<SessionPluginConfig> = {
@@ -156,7 +156,9 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
     config: {},
 };
 
-export interface SessionPluginConfig { }
+export interface SessionPluginConfig {
+    rootHooks?: RootStepHooks
+}
 
 export default function sessionPlugin(
     config: SessionPluginConfig,
