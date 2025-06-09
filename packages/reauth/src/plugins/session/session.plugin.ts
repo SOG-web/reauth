@@ -156,16 +156,26 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
     config: {},
 };
 
-export interface SessionPluginConfig {
+interface SessionPluginConfig {
+    /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
     rootHooks?: RootStepHooks
 }
 
-export default function sessionPlugin(
-    config: SessionPluginConfig,
+const sessionPlugin = (
+    config: SessionPluginConfig = {},
     overrideStep?: {
         name: string;
         override: Partial<AuthStep<SessionPluginConfig>>;
     }[],
-): AuthPlugin<SessionPluginConfig> {
+): AuthPlugin<SessionPluginConfig> => {
     return createAuthPlugin(config, plugin, overrideStep);
 }
+
+export default sessionPlugin;
