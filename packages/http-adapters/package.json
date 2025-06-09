@@ -71,6 +71,12 @@
     "authentication",
     "middleware"
   ],
-  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SOG-web/reauth"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT"
 }
