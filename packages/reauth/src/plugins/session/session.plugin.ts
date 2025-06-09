@@ -80,6 +80,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
                         others,
                     };
                 }
+
                 const { sessionService } = container.cradle
 
                 await sessionService.destroySession(token!);
