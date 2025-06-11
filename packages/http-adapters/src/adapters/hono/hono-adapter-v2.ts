@@ -98,12 +98,12 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
 				try {
 					const session = await context.engine.checkSession(token);
 					if (session.valid && session.entity) {
-						c.set("user", session.entity);
+						c.set("entity", session.entity);
 						c.set("token", session.token);
 						c.set("authenticated", true);
 					} else {
 						c.set("authenticated", false);
-						c.set("user", undefined);
+						c.set("entity", undefined);
 						c.set("token", null);
 						// clear cookie
 						deleteCookie(c, this.adapterConfig.cookieName);
@@ -558,8 +558,8 @@ export class HonoAdapterV2 {
 
 			// Check roles
 			if (options.roles && options.roles.length > 0) {
-				const user = c.get("user") as Entity;
-				const userRole = user?.role;
+				const entity = c.get("entity") as Entity;
+				const userRole = entity?.role;
 				if (!userRole || !options.roles.includes(userRole)) {
 					return c.json({ error: "Insufficient permissions" }, 403);
 				}
@@ -568,8 +568,8 @@ export class HonoAdapterV2 {
 			// Custom authorization
 			if (options.authorize) {
 				try {
-					const user = c.get("user") as Entity;
-					const isAuthorized = await options.authorize(user, c);
+					const entity = c.get("entity") as Entity;
+					const isAuthorized = await options.authorize(entity, c);
 					if (!isAuthorized) {
 						return c.json({ error: "Access denied" }, 403);
 					}
@@ -587,7 +587,7 @@ export class HonoAdapterV2 {
 declare module "hono" {
 	interface ContextVariableMap {
 		// Lightweight context variables - no heavy objects attached
-		user?: Entity;
+		entity?: Entity;
 		authenticated: boolean;
 		token: AuthToken;
 	}
