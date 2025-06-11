@@ -1,5 +1,11 @@
 # @re-auth/http-adapters
 
+## 1.0.0-alpha.10
+
+### Patch Changes
+
+- [`f65fc36`](https://github.com/SOG-web/reauth/commit/f65fc36f9078992241146563a96561c195a9e9a9) Thanks [@SOG-web](https://github.com/SOG-web)! - add key support
+
 ## 1.0.0-alpha.9
 
 ### Patch Changes
