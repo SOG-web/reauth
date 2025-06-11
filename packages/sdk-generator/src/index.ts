@@ -1,76 +1,81 @@
 #!/usr/bin/env node
-import fs from 'fs/promises';
-import path from 'path';
-import { jsonSchemaToZod } from 'json-schema-to-zod';
-import prettier from 'prettier';
-import { program } from 'commander';
-import axios from 'axios';
+import fs from "node:fs/promises";
+import path from "node:path";
+import { jsonSchemaToZod } from "json-schema-to-zod";
+import prettier from "prettier";
+import { program } from "commander";
+import axios from "axios";
 
 program
-  .version('0.0.1')
-  .description(
-    'A CLI to generate a ReAuth TypeScript SDK from an introspection endpoint.',
-  )
-  .requiredOption('-u, --url <url>', 'URL of the introspection endpoint.')
-  .requiredOption(
-    '-o, --output <path>',
-    'Output directory for the generated SDK.',
-  )
-  .action(generate)
-  .parse(process.argv);
+	.version("0.0.1")
+	.description(
+		"A CLI to generate a ReAuth TypeScript SDK from an introspection endpoint.",
+	)
+	.requiredOption("-u, --url <url>", "URL of the introspection endpoint.")
+	.requiredOption(
+		"-o, --output <path>",
+		"Output directory for the generated SDK.",
+	)
+	.requiredOption("-k, --key <key>", "Key to use for the generated SDK.")
+	.action(generate)
+	.parse(process.argv);
 
-async function generate(options: { url: string; output: string }) {
-  try {
-    console.log('🚀 Fetching introspection data from:', options.url);
-    const response = await axios.get(options.url);
-    const introspectionData = response.data.data;
+async function generate(options: { url: string; output: string; key: string }) {
+	try {
+		console.log("🚀 Fetching introspection data from:", options.url);
+		const response = await axios.get(options.url, {
+			headers: {
+				"x-reauth-key": options.key,
+			},
+		});
+		const introspectionData = response.data.data;
 
-    const { entity, plugins } = introspectionData;
-    const outputDir = options.output;
-    const pluginsDir = path.join(outputDir, 'plugins');
+		const { entity, plugins } = introspectionData;
+		const outputDir = options.output;
+		const pluginsDir = path.join(outputDir, "plugins");
 
-    // Create directories
-    await fs.mkdir(pluginsDir, { recursive: true });
+		// Create directories
+		await fs.mkdir(pluginsDir, { recursive: true });
 
-    // Generate entity schema file
-    let entitySchemaCode = `import { z } from 'zod';\n\n`;
-    entitySchemaCode += `export ${jsonSchemaToZod(entity, { name: 'entitySchema' })}\n`;
-    const formattedEntitySchema = await prettier.format(entitySchemaCode, {
-      parser: 'typescript',
-      semi: true,
-      singleQuote: true,
-      trailingComma: 'all',
-    });
-    await fs.writeFile(
-      path.join(outputDir, 'schemas.ts'),
-      formattedEntitySchema,
-    );
+		// Generate entity schema file
+		let entitySchemaCode = `import { z } from 'zod';\n\n`;
+		entitySchemaCode += `export ${jsonSchemaToZod(entity, { name: "entitySchema" })}\n`;
+		const formattedEntitySchema = await prettier.format(entitySchemaCode, {
+			parser: "typescript",
+			semi: true,
+			singleQuote: true,
+			trailingComma: "all",
+		});
+		await fs.writeFile(
+			path.join(outputDir, "schemas.ts"),
+			formattedEntitySchema,
+		);
 
-    const pluginFileNames: string[] = [];
+		const pluginFileNames: string[] = [];
 
-    // Generate a file for each plugin
-    for (const plugin of plugins) {
-      const pluginName = plugin.name.replace(/-/g, '_');
-      const fileName = `${plugin.name}.ts`;
-      pluginFileNames.push(fileName);
+		// Generate a file for each plugin
+		for (const plugin of plugins) {
+			const pluginName = plugin.name.replace(/-/g, "_");
+			const fileName = `${plugin.name}.ts`;
+			pluginFileNames.push(fileName);
 
-      let pluginCode = `
+			let pluginCode = `
                 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
                 import { z } from 'zod';
             \n\n`;
 
-      const stepMethods: string[] = [];
+			const stepMethods: string[] = [];
 
-      for (const step of plugin.steps) {
-        const stepName = step.name.replace(/-/g, '_');
-        const inputSchemaName = `${pluginName}_${stepName}_inputSchema`;
-        const outputSchemaName = `${pluginName}_${stepName}_outputSchema`;
+			for (const step of plugin.steps) {
+				const stepName = step.name.replace(/-/g, "_");
+				const inputSchemaName = `${pluginName}_${stepName}_inputSchema`;
+				const outputSchemaName = `${pluginName}_${stepName}_outputSchema`;
 
-        pluginCode += `export ${jsonSchemaToZod(step.inputs, { name: inputSchemaName })}\n`;
-        pluginCode += `export ${jsonSchemaToZod(step.outputs, { name: outputSchemaName })}\n\n`;
+				pluginCode += `export ${jsonSchemaToZod(step.inputs, { name: inputSchemaName })}\n`;
+				pluginCode += `export ${jsonSchemaToZod(step.outputs, { name: outputSchemaName })}\n\n`;
 
-        const apiPostLogic = step.requiresAuth
-          ? `
+				const apiPostLogic = step.requiresAuth
+					? `
                             const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
                             if (callbacks?.interceptors?.request) {
                                 callbacks.interceptors.request(requestConfig);
@@ -80,13 +85,13 @@ async function generate(options: { url: string; output: string }) {
                                 requestConfig.headers = { ...requestConfig.headers, Authorization: \`Bearer \${token}\` };
                             }
                             const response = await api.post('/auth/${plugin.name}/${step.name}', payload, requestConfig);`
-          : `const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
+					: `const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
                              if (callbacks?.interceptors?.request) {
                                 callbacks.interceptors.request(requestConfig);
                              }
                              const response = await api.post('/auth/${plugin.name}/${step.name}', payload, requestConfig);`;
 
-        stepMethods.push(`
+				stepMethods.push(`
                     ${stepName}: async (
                         payload: z.infer<typeof ${inputSchemaName}>,
                         callbacks?: {
@@ -107,45 +112,45 @@ async function generate(options: { url: string; output: string }) {
                             if (callbacks?.interceptors?.response) {
                                 processedResponse = callbacks.interceptors.response(response);
                             }
-                            const data = ${outputSchemaName}.parse(processedResponse.data.data);
+                            const data = ${outputSchemaName}.parse(processedResponse.data);
                             callbacks?.onSuccess?.(data);
                             return { data, error: null };
-                        } catch (error) {
-                            callbacks?.onError?.(error);
-                            return { data: null, error };
+                        } catch (error: any) {
+                            callbacks?.onError?.(error.response.data);
+                            return { data: null, error: error.response.data };
                         }
                     }
                 `);
-      }
+			}
 
-      pluginCode += `
+			pluginCode += `
                 export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (api: AxiosInstance, getToken: () => string | null, config: any) => ({
-                    ${stepMethods.join(',\n')}
+                    ${stepMethods.join(",\n")}
                 });
             `;
 
-      const formattedPluginCode = await prettier.format(pluginCode, {
-        parser: 'typescript',
-        semi: true,
-        singleQuote: true,
-        trailingComma: 'all',
-      });
-      await fs.writeFile(path.join(pluginsDir, fileName), formattedPluginCode);
-    }
+			const formattedPluginCode = await prettier.format(pluginCode, {
+				parser: "typescript",
+				semi: true,
+				singleQuote: true,
+				trailingComma: "all",
+			});
+			await fs.writeFile(path.join(pluginsDir, fileName), formattedPluginCode);
+		}
 
-    // Generate main index.ts
-    let indexCode = `
+		// Generate main index.ts
+		let indexCode = `
             import axios from 'axios';
             import type { AxiosInstance, AxiosRequestConfig } from 'axios';
         `;
 
-    for (const fileName of pluginFileNames) {
-      const pluginName = fileName.replace('.ts', '').replace(/-/g, '_');
-      const functionName = `create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints`;
-      indexCode += `import { ${functionName} } from './plugins/${fileName.replace('.ts', '')}';\n`;
-    }
+		for (const fileName of pluginFileNames) {
+			const pluginName = fileName.replace(".ts", "").replace(/-/g, "_");
+			const functionName = `create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints`;
+			indexCode += `import { ${functionName} } from './plugins/${fileName.replace(".ts", "")}';\n`;
+		}
 
-    indexCode += `
+		indexCode += `
             interface AuthClientConfig {
               baseURL?: string;
               axiosInstance?: AxiosInstance;
@@ -182,13 +187,13 @@ async function generate(options: { url: string; output: string }) {
                 const client = {
         `;
 
-    for (const fileName of pluginFileNames) {
-      const pluginName = fileName.replace('.ts', '').replace(/-/g, '_');
-      const functionName = `create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints`;
-      indexCode += `  ${pluginName}: ${functionName}(api, getToken, config),\n`;
-    }
+		for (const fileName of pluginFileNames) {
+			const pluginName = fileName.replace(".ts", "").replace(/-/g, "_");
+			const functionName = `create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints`;
+			indexCode += `  ${pluginName}: ${functionName}(api, getToken, config),\n`;
+		}
 
-    indexCode += `
+		indexCode += `
                 };
 
                 return {
@@ -199,18 +204,18 @@ async function generate(options: { url: string; output: string }) {
             };
         `;
 
-    const formattedIndexCode = await prettier.format(indexCode, {
-      parser: 'typescript',
-      semi: true,
-      singleQuote: true,
-      trailingComma: 'all',
-    });
-    await fs.writeFile(path.join(outputDir, 'index.ts'), formattedIndexCode);
+		const formattedIndexCode = await prettier.format(indexCode, {
+			parser: "typescript",
+			semi: true,
+			singleQuote: true,
+			trailingComma: "all",
+		});
+		await fs.writeFile(path.join(outputDir, "index.ts"), formattedIndexCode);
 
-    console.log('✅ SDK generated successfully!');
-    console.log(`✅ Output directory: ${outputDir}`);
-  } catch (error) {
-    console.error('Error generating SDK:', error);
-    process.exit(1);
-  }
+		console.log("✅ SDK generated successfully!");
+		console.log(`✅ Output directory: ${outputDir}`);
+	} catch (error) {
+		console.error("Error generating SDK:", error);
+		process.exit(1);
+	}
 }
