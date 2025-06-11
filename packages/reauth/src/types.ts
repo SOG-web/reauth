@@ -1,6 +1,6 @@
-import { AwilixContainer } from "awilix";
-import { ReAuthEngine } from "./auth-engine";
-import { Type } from "arktype";
+import type { AwilixContainer } from "awilix";
+import type { ReAuthEngine } from "./auth-engine";
+import type { Type } from "arktype";
 
 export interface ValidationResult {
 	isValid: boolean;
