@@ -1,60 +1,53 @@
 {
-  "name": "@re-auth/sdk-generator",
-  "version": "0.0.2-alpha.2",
-  "private": false,
-  "description": "TypeScript SDK generator for ReAuth",
-  "bin": {
-    "reauth-sdk-generator": "dist/index.js"
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc -w",
-    "lint": "eslint .",
-    "generate": "node dist/index.js"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      ".": [
-        "./dist/index.d.ts"
-      ]
-    }
-  },
-  "files": [
-    "dist",
-    "!**/*.tsbuildinfo",
-    "package.json",
-    "README.md"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/SOG-web/reauth"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "dependencies": {
-    "json-schema-to-zod": "^2.1.0",
-    "axios": "^1.6.8",
-    "commander": "^12.0.0",
-    "prettier": "^3.2.5"
-  },
-  "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
-    "eslint": "^8.57.0",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.11.24"
-  },
-  "peerDependencies": {
-    "zod": "^3.0.0"
-  },
-  "license": "MIT"
+	"name": "@re-auth/sdk-generator",
+	"version": "0.0.2-alpha.2",
+	"private": false,
+	"description": "TypeScript SDK generator for ReAuth",
+	"bin": {
+		"reauth-sdk-generator": "dist/index.js"
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc -w",
+		"lint": "eslint .",
+		"generate": "node dist/index.js"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"typesVersions": {
+		"*": {
+			".": ["./dist/index.d.ts"]
+		}
+	},
+	"files": ["dist", "!**/*.tsbuildinfo", "package.json", "README.md"],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/SOG-web/reauth"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"dependencies": {
+		"json-schema-to-zod": "^2.1.0",
+		"axios": "^1.6.8",
+		"commander": "^12.0.0",
+		"prettier": "^3.2.5"
+	},
+	"devDependencies": {
+		"@repo/eslint-config": "workspace:*",
+		"@repo/typescript-config": "workspace:*",
+		"eslint": "^8.57.0",
+		"typescript": "^5.3.3",
+		"@types/node": "^20.11.24"
+	},
+	"peerDependencies": {
+		"zod": "^3.0.0"
+	},
+	"license": "MIT"
 }

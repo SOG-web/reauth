@@ -1,7 +1,8 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { createEmailAuthPluginEndpoints } from './plugins/emailAuthPlugin';
-import { createPhoneAuthPluginEndpoints } from './plugins/phoneAuthPlugin';
+import { createSessionEndpoints } from './plugins/session';
+import { createEmailEndpoints } from './plugins/email';
+import { createPhoneEndpoints } from './plugins/phone';
 
 interface AuthClientConfig {
   baseURL?: string;
@@ -50,8 +51,9 @@ export const createReAuthClient = (config: AuthClientConfig) => {
   };
 
   const client = {
-    emailAuthPlugin: createEmailAuthPluginEndpoints(api, getToken, config),
-    phoneAuthPlugin: createPhoneAuthPluginEndpoints(api, getToken, config),
+    session: createSessionEndpoints(api, getToken, config),
+    email: createEmailEndpoints(api, getToken, config),
+    phone: createPhoneEndpoints(api, getToken, config),
   };
 
   return {
