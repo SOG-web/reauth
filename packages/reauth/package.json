@@ -1,6 +1,6 @@
 {
 	"name": "@re-auth/reauth",
-	"version": "0.1.0-alpha.13",
+	"version": "0.1.0-alpha.14",
 	"type": "module",
 	"main": "./dist/cjs/src/index.js",
 	"module": "./dist/esm/src/index.js",
@@ -45,14 +45,29 @@
 	},
 	"typesVersions": {
 		"*": {
-			".": ["./dist/esm/src/index.d.ts"],
-			"lib": ["./dist/esm/src/lib/index.d.ts"],
-			"plugins/utils": ["./dist/esm/src/plugins/utils/index.d.ts"],
-			"plugins": ["./dist/esm/src/plugins/index.d.ts"],
-			"services": ["./dist/esm/src/services/index.d.ts"]
+			".": [
+				"./dist/esm/src/index.d.ts"
+			],
+			"lib": [
+				"./dist/esm/src/lib/index.d.ts"
+			],
+			"plugins/utils": [
+				"./dist/esm/src/plugins/utils/index.d.ts"
+			],
+			"plugins": [
+				"./dist/esm/src/plugins/index.d.ts"
+			],
+			"services": [
+				"./dist/esm/src/services/index.d.ts"
+			]
 		}
 	},
-	"files": ["dist", "!**/*.tsbuildinfo", "package.json", "README.md"],
+	"files": [
+		"dist",
+		"!**/*.tsbuildinfo",
+		"package.json",
+		"README.md"
+	],
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/SOG-web/reauth"
