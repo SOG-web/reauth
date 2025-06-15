@@ -1,6 +1,6 @@
 {
 	"name": "@re-auth/sdk-generator",
-	"version": "0.0.2-alpha.2",
+	"version": "0.1.0-alpha.3",
 	"private": false,
 	"description": "TypeScript SDK generator for ReAuth",
 	"bin": {
@@ -22,10 +22,17 @@
 	},
 	"typesVersions": {
 		"*": {
-			".": ["./dist/index.d.ts"]
+			".": [
+				"./dist/index.d.ts"
+			]
 		}
 	},
-	"files": ["dist", "!**/*.tsbuildinfo", "package.json", "README.md"],
+	"files": [
+		"dist",
+		"!**/*.tsbuildinfo",
+		"package.json",
+		"README.md"
+	],
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/SOG-web/reauth"
