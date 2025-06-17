@@ -155,7 +155,7 @@ function generateAxiosPluginCode(
 				if (callbacks?.interceptors?.request) {
 					callbacks.interceptors.request(requestConfig);
 				}
-				const token = getToken();
+				const token = await getToken();
 				if (token) {
 					requestConfig.headers = { ...requestConfig.headers, Authorization: \`Bearer \${token}\` };
 				}
@@ -199,7 +199,7 @@ function generateAxiosPluginCode(
 	}
 
 	pluginCode += `
-		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (api: AxiosInstance, getToken: () => string | null, config: any) => ({
+		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (api: AxiosInstance, getToken: () => Promise<string | null>, config: any) => ({
 			${stepMethods.join(",\n")}
 		});
 	`;
@@ -213,6 +213,7 @@ function generateFetchPluginCode(
 ): string {
 	let pluginCode = `
 		import { z } from 'zod';
+		import fetch from 'cross-fetch';
 	\n\n`;
 
 	const stepMethods: string[] = [];
@@ -227,7 +228,7 @@ function generateFetchPluginCode(
 
 		const apiPostLogic = step.requiresAuth
 			? `
-				const token = getToken();
+				const token = await getToken();
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/json',
 					...config.headers,
@@ -302,7 +303,7 @@ function generateFetchPluginCode(
 	}
 
 	pluginCode += `
-		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => string | null) => ({
+		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (authFetch: typeof fetch, config: any, getToken: () => Promise<string | null>) => ({
 			${stepMethods.join(",\n")}
 		});
 	`;
@@ -330,7 +331,7 @@ function generateAxiosIndexCode(pluginFileNames: string[]): string {
 			auth?: {
 				type: 'localstorage' | 'sessionstorage' | 'cookie' | 'custom';
 				key?: string;
-				getToken?: () => string | null;
+				getToken?: () => Promise<string | null> | string | null;
 			}
 		}
 
@@ -345,13 +346,15 @@ function generateAxiosIndexCode(pluginFileNames: string[]): string {
 				withCredentials: config.auth?.type === 'cookie',
 			});
 
-			const getToken = (): string | null => {
+			const getToken = async (): Promise<string | null> => {
 				if (!config.auth || typeof window === 'undefined' || config.auth.type === 'cookie') return null;
 				const { type, key, getToken: customGetToken } = config.auth;
+				if (customGetToken) {
+					return await customGetToken();
+				}
 				switch (type) {
 					case 'localstorage': return localStorage.getItem(key || 'reauth-token');
 					case 'sessionstorage': return sessionStorage.getItem(key || 'reauth-token');
-					case 'custom': return customGetToken ? customGetToken() : null;
 					default: return null;
 				}
 			};
@@ -395,10 +398,11 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 			baseURL: string;
 			headers?: Record<string, string>;
 			fetchConfig?: RequestInit;
+			authFetch?: typeof fetch;
 			auth?: {
 				type: 'localstorage' | 'sessionstorage' | 'cookie' | 'custom';
 				key?: string;
-				getToken?: () => string | null;
+				getToken?: () => Promise<string | null> | string | null;
 			}
 		}
 
@@ -407,13 +411,17 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 				throw new Error('baseURL must be provided when using fetch client.');
 			}
 
-			const getToken = (): string | null => {
+			const authFetch = config.authFetch || fetch;
+
+			const getToken = async (): Promise<string | null> => {
 				if (!config.auth || typeof window === 'undefined' || config.auth.type === 'cookie') return null;
 				const { type, key, getToken: customGetToken } = config.auth;
+				if (customGetToken) {
+					return await customGetToken();
+				}
 				switch (type) {
 					case 'localstorage': return localStorage.getItem(key || 'reauth-token');
 					case 'sessionstorage': return sessionStorage.getItem(key || 'reauth-token');
-					case 'custom': return customGetToken ? customGetToken() : null;
 					default: return null;
 				}
 			};
@@ -424,7 +432,7 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 	for (const fileName of pluginFileNames) {
 		const pluginName = fileName.replace(".ts", "").replace(/-/g, "_");
 		const functionName = `create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints`;
-		indexCode += `  ${pluginName}: ${functionName}(config, getToken),\n`;
+		indexCode += `  ${pluginName}: ${functionName}(authFetch, config, getToken),\n`;
 	}
 
 	indexCode += `
