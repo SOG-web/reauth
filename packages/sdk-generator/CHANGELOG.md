@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.7
+
+### Patch Changes
+
+- [`b788a57`](https://github.com/SOG-web/reauth/commit/b788a575d7c99a4cf1b0c07c8589c55e45f83464) Thanks [@SOG-web](https://github.com/SOG-web)! - sovle fetch error
+
 ## 0.1.0-alpha.6
 
 ### Patch Changes
