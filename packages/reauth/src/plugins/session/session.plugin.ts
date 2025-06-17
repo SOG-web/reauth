@@ -11,7 +11,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
 			name: "getSession",
 			description: "Get current session",
 			validationSchema: type({
-				token: "string",
+				token: "string?",
 				others: "object?",
 			}),
 			inputs: ["token", "others"],
@@ -66,7 +66,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
 			name: "logout",
 			description: "Logout current session",
 			validationSchema: type({
-				token: "string",
+				token: "string?",
 				others: "object?",
 			}),
 			inputs: ["token", "others"],
@@ -113,7 +113,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
 			name: "logoutAll",
 			description: "Logout all sessions",
 			validationSchema: type({
-				token: "string",
+				token: "string?",
 				others: "object?",
 			}),
 			inputs: ["token", "others"],
