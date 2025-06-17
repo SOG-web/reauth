@@ -246,7 +246,7 @@ function generateFetchPluginCode(
 				});
 
 				if (callbacks?.interceptors?.request) {
-					request = callbacks.interceptors.request({ headers }, payload, request);
+					request = await callbacks.interceptors.request({ headers }, payload, request);
 				}
 				const response = await fetch(request);`
 			: `
@@ -264,7 +264,7 @@ function generateFetchPluginCode(
 				});
 
 				if (callbacks?.interceptors?.request) {
-					request = callbacks.interceptors.request({ headers }, payload, request);
+					request = await callbacks.interceptors.request({ headers }, payload, request);
 				}
 				const response = await fetch(request);`;
 
@@ -272,12 +272,12 @@ function generateFetchPluginCode(
 			${stepName}: async (
 				payload: z.infer<typeof ${inputSchemaName}>,
 				callbacks?: {
-					onRequest?: () => void;
-					onSuccess?: (data: z.infer<typeof ${outputSchemaName}>) => void;
-					onError?: (error: any) => void;
+					onRequest?: () => Promise<void>;
+					onSuccess?: (data: z.infer<typeof ${outputSchemaName}>) => Promise<void>;
+					onError?: (error: any) => Promise<void>;
 					interceptors?: {
-						request?: (config: { headers: Record<string, string> }, payload: z.infer<typeof ${inputSchemaName}>, request: Request) => Request;
-						response?: (response: Response) => Response;
+						request?: (config: { headers: Record<string, string> }, payload: z.infer<typeof ${inputSchemaName}>, request: Request) => Promise<Request>;
+						response?: (response: Response) => Promise<Response>;
 					}
 				}
 			) => {
@@ -293,21 +293,21 @@ function generateFetchPluginCode(
 
 					let processedResponse = response;
 					if (callbacks?.interceptors?.response) {
-						processedResponse = callbacks.interceptors.response(response);
+						processedResponse = await callbacks.interceptors.response(response);
 					}
 					if (responseInterceptor) {
-						processedResponse = responseInterceptor(processedResponse);
+						processedResponse = await responseInterceptor(processedResponse);
 					}
 					if (callbacks?.interceptors?.response) {
-						processedResponse = callbacks.interceptors.response(response);
+						processedResponse = await callbacks.interceptors.response(response);
 					}
 					const responseData = await processedResponse.json();
 					const data = ${outputSchemaName}.parse(responseData);
-					callbacks?.onSuccess?.(data);
+					await callbacks?.onSuccess?.(data);
 					return { data, error: null };
 				} catch (error: any) {
 					const errorData = error.message ? JSON.parse(error.message) : error;
-					callbacks?.onError?.(errorData);
+					await callbacks?.onError?.(errorData);
 					return { data: null, error: errorData };
 				}
 			}
@@ -315,7 +315,7 @@ function generateFetchPluginCode(
 	}
 
 	pluginCode += `
-		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => Promise<string | null>, responseInterceptor?: (response: Response) => Response) => ({
+		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => Promise<string | null>, responseInterceptor?: (response: Response) => Promise<Response>) => ({
 			${stepMethods.join(",\n")}
 		});
 	`;
@@ -415,7 +415,7 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 				key?: string;
 				getToken?: () => Promise<string | null> | string | null;
 			},
-			responseInterceptor?: (response: Response) => Response;
+			responseInterceptor?: (response: Response) => Promise<Response>;
 		}
 
 		export const createReAuthClient = (config: AuthClientConfig) => {
