@@ -47,6 +47,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
 			protocol: {
 				http: {
 					method: "POST",
+					auth: true,
 					unf: 401,
 					ip: 400,
 					ic: 400,
@@ -95,6 +96,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
 			protocol: {
 				http: {
 					method: "POST",
+					auth: true,
 					unf: 401,
 					ip: 400,
 					ic: 400,
@@ -149,6 +151,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
 			protocol: {
 				http: {
 					method: "POST",
+					auth: true,
 					unf: 401,
 					ip: 400,
 					ic: 400,

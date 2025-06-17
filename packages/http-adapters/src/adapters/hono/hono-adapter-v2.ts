@@ -42,8 +42,8 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
 	private contextRules: ContextExtractionRule[] = [];
 	private adapterConfig: any = {};
 
-	constructor(engine?: ReAuthEngine) {
-		this.app = new Hono();
+	constructor(engine?: ReAuthEngine, app?: Hono) {
+		this.app = app || new Hono();
 		this.engine = engine;
 	}
 
@@ -497,16 +497,18 @@ export class HonoAdapterV2 {
 	constructor(
 		engine: ReAuthEngine,
 		config: HonoAdapterConfig = {},
+		app: Hono,
 		frameworkAdapter?: HonoFrameworkAdapter,
 	) {
 		this.engine = engine;
 		this.config = config;
 		this.frameworkAdapter =
-			frameworkAdapter || new HonoFrameworkAdapter(engine);
+			frameworkAdapter || new HonoFrameworkAdapter(engine, app);
 		// Set the engine on the shared adapter before creating the HTTP adapter
 		this.frameworkAdapter.setEngine(engine);
 		// Create the app using the factory
-		this.app = createHonoAdapterV2(engine, config, this.frameworkAdapter);
+		 createHonoAdapterV2(engine, config, this.frameworkAdapter);
+		 this.app = this.frameworkAdapter.getAdapter()
 
 		// No need for middleware to attach config - it's stored at adapter level now
 	}
@@ -516,6 +518,10 @@ export class HonoAdapterV2 {
 	 */
 	getApp(): Hono {
 		return this.app;
+	}
+
+	getAdapter(): HonoFrameworkAdapter {
+		return this.frameworkAdapter;
 	}
 
 	/**
@@ -607,8 +613,9 @@ interface ProtectOptions {
 export function createHonoAdapter(
 	engine: ReAuthEngine,
 	config: HonoAdapterConfig = {},
+	app: Hono,
 ): HonoAdapterV2 {
-	return new HonoAdapterV2(engine, config);
+	return new HonoAdapterV2(engine, config, app);
 }
 
 // Export utility functions
