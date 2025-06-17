@@ -237,36 +237,36 @@ function generateFetchPluginCode(
 					headers.Authorization = \`Bearer \${token}\`;
 				}
 
-				let request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
+				let request: RequestInit = {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(payload),
 					credentials: config.auth?.type === 'cookie' ? 'include' : 'same-origin',
 					...config.fetchConfig,
-				});
+				};
 
 				if (callbacks?.interceptors?.request) {
-					request = await callbacks.interceptors.request({ headers }, payload, request);
+					request = await callbacks.interceptors.request(payload, request);
 				}
-				const response = await fetch(request);`
+				const response = await fetch(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`,request);`
 			: `
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/json',
 					...config.headers,
 				};
 
-				let request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
+				let request: RequestInit = {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(payload),
 					credentials: config.auth?.type === 'cookie' ? 'include' : 'same-origin',
 					...config.fetchConfig,
-				});
+				};
 
 				if (callbacks?.interceptors?.request) {
-					request = await callbacks.interceptors.request({ headers }, payload, request);
+					request = await callbacks.interceptors.request(payload, request);
 				}
-				const response = await fetch(request);`;
+				const response = await fetch(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, request);`;
 
 		stepMethods.push(`
 			${stepName}: async (
@@ -276,7 +276,7 @@ function generateFetchPluginCode(
 					onSuccess?: (data: z.infer<typeof ${outputSchemaName}>) => Promise<void>;
 					onError?: (error: any) => Promise<void>;
 					interceptors?: {
-						request?: (config: { headers: Record<string, string> }, payload: z.infer<typeof ${inputSchemaName}>, request: Request) => Promise<Request>;
+						request?: (payload: z.infer<typeof ${inputSchemaName}>, request: RequestInit) => Promise<RequestInit>;
 						response?: (response: Response) => Promise<Response>;
 					}
 				}
