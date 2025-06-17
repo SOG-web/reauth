@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.8
+
+### Patch Changes
+
+- [`9ce19cc`](https://github.com/SOG-web/reauth/commit/9ce19cc9b247a3c213223e51fb478f95087939e9) Thanks [@SOG-web](https://github.com/SOG-web)! - fetch
+
 ## 0.1.0-alpha.7
 
 ### Patch Changes
