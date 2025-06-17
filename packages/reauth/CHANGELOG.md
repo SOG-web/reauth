@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.15
+
+### Patch Changes
+
+- [`2bcf805`](https://github.com/SOG-web/reauth/commit/2bcf805e84264d87383efa57695bb78e11e7d953) Thanks [@SOG-web](https://github.com/SOG-web)! - updated session plugin
+
 ## 0.1.0-alpha.14
 
 ### Patch Changes
