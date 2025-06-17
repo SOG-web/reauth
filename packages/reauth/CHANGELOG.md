@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.16
+
+### Patch Changes
+
+- [`437a0b0`](https://github.com/SOG-web/reauth/commit/437a0b0df9980422612967caafa564a452bef4a1) Thanks [@SOG-web](https://github.com/SOG-web)! - fix auth issue and hono adapter issue
+
 ## 0.1.0-alpha.15
 
 ### Patch Changes
