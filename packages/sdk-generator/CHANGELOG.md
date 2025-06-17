@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.4
+
+### Patch Changes
+
+- [`8fb68ff`](https://github.com/SOG-web/reauth/commit/8fb68ff34fd7df50d029311d9e45ad5722399a2c) Thanks [@SOG-web](https://github.com/SOG-web)! - added cross-fetch
+
 ## 0.1.0-alpha.3
 
 ### Minor Changes
