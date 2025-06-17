@@ -255,7 +255,7 @@ function generateFetchPluginCode(
 					...config.headers,
 				};
 
-				const request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
+				let request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(payload),
@@ -277,7 +277,7 @@ function generateFetchPluginCode(
 					onError?: (error: any) => void;
 					interceptors?: {
 						request?: (config: { headers: Record<string, string> }, payload: z.infer<typeof ${inputSchemaName}>, request: Request) => Request;
-						response?: (response: Response) => any;
+						response?: (response: Response) => Response;
 					}
 				}
 			) => {
@@ -315,7 +315,7 @@ function generateFetchPluginCode(
 	}
 
 	pluginCode += `
-		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => Promise<string | null>, responseInterceptor: (response: Response) => Response) => ({
+		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => Promise<string | null>, responseInterceptor?: (response: Response) => Response) => ({
 			${stepMethods.join(",\n")}
 		});
 	`;
@@ -396,7 +396,7 @@ function generateAxiosIndexCode(pluginFileNames: string[]): string {
 
 function generateFetchIndexCode(pluginFileNames: string[]): string {
 	let indexCode = `
-		import fetch from 'cross-fetch';
+		
 	`;
 
 	for (const fileName of pluginFileNames) {
@@ -415,7 +415,7 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 				key?: string;
 				getToken?: () => Promise<string | null> | string | null;
 			},
-			responseInterceptor: (response: Response) => Response;
+			responseInterceptor?: (response: Response) => Response;
 		}
 
 		export const createReAuthClient = (config: AuthClientConfig) => {
