@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- [`f8fcd32`](https://github.com/SOG-web/reauth/commit/f8fcd32a95c1f777acdb63766f9b13e2ecad7db5) Thanks [@SOG-web](https://github.com/SOG-web)! - proper support for cross-fetch
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes
