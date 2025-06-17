@@ -236,31 +236,37 @@ function generateFetchPluginCode(
 				if (token) {
 					headers.Authorization = \`Bearer \${token}\`;
 				}
-				if (callbacks?.interceptors?.request) {
-					callbacks.interceptors.request({ headers });
-				}
-				const response = await fetch(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
+
+				const request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(payload),
 					credentials: config.auth?.type === 'cookie' ? 'include' : 'same-origin',
 					...config.fetchConfig,
-				});`
+				});
+
+				if (callbacks?.interceptors?.request) {
+					request = callbacks.interceptors.request({ headers }, payload, request);
+				}
+				const response = await fetch(request);`
 			: `
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/json',
 					...config.headers,
 				};
-				if (callbacks?.interceptors?.request) {
-					callbacks.interceptors.request({ headers });
-				}
-				const response = await fetch(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
+
+				const request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(payload),
 					credentials: config.auth?.type === 'cookie' ? 'include' : 'same-origin',
 					...config.fetchConfig,
-				});`;
+				});
+
+				if (callbacks?.interceptors?.request) {
+					request = callbacks.interceptors.request({ headers }, payload, request);
+				}
+				const response = await fetch(request);`;
 
 		stepMethods.push(`
 			${stepName}: async (
@@ -270,7 +276,7 @@ function generateFetchPluginCode(
 					onSuccess?: (data: z.infer<typeof ${outputSchemaName}>) => void;
 					onError?: (error: any) => void;
 					interceptors?: {
-						request?: (config: { headers: Record<string, string> }) => any;
+						request?: (config: { headers: Record<string, string> }, payload: z.infer<typeof ${inputSchemaName}>, request: Request) => Request;
 						response?: (response: Response) => any;
 					}
 				}
@@ -284,8 +290,14 @@ function generateFetchPluginCode(
 						const errorData = await response.json().catch(() => ({ message: response.statusText }));
 						throw new Error(JSON.stringify(errorData));
 					}
-					
+
 					let processedResponse = response;
+					if (callbacks?.interceptors?.response) {
+						processedResponse = callbacks.interceptors.response(response);
+					}
+					if (responseInterceptor) {
+						processedResponse = responseInterceptor(processedResponse);
+					}
 					if (callbacks?.interceptors?.response) {
 						processedResponse = callbacks.interceptors.response(response);
 					}
@@ -303,7 +315,7 @@ function generateFetchPluginCode(
 	}
 
 	pluginCode += `
-		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (authFetch: typeof fetch, config: any, getToken: () => Promise<string | null>) => ({
+		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => Promise<string | null>, responseInterceptor: (response: Response) => Response) => ({
 			${stepMethods.join(",\n")}
 		});
 	`;
@@ -398,12 +410,12 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 			baseURL: string;
 			headers?: Record<string, string>;
 			fetchConfig?: RequestInit;
-			authFetch?: typeof fetch;
 			auth?: {
 				type: 'localstorage' | 'sessionstorage' | 'cookie' | 'custom';
 				key?: string;
 				getToken?: () => Promise<string | null> | string | null;
-			}
+			},
+			responseInterceptor: (response: Response) => Response;
 		}
 
 		export const createReAuthClient = (config: AuthClientConfig) => {
@@ -411,10 +423,8 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 				throw new Error('baseURL must be provided when using fetch client.');
 			}
 
-			const authFetch = config.authFetch || fetch;
-
 			const getToken = async (): Promise<string | null> => {
-				if (!config.auth || typeof window === 'undefined' || config.auth.type === 'cookie') return null;
+				if (!config.auth) return null;
 				const { type, key, getToken: customGetToken } = config.auth;
 				if (customGetToken) {
 					return await customGetToken();
@@ -432,15 +442,14 @@ function generateFetchIndexCode(pluginFileNames: string[]): string {
 	for (const fileName of pluginFileNames) {
 		const pluginName = fileName.replace(".ts", "").replace(/-/g, "_");
 		const functionName = `create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints`;
-		indexCode += `  ${pluginName}: ${functionName}(authFetch, config, getToken),\n`;
+		indexCode += `  ${pluginName}: ${functionName}(config, getToken, config.responseInterceptor),\n`;
 	}
 
 	indexCode += `
 			};
 
 			return {
-				...client,
-				fetch,
+				...client
 			}
 		};
 	`;
