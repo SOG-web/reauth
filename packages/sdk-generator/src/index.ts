@@ -237,7 +237,7 @@ function generateFetchPluginCode(
 					headers.Authorization = \`Bearer \${token}\`;
 				}
 
-				const request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
+				let request = new Request(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(payload),
