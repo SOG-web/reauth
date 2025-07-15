@@ -349,6 +349,10 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
 					};
 				}
 
+				if (!config.generateCode) {
+					throw new Error("No generate code function");
+				}
+
 				const code = await config.generateCode(entity.email!, entity);
 
 				await container.cradle.entityService.updateEntity(
