@@ -302,6 +302,7 @@ class HonoFrameworkAdapter implements FrameworkAdapter<HonoAdapterConfig> {
 		return context.json(
 			{
 				success,
+				status,
 				...data,
 			},
 			statusCode,

@@ -349,21 +349,14 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
 					};
 				}
 
-				if (!entity.email_verification_code) {
-					return {
-						success: false,
-						message: "No verification code",
-						status: "nc",
-						others,
-					};
-				}
+				const code = await config.generateCode(entity.email!, entity);
 
 				await container.cradle.entityService.updateEntity(
 					entity.email!,
 					"email",
 					{
 						...entity,
-						email_verification_code: undefined,
+						email_verification_code: code,
 					},
 				);
 
@@ -371,12 +364,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
 					throw new Error("No send code function provided");
 				}
 
-				await config.sendCode(
-					entity,
-					entity.email_verification_code,
-					entity.email!,
-					"verify",
-				);
+				await config.sendCode(entity, code, entity.email!, "verify");
 
 				return {
 					success: true,
@@ -426,7 +414,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
 					};
 				}
 
-				if (!entity.email_verified) {
+				if (!entity.email_verified && !config.verifyEmail) {
 					return {
 						success: false,
 						message: "Email not verified",
