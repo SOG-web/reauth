@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.18
+
+### Patch Changes
+
+- [`9b14a68`](https://github.com/SOG-web/reauth/commit/9b14a68936c01e41bca106a20a5e72a6e2749dc9) Thanks [@SOG-web](https://github.com/SOG-web)! - create plugin issue fixed
+
 ## 0.1.0-alpha.17
 
 ### Patch Changes
