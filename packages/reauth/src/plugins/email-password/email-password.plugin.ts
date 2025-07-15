@@ -562,7 +562,6 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
 			protocol: {
 				http: {
 					method: "POST",
-					auth: true,
 					ic: 400,
 					ip: 400,
 					su: 200,
