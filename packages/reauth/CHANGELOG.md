@@ -1,5 +1,13 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.19
+
+### Patch Changes
+
+- [`765e592`](https://github.com/SOG-web/reauth/commit/765e59221a74f25c20693456b39fe2b7a01538bd) Thanks [@SOG-web](https://github.com/SOG-web)! - fix(email-password.plugin): remove unnecessary auth property from HTTP configuration
+
+  - Removed the 'auth' property from the HTTP configuration in the email-password plugin, streamlining the protocol setup.
+
 ## 0.1.0-alpha.18
 
 ### Patch Changes
