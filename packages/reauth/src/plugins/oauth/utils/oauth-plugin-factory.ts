@@ -366,7 +366,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
 
     // extract root hooks from config
     const rootHooks = config.rootHooks;
-    delete config.rootHooks;
+    config.rootHooks = undefined;
 
     // Step 1: Start OAuth flow
     steps.push({
@@ -386,7 +386,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
         try {
           const state = arctic.generateState();
           let url: string;
-          let cookiesToSet: Record<string, string> = { oauth_state: state };
+          const cookiesToSet: Record<string, string> = { oauth_state: state };
 
           if (providerType === 'pkce') {
             const codeVerifier = arctic.generateCodeVerifier();
@@ -446,6 +446,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           }
 
           // Exchange code for tokens
+          // biome-ignore lint/suspicious/noImplicitAnyLet: <explanation>
           let tokens;
           if (providerType === 'pkce') {
             if (!oauth_code_verifier) {
@@ -633,6 +634,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
           }
 
           // Exchange code for tokens
+          // biome-ignore lint/suspicious/noImplicitAnyLet: <explanation>
           let tokens;
           if (providerType === 'pkce') {
             if (!oauth_code_verifier) {
@@ -795,7 +797,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
       name: `${providerName.toLowerCase()}`,
       steps,
       config,
-      async initialize() { },
+      async initialize() {},
       getSensitiveFields() {
         return [`${providerName.toLowerCase()}_data`];
       },

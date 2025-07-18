@@ -1,5 +1,8 @@
 import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
-import { createAuthPlugin } from '../utils/create-plugin';
+import {
+  createAuthPlugin,
+  createAuthPluginLegacy,
+} from '../utils/create-plugin';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { type } from 'arktype';
 import { passwordSchema, phoneSchema } from '../shared/validation';
@@ -454,7 +457,7 @@ export default function phonePasswordAuth(
     throw new Error('sendCode function is required for phone-password plugin');
   }
 
-  return createAuthPlugin(config, plugin, overrideStep, {
+  return createAuthPluginLegacy(config, plugin, overrideStep, {
     verifyPhone: false,
     loginOnRegister: true,
     expireTime: '10m',
