@@ -160,9 +160,9 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
               phone_verification_code: code,
               phone_verification_code_expires_at: new Date(
                 Date.now() +
-                (config.expireTime
-                  ? (config.expireTime as any).split('m')[0] * 60 * 1000
-                  : 0),
+                  (config.expireTime
+                    ? (config.expireTime as any).split('m')[0] * 60 * 1000
+                    : 0),
               ),
             },
           );
@@ -333,7 +333,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       }),
       hooks: {},
       inputs: ['phone', 'others'],
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
         const { phone, others } = input;
 

@@ -40,7 +40,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         'entity?': 'object',
         'keyData?': 'object',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
         const { apiKey } = input;
 
@@ -123,7 +123,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         'apiKey?': 'string',
         'keyData?': 'object',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
         const { entity, name, permissions, expiresIn } = input;
 
@@ -223,7 +223,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         status: 'string',
         'apiKeys?': 'object[]',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container } = pluginProperties!;
         const { entity } = input;
 
@@ -287,7 +287,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
         message: 'string',
         status: 'string',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container } = pluginProperties!;
         const { entity, name } = input;
 
@@ -355,7 +355,7 @@ const plugin: AuthPlugin<ApiKeyConfig> = {
       },
     },
   ],
-  initialize: async function (container) {
+  initialize: async (container) => {
     // TODO: API Key plugin is not yet complete. Missing features:
     // - Comprehensive testing and validation
     // - Rate limiting implementation testing

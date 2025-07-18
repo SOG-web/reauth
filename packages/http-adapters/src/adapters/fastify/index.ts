@@ -243,7 +243,7 @@ export class FastifyAuthAdapter {
 
   private getStatusCode(result: AuthOutput, httpConfig: any): number {
     // Check if step defines custom status codes
-    if (httpConfig && httpConfig[result.status as string]) {
+    if (httpConfig?.[result.status as string]) {
       return httpConfig[result.status as string];
     }
 
@@ -286,7 +286,7 @@ export class FastifyAuthAdapter {
   private extractToken(request: FastifyRequest): string | null {
     // 1. Check Authorization header
     const authHeader = request.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (authHeader?.startsWith('Bearer ')) {
       return authHeader.substring(7);
     }
 

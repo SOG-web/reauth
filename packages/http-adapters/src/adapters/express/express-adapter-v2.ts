@@ -264,7 +264,7 @@ class ExpressFrameworkAdapter
 
     // Handle redirect
     if (redirect) {
-      return response.redirect(redirect);
+      response.redirect(redirect);
     }
 
     // Determine status code
@@ -401,7 +401,7 @@ class ExpressFrameworkAdapter
 
   extractToken(request: Request): string | null {
     // From cookie
-    if (request.cookies && request.cookies.auth_token) {
+    if (request.cookies?.auth_token) {
       return request.cookies.auth_token;
     }
 

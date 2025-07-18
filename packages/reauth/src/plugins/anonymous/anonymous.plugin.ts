@@ -101,7 +101,7 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         status: 'string',
         'linkedEntity?': 'object',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
         const { entity, targetEntityId } = input;
 
@@ -227,7 +227,7 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         'token?': 'string',
         'entity?': 'object',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
         const { entity, email, password, username } = input;
 
@@ -361,7 +361,7 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         status: 'string',
         'data?': 'Record<string, unknown>',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container } = pluginProperties!;
         const { entity } = input;
 
@@ -412,7 +412,7 @@ const plugin: AuthPlugin<AnonymousConfig> = {
         status: 'string',
         'data?': 'Record<string, unknown>',
       }),
-      run: async function (input, pluginProperties) {
+      run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
         const { entity, data } = input;
 
@@ -477,7 +477,7 @@ const plugin: AuthPlugin<AnonymousConfig> = {
       },
     },
   ],
-  initialize: async function (container) {
+  initialize: async (container) => {
     // TODO: Anonymous plugin is not yet complete. Missing features:
     // - Comprehensive testing and validation
     // - Security assessment for anonymous data handling

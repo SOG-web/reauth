@@ -1,15 +1,18 @@
-# 🔐 ReAuth - Modular Authentication System
+# 🔐 ReAuth Core - Protocol-Agnostic Authentication Engine
 
-ReAuth is a flexible, plugin-based authentication system for Node.js applications. It provides a robust framework for handling various authentication methods while maintaining a clean and extensible architecture.
+ReAuth Core is a **runtime, framework, and protocol-independent** authentication engine for TypeScript/JavaScript applications. It provides a universal authentication solution that works across all JS runtimes (Node.js, Deno, Bun, browsers, edge runtimes) and can be integrated with any protocol through dedicated adapters.
 
 ## 🚀 Features
 
-- **Plugin-based Architecture**: Easily extendable with custom authentication methods
-- **Multiple Authentication Flows**: Supports email/password, passwordless, and more
-- **TypeScript First**: Built with TypeScript for enhanced developer experience
-- **Dependency Injection**: Powered by Awilix for clean dependency management
-- **Session Management**: Built-in session handling with token support
-- **Extensible**: Create custom authentication plugins for any use case
+- **🌐 Runtime Agnostic**: Works in Node.js, Deno, Bun, browsers, and edge runtimes
+- **🔌 Protocol Independent**: Core engine works with any protocol through dedicated adapters
+- **🎯 Framework Universal**: Integrates with any framework through adapter pattern
+- **🧩 Plugin Architecture**: Extensible authentication methods (email/password, OAuth, passwordless, custom)
+- **🔒 Session Management**: Protocol-agnostic session handling with token support
+- **📡 Auto-Introspection**: Automatic API discovery and SDK generation capabilities
+- **💉 Dependency Injection**: Clean architecture using Awilix container
+- **✅ Type Safety**: Full TypeScript support with comprehensive type definitions
+- **📋 ArkType Validation**: Type-safe validation using ArkType
 
 ## 📦 Installation
 
@@ -23,27 +26,63 @@ npm install @re-auth/reauth
 
 ## 🛠️ Getting Started
 
-### Basic Setup
+### Protocol-Agnostic Core Setup
+
+The ReAuth core engine is protocol-independent and requires abstract service implementations for entity and session management:
 
 ```typescript
 import { ReAuthEngine, emailPasswordAuth } from '@re-auth/reauth';
-import { KnexEntityService, KnexSessionService } from './services';
+import { EntityService, SessionService } from '@re-auth/reauth';
 
-// Initialize your entity and session services
-const entityService = new KnexEntityService(knex);
-const sessionService = new KnexSessionService(knex);
+// Implement abstract services for your data layer
+class MyEntityService implements EntityService {
+  async create(data: any) {
+    /* Your implementation */
+  }
+  async findById(id: string) {
+    /* Your implementation */
+  }
+  async findByEmail(email: string) {
+    /* Your implementation */
+  }
+  async update(id: string, data: any) {
+    /* Your implementation */
+  }
+  async delete(id: string) {
+    /* Your implementation */
+  }
+}
 
-// Create an email/password auth plugin
+class MySessionService implements SessionService {
+  async create(entityId: string, data?: any) {
+    /* Your implementation */
+  }
+  async findById(sessionId: string) {
+    /* Your implementation */
+  }
+  async update(sessionId: string, data: any) {
+    /* Your implementation */
+  }
+  async delete(sessionId: string) {
+    /* Your implementation */
+  }
+}
+
+// Initialize your services
+const entityService = new MyEntityService();
+const sessionService = new MySessionService();
+
+// Create authentication plugins (protocol-agnostic)
 const emailPassword = emailPasswordAuth({
   verifyEmail: true,
   loginOnRegister: true,
   async sendCode(entity, code, email, type) {
-    // Implement your email sending logic here
+    // Implement your notification logic (email, SMS, etc.)
     console.log(`Sending ${type} code ${code} to ${email}`);
   },
 });
 
-// Initialize the auth engine
+// Initialize the protocol-agnostic auth engine
 const auth = new ReAuthEngine({
   plugins: [emailPassword],
   entity: entityService,
@@ -52,6 +91,37 @@ const auth = new ReAuthEngine({
     password: true,
     token: true,
   },
+});
+```
+
+### Integration with Protocol Adapters
+
+The core engine integrates with any protocol through dedicated adapters. For HTTP protocol integration, use `@re-auth/http-adapters`:
+
+```typescript
+// For HTTP protocol integration
+import { createHttpAdapter } from '@re-auth/http-adapters';
+
+// The core engine works with any protocol adapter
+const httpAdapter = createHttpAdapter(auth, {
+  // HTTP-specific configuration
+  routes: { prefix: '/auth' },
+  introspection: { enabled: true },
+});
+
+// Use with your preferred HTTP framework (Express, Fastify, Hono, etc.)
+```
+
+### Universal Runtime Compatibility
+
+The same core engine works across all JavaScript runtimes:
+
+```typescript
+// Works in Node.js, Deno, Bun, browsers, edge runtimes
+const auth = new ReAuthEngine({
+  plugins: [emailPassword],
+  entity: entityService, // Your runtime-specific implementation
+  session: sessionService, // Your runtime-specific implementation
 });
 ```
 
@@ -165,13 +235,13 @@ export class MyAuthPlugin implements AuthPlugin {
 
 ### ReAuthEngine
 
-The main authentication engine that manages plugins and authentication flows.
+The main protocol-agnostic authentication engine that manages plugins and authentication flows.
 
 ```typescript
 const auth = new ReAuthEngine({
   plugins: AuthPlugin[],      // Array of authentication plugins
-  entity: EntityService,     // Entity service implementation
-  session: SessionService,   // Session service implementation
+  entity: EntityService,     // Abstract entity service implementation
+  session: SessionService,   // Abstract session service implementation
   sensitiveFields?: {        // Fields to redact in logs
     [key: string]: boolean;
   };
@@ -179,12 +249,109 @@ const auth = new ReAuthEngine({
 });
 ```
 
-### Built-in Services
+### Abstract Service Interfaces
 
-- `EntityService`: Manages user entities
-- `SessionService`: Handles session management
-- `KnexEntityService`: Knex-based entity service
-- `KnexSessionService`: Knex-based session service
+The core engine works with abstract service interfaces that you implement for your specific data layer:
+
+#### EntityService Interface
+
+```typescript
+interface EntityService {
+  create(data: any): Promise<any>;
+  findById(id: string): Promise<any>;
+  findByEmail(email: string): Promise<any>;
+  update(id: string, data: any): Promise<any>;
+  delete(id: string): Promise<void>;
+}
+```
+
+#### SessionService Interface
+
+```typescript
+interface SessionService {
+  create(entityId: string, data?: any): Promise<any>;
+  findById(sessionId: string): Promise<any>;
+  update(sessionId: string, data: any): Promise<any>;
+  delete(sessionId: string): Promise<void>;
+}
+```
+
+### Protocol-Agnostic Session Management
+
+The core engine provides protocol-independent session management:
+
+```typescript
+// Create a session (works with any protocol)
+const session = await auth.createSession(entityId, sessionData);
+
+// Validate a session (protocol-independent)
+const validSession = await auth.validateSession(sessionId);
+
+// Introspect authentication capabilities
+const capabilities = auth.introspect();
+```
+
+### Protocol Adapter Integration
+
+The core engine is designed to work with any protocol through dedicated adapters:
+
+```typescript
+// HTTP Protocol (via @re-auth/http-adapters)
+import { createHttpAdapter } from '@re-auth/http-adapters';
+const httpAdapter = createHttpAdapter(auth);
+
+// gRPC Protocol (hypothetical future adapter)
+import { createWebSocketAdapter } from '@re-auth/grpc-adapters';
+const wsAdapter = createGrpcAdapter(auth);
+
+// Custom Protocol (your own adapter)
+import { createCustomAdapter } from './my-custom-adapter';
+const customAdapter = createCustomAdapter(auth);
+```
+
+## 🌐 Runtime Compatibility
+
+ReAuth Core works across all JavaScript runtimes without modification:
+
+### Node.js
+
+```typescript
+// Standard Node.js usage
+import { ReAuthEngine } from '@re-auth/reauth';
+const auth = new ReAuthEngine({
+  /* config */
+});
+```
+
+### Deno
+
+```typescript
+// Deno usage (same API)
+import { ReAuthEngine } from 'npm:@re-auth/reauth';
+const auth = new ReAuthEngine({
+  /* config */
+});
+```
+
+### Bun
+
+```typescript
+// Bun usage (same API)
+import { ReAuthEngine } from '@re-auth/reauth';
+const auth = new ReAuthEngine({
+  /* config */
+});
+```
+
+### Edge Runtimes & Browsers
+
+```typescript
+// Works in Cloudflare Workers, Vercel Edge, browsers
+import { ReAuthEngine } from '@re-auth/reauth';
+const auth = new ReAuthEngine({
+  /* config */
+});
+```
 
 ## 📝 License
 
@@ -227,7 +394,7 @@ interface AuthStep {
 type ValidationSchema = Record<string, ((value: any, input: AuthInput) => string | undefined)[]>;
 ```
 
-You can also use Standard Schema compliant validators (see [Standard Schema Support](#standard-schema-support) below).
+You can also use ArkType for validation (see [ArkType Validation Support](#arktype-validation-support) below).
 
 ## ✅ Required Input Flags
 
@@ -274,33 +441,53 @@ export const authPlugins: AuthPlugin[] = [emailPasswordPlugin, new MagicLinkPlug
 | Object-based | ❌ No          | ✅ Yes            | Lightweight plugins         |
 | Class-based  | ✅ Yes         | ✅ Yes            | Stateful or complex plugins |
 
-## 🔄 Standard Schema Support
+## 🔄 ArkType Validation Support
 
-ReAuth supports [Standard Schema](https://standardschema.dev/) for validation, allowing you to use any compatible validation library (like Zod, Valibot, ArkType, etc.) with your plugins.
+ReAuth uses [ArkType](https://arktype.io/) for type-safe validation throughout the authentication engine.
 
-### Using Standard Schema in a Plugin
+### Using ArkType in a Plugin
 
 ```typescript
 import { type } from 'arktype';
-import { createStandardSchemaRule } from '@the-forgebase/reauth/utils';
 
-// Define schemas using ArkType (which implements standard-schema)
+// Define schemas using ArkType
 const emailSchema = type('string.email');
-const passwordSchema = type('string.alphanumeric >= 3');
+const passwordSchema = type('string.alphanumeric >= 8');
 
-// Create validation rules using standard-schema
-const loginValidation = {
-  email: createStandardSchemaRule(emailSchema, 'Please enter a valid email address'),
-  password: createStandardSchemaRule(passwordSchema, 'Password must be at least 8 characters'),
+// Use ArkType validation in your plugin
+const myPlugin: AuthPlugin = {
+  name: 'my-auth-plugin',
+  version: '1.0.0',
+  steps: [
+    {
+      name: 'login',
+      description: 'Login with email and password',
+      async run(input) {
+        // Validate input using ArkType
+        const emailResult = emailSchema(input.email);
+        const passwordResult = passwordSchema(input.password);
+
+        if (emailResult instanceof type.errors) {
+          throw new Error('Invalid email format');
+        }
+
+        if (passwordResult instanceof type.errors) {
+          throw new Error('Password must be at least 8 alphanumeric characters');
+        }
+
+        // Your authentication logic here
+        return { success: true };
+      },
+    },
+  ],
 };
 ```
 
-### Direct Validation with Standard Schema
+### Direct ArkType Validation
 
-You can also use the `standardValidate` utility function to validate data directly:
+You can use ArkType directly for data validation:
 
 ```typescript
-import { standardValidate } from '@the-forgebase/reauth/utils';
 import { type } from 'arktype';
 
 const userSchema = type({
@@ -308,10 +495,15 @@ const userSchema = type({
   password: 'string.alphanumeric >= 8',
 });
 
-try {
-  const validatedUser = await standardValidate(userSchema, userData);
-  console.log('Valid user data:', validatedUser);
-} catch (error) {
-  console.error('Validation failed:', error);
+// Validate data
+const result = userSchema({
+  email: 'user@example.com',
+  password: 'password123',
+});
+
+if (result instanceof type.errors) {
+  console.error('Validation failed:', result.summary);
+} else {
+  console.log('Valid user data:', result);
 }
 ```

@@ -210,7 +210,7 @@ const plugin: AuthPlugin<AdminConfig> = {
               'id',
             );
 
-            if (entity && entity.banned) {
+            if (entity?.banned) {
               return {
                 banned: true,
                 reason: entity.ban_reason!,

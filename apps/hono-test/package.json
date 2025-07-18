@@ -1,5 +1,6 @@
 {
   "name": "hono-test",
+  "description": "Example HTTP protocol integration demonstrating ReAuth with Hono framework using HTTP adapters",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",

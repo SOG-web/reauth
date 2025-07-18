@@ -1,53 +1,199 @@
-# Reauth
+# ReAuth
 
-Reauth is a authentication library for Node.js and the web.
+ReAuth is a **runtime, framework, and protocol-independent** authentication engine for TypeScript/JavaScript applications. It provides a universal authentication solution that works across all JS runtimes and frameworks through a plugin-based architecture with protocol-specific adapters.
 
-## Using this example
+## 🚀 Getting Started
 
-Run the following command:
+Choose your integration approach based on your needs:
 
-```sh
+### For HTTP-based Applications
+
+```bash
+# Install core engine and HTTP adapters
+npm install @re-auth/reauth @re-auth/http-adapters
+
+# Or with your preferred package manager
+pnpm add @re-auth/reauth @re-auth/http-adapters
+yarn add @re-auth/reauth @re-auth/http-adapters
+```
+
+### For Custom Protocol Integration
+
+```bash
+# Install only the core engine
+npm install @re-auth/reauth
+
+# Build your own protocol adapter using the core engine
+```
+
+### Development Setup (Monorepo)
+
+```bash
+# Install dependencies
 pnpm install
-```
 
-## What's inside?
+# Start development mode
+pnpm dev
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd reauth
+# Build all packages
 pnpm build
 ```
 
-### Develop
+## 📍 Next Steps
 
-To develop all apps and packages, run the following command:
+### For HTTP Web Applications
+
+1. **Start with the Core + HTTP Adapters**: Install `@re-auth/reauth` and `@re-auth/http-adapters`
+2. **Choose Your Framework**: Use Express, Fastify, or Hono adapters (or create a custom one)
+3. **Configure Plugins**: Set up authentication methods (email/password, OAuth, etc.)
+4. **Generate Client SDK**: Use `@re-auth/sdk-generator` for type-safe client integration
+5. **See Example**: Check out `apps/hono-test` for a complete HTTP integration example
+
+### For Custom Protocol Integration
+
+1. **Start with Core Engine**: Install only `@re-auth/reauth`
+2. **Implement Protocol Adapter**: Create your own adapter following the `FrameworkAdapter` interface
+3. **Use Abstract Services**: Leverage `EntityService` and `SessionService` abstractions
+4. **Configure Plugins**: Set up authentication methods that work across protocols
+5. **Build Tooling**: Create protocol-specific tooling as needed
+
+### For Learning and Exploration
+
+1. **Explore Examples**: Start with `apps/hono-test` (backend) and `apps/web` (frontend)
+2. **Read Documentation**: Check individual package READMEs for detailed usage
+3. **Understand Architecture**: Review the architecture overview above
+4. **Try Different Runtimes**: Test the same code in Node.js, Deno, or Bun
+
+## 🏗️ Architecture Overview
+
+ReAuth follows a clean separation of concerns with three distinct layers:
 
 ```
-cd reauth
+┌─────────────────────────────────────────────────────────────┐
+│                    ReAuth Core Engine                       │
+│              (@re-auth/reauth package)                     │
+│                                                             │
+│  • Plugin System (OAuth, Email/Password, Custom)           │
+│  • Session Management (Protocol-Agnostic)                  │
+│  • Entity Services (Abstract Interfaces)                   │
+│  • Dependency Injection (Awilix Container)                 │
+│  • Introspection & Validation (Standard Schema)            │
+├─────────────────────────────────────────────────────────────┤
+│                   Protocol Adapters                        │
+│              (@re-auth/http-adapters package)              │
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │ HTTP        │  │ gRPC        │  │ Custom Protocol     │ │
+│  │ Adapters    │  │ Adapters    │  │ Adapters            │ │
+│  │ (Available) │  │ (Future)    │  │ (Build Your Own)    │ │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│                Framework Integrations                      │
+│              (Within HTTP Adapters)                        │
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │ Express     │  │ Fastify     │  │ Hono / Custom       │ │
+│  │ Adapter     │  │ Adapter     │  │ Framework Adapter   │ │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Architectural Principles
+
+- **Core Engine Independence**: The authentication logic is completely separate from protocol and framework concerns
+- **Protocol Adapter Pattern**: Different protocols (HTTP, WebSocket, gRPC) can be supported through dedicated adapter packages
+- **Framework Abstraction**: Within each protocol, multiple frameworks are supported through a common adapter interface
+- **Plugin Extensibility**: Authentication methods are implemented as plugins that work across all protocols and frameworks
+- **Universal Compatibility**: The same authentication logic works in any JavaScript runtime or framework
+
+## 📦 Packages
+
+### Core Engine
+
+- **`@re-auth/reauth`** - The core protocol-agnostic authentication engine
+  - Plugin-based architecture for extensible authentication methods
+  - Runtime-independent (Node.js, Deno, Bun, browsers, edge runtimes)
+  - Framework-independent with abstract service interfaces
+  - Session management and introspection capabilities
+
+### Protocol Adapters
+
+- **`@re-auth/http-adapters`** - HTTP protocol implementation for web frameworks
+  - Express.js, Fastify, and Hono framework adapters
+  - Auto-route generation and introspection endpoints
+  - HTTP-specific context handling and middleware integration
+  - Custom adapter creation utilities
+
+### Development Tools
+
+- **`@re-auth/sdk-generator`** - Client SDK generation from HTTP protocol introspection
+  - Automatic TypeScript client generation
+  - Support for multiple HTTP clients (axios, fetch)
+  - Type-safe API interfaces from runtime introspection
+
+### Shared Configurations
+
+- **`@repo/eslint-config`** - Shared ESLint configurations for monorepo consistency
+- **`@repo/typescript-config`** - Shared TypeScript configurations for universal compatibility
+- **`@repo/ui`** - Shared React components for example applications
+
+### Example Applications
+
+- **`hono-test`** - HTTP protocol integration demonstration with Hono framework
+
+  - Shows core engine + HTTP adapter integration
+  - SQLite database setup and plugin configuration
+  - Authentication flow examples
+
+- **`web`** - Next.js client application with generated SDK
+  - Demonstrates client-side integration patterns
+  - Generated SDK usage examples
+  - Frontend authentication flows
+
+All packages support dual ESM/CJS builds for universal compatibility across JavaScript environments.
+
+## ✨ Key Features
+
+- **🌐 Universal Compatibility** - Works across Node.js, Deno, Bun, browsers, and edge runtimes
+- **🔌 Protocol Agnostic** - Core engine works with HTTP, WebSocket, gRPC, or any custom protocol
+- **🎯 Framework Independent** - Integrates with Express, Fastify, Hono, or any framework through adapters
+- **🧩 Plugin Architecture** - Extensible authentication methods (email/password, OAuth, passwordless, custom)
+- **🔒 Session Management** - Protocol-agnostic session handling with token support
+- **📡 Auto-Introspection** - Automatic SDK generation and API discovery
+- **💉 Dependency Injection** - Clean architecture using Awilix container
+- **✅ Type Safety** - Full TypeScript support with comprehensive type definitions
+- **📋 Standard Schema** - Universal validation using Standard Schema specification
+
+## 🛠️ Development
+
+### Prerequisites
+
+- Node.js >= 18 (for development, but ReAuth works in all JS runtimes)
+- pnpm (package manager)
+
+### Commands
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start development mode (all packages)
 pnpm dev
+
+# Build all packages
+pnpm build
+
+# Run tests
+pnpm test
+
+# Lint code
+pnpm lint
+
+# Format code
+pnpm format
+
+# Type checking
+pnpm check-types
 ```
 
 ### Remote Caching

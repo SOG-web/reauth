@@ -425,7 +425,7 @@ class FastifyFrameworkAdapter
 
   extractToken(request: FastifyRequest): string | null {
     // From cookie
-    if (request.cookies && request.cookies.auth_token) {
+    if (request.cookies?.auth_token) {
       return request.cookies.auth_token;
     }
 
