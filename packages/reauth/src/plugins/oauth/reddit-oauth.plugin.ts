@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Reddit OAuth configuration
@@ -28,3 +30,12 @@ export const redditOAuthPlugin = createOAuthPlugin<RedditOAuthConfig>(
 );
 
 export default redditOAuthPlugin;
+
+export const redditOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      reddit_id: column('reddit_id', 'varchar(255)').nullable().unique(),
+      reddit_data: column('reddit_data', 'json').nullable(),
+    },
+  },
+};

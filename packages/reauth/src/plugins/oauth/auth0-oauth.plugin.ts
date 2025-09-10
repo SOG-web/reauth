@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Auth0 OAuth configuration
@@ -42,3 +44,12 @@ export const auth0OAuthPlugin = createOAuthPlugin<Auth0OAuthConfig>(
 );
 
 export default auth0OAuthPlugin;
+
+export const auth0OAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      auth0_id: column('auth0_id', 'varchar(255)').nullable().unique(),
+      auth0_data: column('auth0_data', 'json').nullable(),
+    },
+  },
+};

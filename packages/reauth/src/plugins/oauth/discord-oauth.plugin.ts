@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Discord OAuth configuration
@@ -37,3 +39,12 @@ export const discordOAuthPlugin = createOAuthPlugin<DiscordOAuthConfig>(
 );
 
 export default discordOAuthPlugin;
+
+export const discordOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      discord_id: column('discord_id', 'varchar(255)').nullable().unique(),
+      discord_data: column('discord_data', 'json').nullable(),
+    },
+  },
+};

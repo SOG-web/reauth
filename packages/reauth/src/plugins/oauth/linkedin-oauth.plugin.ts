@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * LinkedIn OAuth configuration
@@ -32,3 +34,12 @@ export const linkedinOAuthPlugin = createOAuthPlugin<LinkedInOAuthConfig>(
 );
 
 export default linkedinOAuthPlugin;
+
+export const linkedinOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      linkedin_id: column('linkedin_id', 'varchar(255)').nullable().unique(),
+      linkedin_data: column('linkedin_data', 'json').nullable(),
+    },
+  },
+};

@@ -1,6 +1,7 @@
 import type { AwilixContainer } from "awilix";
 import type { ReAuthEngine } from "./auth-engine";
 import type { Type } from "arktype";
+import { column, idColumn, RelationBuilder, table } from "fumadb/schema";
 
 export interface ValidationResult {
 	isValid: boolean;
@@ -412,3 +413,17 @@ export interface IntrospectionResult {
 	generatedAt: string;
 	version: string;
 }
+
+
+export type ReauthSchemaPlugin = {
+	tables?: Record<string, ReturnType<typeof table>>;
+	relations?: Record<string, (builder: RelationBuilder<any>) => Record<string, unknown>>;
+  /**
+   * Extend columns of existing tables by name. Keys are table names, values are maps of new columns.
+   * These columns will be merged into core table column maps before creating the final tables.
+   */
+  extendTables?: Record<
+    string,
+    Record<string, ReturnType<typeof column> | ReturnType<typeof idColumn>>
+  >;
+  };

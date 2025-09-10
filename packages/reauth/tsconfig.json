@@ -6,7 +6,8 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "noImplicitAny": false,
-    "composite": true
+    "composite": true,
+    "strict": true
   },
   "include": ["src"],
   "exclude": [
