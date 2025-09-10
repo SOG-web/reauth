@@ -18,12 +18,14 @@ describe('Anonymous Plugin V2 Step Debug', () => {
       count: vi.fn().mockResolvedValue(0),
       create: vi.fn()
         .mockResolvedValueOnce({ id: 'subject_123' })
+        .mockResolvedValueOnce({ id: 'tracking_789' })
         .mockResolvedValueOnce({ id: 'session_456' }),
     };
 
     const mockEngine = {
       getOrm: vi.fn().mockResolvedValue(mockOrm),
       createSessionFor: vi.fn().mockResolvedValue('token_123'),
+      checkSession: vi.fn().mockResolvedValue({ valid: true, subject: { id: 'subject_123' } }),
     };
 
     const mockContext = {
@@ -47,6 +49,6 @@ describe('Anonymous Plugin V2 Step Debug', () => {
     console.log('ORM create calls:', mockOrm.create.mock.calls);
 
     expect(result.success).toBe(true);
-    expect(mockOrm.create).toHaveBeenCalledTimes(2);
+    expect(mockOrm.create).toHaveBeenCalledTimes(3); // subjects + anonymous_subjects + anonymous_sessions
   });
 });

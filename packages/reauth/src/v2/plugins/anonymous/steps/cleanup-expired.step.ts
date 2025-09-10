@@ -78,11 +78,11 @@ export const cleanupExpiredStep: AuthStepV2<
         });
         const wouldCleanSessions = typeof wouldCleanSessionsResult === 'number' ? wouldCleanSessionsResult : 0;
 
-        // Estimate orphaned subjects (simplified for dry run)
-        const oldSubjectsResult = await orm.count('subjects', {
+        // Estimate orphaned subjects that are tracked by anonymous plugin
+        const trackedSubjectsResult = await orm.count('anonymous_subjects', {
           where: (b: any) => b('created_at', '<', subjectCutoffDate),
         });
-        const wouldCleanSubjects = typeof oldSubjectsResult === 'number' ? Math.min(oldSubjectsResult, wouldCleanSessions) : 0;
+        const wouldCleanSubjects = typeof trackedSubjectsResult === 'number' ? Math.min(trackedSubjectsResult, wouldCleanSessions) : 0;
 
         const totalWouldClean = wouldCleanSessions + wouldCleanSubjects;
 
@@ -110,23 +110,29 @@ export const cleanupExpiredStep: AuthStepV2<
         });
         result.sessionsDeleted = typeof sessionResult === 'number' ? sessionResult : 0;
 
-        // For force cleanup, also clean up any orphaned subjects
-        // This is a simplified approach - in production you might want more sophisticated logic
-        const oldSubjects = await orm.findMany('subjects', {
+        // For force cleanup, also clean up any orphaned subjects that are tracked by anonymous plugin
+        const trackedSubjects = await orm.findMany('anonymous_subjects', {
           where: (b: any) => b('created_at', '<', now),
         });
 
-        if (oldSubjects && Array.isArray(oldSubjects)) {
-          for (const subject of oldSubjects) {
+        if (trackedSubjects && Array.isArray(trackedSubjects)) {
+          for (const trackedSubject of trackedSubjects) {
             const hasActiveSessions = await orm.findFirst('anonymous_sessions', {
-              where: (b: any) => b('subject_id', '=', subject.id),
+              where: (b: any) => b('subject_id', '=', trackedSubject.subject_id),
             });
             
             if (!hasActiveSessions) {
               try {
+                // Delete the actual subject
                 await orm.deleteMany('subjects', {
-                  where: (b: any) => b('id', '=', subject.id),
+                  where: (b: any) => b('id', '=', trackedSubject.subject_id),
                 });
+                
+                // Remove from our tracking table
+                await orm.deleteMany('anonymous_subjects', {
+                  where: (b: any) => b('subject_id', '=', trackedSubject.subject_id),
+                });
+                
                 result.subjectsDeleted++;
               } catch (error) {
                 continue;

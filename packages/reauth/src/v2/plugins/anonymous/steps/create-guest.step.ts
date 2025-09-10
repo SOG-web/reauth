@@ -92,6 +92,11 @@ export const createGuestStep: AuthStepV2<
       // Create subject record for the guest
       const subject = await orm.create('subjects', {});
 
+      // Track this subject as created by anonymous plugin for safe cleanup
+      await orm.create('anonymous_subjects', {
+        subject_id: subject.id,
+      });
+
       // Create anonymous session record
       await orm.create('anonymous_sessions', {
         subject_id: subject.id,

@@ -116,6 +116,11 @@ export const convertGuestStep: AuthStepV2<
         where: (b: any) => b('subject_id', '=', subjectId),
       });
 
+      // Remove from anonymous subjects tracking since it's now a regular user
+      await orm.deleteMany('anonymous_subjects', {
+        where: (b: any) => b('subject_id', '=', subjectId),
+      });
+
       // Create a new session with appropriate TTL for registered users
       const registeredTtl = 3600; // 1 hour for registered users (vs 30 min for guests)
       const newToken = await ctx.engine.createSessionFor('subject', subjectId, registeredTtl);

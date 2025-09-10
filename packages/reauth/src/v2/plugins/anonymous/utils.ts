@@ -76,29 +76,36 @@ export const cleanupExpiredSessions = async (
   
   const sessionsDeleted = typeof sessionResult === 'number' ? sessionResult : 0;
 
-  // Step 2: Find and delete orphaned subjects that were created for anonymous sessions
+  // Step 2: Find and delete orphaned subjects that were created by anonymous plugin
   // but no longer have any anonymous_sessions records
   
-  // First, get all subjects that have ever had anonymous sessions (to identify guest subjects)
-  const guestSubjects = await orm.findMany('subjects', {
+  // Get tracked anonymous subjects that are old enough for cleanup
+  const trackedSubjects = await orm.findMany('anonymous_subjects', {
     where: (b: any) => b('created_at', '<', subjectCutoffDate),
   });
 
   let subjectsDeleted = 0;
   
-  if (guestSubjects && Array.isArray(guestSubjects)) {
-    for (const subject of guestSubjects) {
+  if (trackedSubjects && Array.isArray(trackedSubjects)) {
+    for (const trackedSubject of trackedSubjects) {
       // Check if this subject still has any anonymous_sessions
       const hasActiveSessions = await orm.findFirst('anonymous_sessions', {
-        where: (b: any) => b('subject_id', '=', subject.id),
+        where: (b: any) => b('subject_id', '=', trackedSubject.subject_id),
       });
       
-      // If no active sessions and subject is old enough, it's an orphaned guest subject
+      // If no active sessions, it's an orphaned guest subject - safe to delete
       if (!hasActiveSessions) {
         try {
+          // Delete the actual subject
           await orm.deleteMany('subjects', {
-            where: (b: any) => b('id', '=', subject.id),
+            where: (b: any) => b('id', '=', trackedSubject.subject_id),
           });
+          
+          // Remove from our tracking table
+          await orm.deleteMany('anonymous_subjects', {
+            where: (b: any) => b('subject_id', '=', trackedSubject.subject_id),
+          });
+          
           subjectsDeleted++;
         } catch (error) {
           // Continue with other subjects if one fails
