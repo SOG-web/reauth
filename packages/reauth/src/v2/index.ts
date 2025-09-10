@@ -7,8 +7,19 @@ export { sessionsV2 } from './session.schema.v2';
 export { InMemorySessionResolvers } from './session-resolvers.v2';
 export { FumaSessionServiceV2 } from './session-service.v2';
 export { ReAuthEngineV2 } from './engine.v2';
+
+// Email plugin
 export { emailPasswordSchemaV2 } from './plugins/email-password/schema.v2';
-export { emailPasswordPluginV2, type EmailPasswordConfigV2 } from './plugins/email-password/plugin.v2';
+export { baseEmailPasswordPluginV2, type EmailPasswordConfigV2 } from './plugins/email-password/plugin.v2';
+
+// Phone plugin
+export { phonePasswordSchemaV2 } from './plugins/phone/schema.v2';
+export { basePhonePasswordPluginV2, type PhonePasswordConfigV2 } from './plugins/phone/plugin.v2';
+
+// Username plugin
+export { usernamePasswordSchemaV2 } from './plugins/username/schema.v2';
+export { baseUsernamePasswordPluginV2, type UsernamePasswordConfigV2 } from './plugins/username/plugin.v2';
+
 export { createAuthPluginV2, createAuthPluginLegacyV2 } from './utils/create-plugin.v2';
 
 export type {
@@ -21,6 +32,3 @@ export type {
   AuthInput,
   AuthOutput,
 } from './types.v2';
-
-// Example helper
-export { runExample as runEmailPasswordExample } from './examples/email-password.example';

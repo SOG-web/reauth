@@ -95,7 +95,7 @@ describe('EmailPasswordAuth Plugin', () => {
   const entity: Entity = {
     id: '744d263d-3610-409b-9549-661a99411e77',
     role: 'user',
-    created_at: new Date(),``
+    created_at: new Date(),
     updated_at: new Date(),
     email: 'rah@rr.com',
     email_verified: true,
