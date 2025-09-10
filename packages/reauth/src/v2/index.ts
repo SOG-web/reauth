@@ -8,6 +8,10 @@ export { InMemorySessionResolvers } from './session-resolvers.v2';
 export { FumaSessionServiceV2 } from './session-service.v2';
 export { ReAuthEngineV2 } from './engine.v2';
 export { emailPasswordSchemaV2 } from './plugins/email-password/schema.v2';
+
+export { anonymousSchemaV2 } from './plugins/anonymous/schema.v2';
+export { default as anonymousPluginV2, type AnonymousConfigV2 } from './plugins/anonymous/plugin.v2';
+
 export { passwordlessSchemaV2 } from './plugins/passwordless/schema.v2';
 export { default as passwordlessPluginV2, createPasswordlessPluginV2, type PasswordlessConfigV2 } from './plugins/passwordless/plugin.v2';
 
@@ -36,3 +40,4 @@ export type {
   AuthInput,
   AuthOutput,
 } from './types.v2';
+
