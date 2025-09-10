@@ -1,7 +1,7 @@
-import type { EmailPasswordConfigV2 } from './types';
+import type { UsernamePasswordConfigV2 } from './types';
 
 export const isTestEnvironmentAllowed = (
-  config: EmailPasswordConfigV2,
+  config: UsernamePasswordConfigV2,
 ): boolean => {
   if (!config.testUsers?.enabled) return false;
   const env = config.testUsers.environment || 'development';
@@ -14,19 +14,19 @@ export const isTestEnvironmentAllowed = (
 };
 
 export const findTestUser = (
-  email: string,
+  username: string,
   password: string,
-  config: EmailPasswordConfigV2,
-): { email: string; password: string; profile: Record<string, any> } | null => {
+  config: UsernamePasswordConfigV2,
+): { username: string; password: string; profile: Record<string, any> } | null => {
   if (!isTestEnvironmentAllowed(config)) return null;
   return (
     config.testUsers?.users.find(
-      (u) => u.email === email && u.password === password,
+      (u) => u.username === username && u.password === password,
     ) || null
   );
 };
 
-export const genCode = (config?: EmailPasswordConfigV2) => {
+export const genCode = (config?: UsernamePasswordConfigV2) => {
   const len = config?.codeLength ?? 4;
   const type = config?.codeType ?? 'numeric';
   const rand = (min: number, max: number) =>
@@ -46,9 +46,4 @@ export const genCode = (config?: EmailPasswordConfigV2) => {
     .fill(0)
     .map(() => String.fromCharCode(48 + rand(0, 74)))
     .join('');
-};
-
-export const generateCode = async (email: string, subject?: any): Promise<string> => {
-  // Default code generation for email verification
-  return genCode();
 };
