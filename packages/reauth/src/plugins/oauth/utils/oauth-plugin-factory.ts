@@ -795,7 +795,7 @@ export function createOAuthPlugin<T extends BaseOAuthConfig>(
       name: `${providerName.toLowerCase()}`,
       steps,
       config,
-      async initialize() { },
+      async initialize() {},
       getSensitiveFields() {
         return [`${providerName.toLowerCase()}_data`];
       },
