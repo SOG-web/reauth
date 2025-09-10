@@ -1,5 +1,9 @@
 import { createReAuthEngine } from '@re-auth/reauth';
-import { emailPasswordAuth, phonePasswordAuth, sessionPlugin } from '@re-auth/reauth/plugins';
+import {
+  emailPasswordAuth,
+  phonePasswordAuth,
+  sessionPlugin,
+} from '@re-auth/reauth/plugins';
 import {
   KnexEntityService,
   KnexSessionService,

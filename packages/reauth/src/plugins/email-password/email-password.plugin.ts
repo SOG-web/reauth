@@ -5,6 +5,7 @@ import {
   createAuthPlugin,
   createAuthPluginLegacy,
 } from '../utils/create-plugin';
+
 import { passwordSchema } from '../shared/validation';
 
 const loginSchema = type({
@@ -230,7 +231,6 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { email, password, others } = input;
-
         // Check for test user registration
         const testUser = findTestUser(email, password, config);
         if (testUser) {
@@ -784,7 +784,6 @@ export default emailPasswordAuth;
 
 // Export helper functions for testing and external use
 export { isTestEnvironmentAllowed, findTestUser, createTestEntity };
-
 declare module '../../types' {
   interface EntityExtension {
     email: string | null;
