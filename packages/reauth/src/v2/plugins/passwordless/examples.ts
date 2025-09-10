@@ -3,7 +3,7 @@
  * This demonstrates how to configure and use magic links and WebAuthn authentication
  */
 
-import { passwordlessPluginV2, type PasswordlessConfigV2 } from '../plugin.v2';
+import passwordlessPluginV2, { type PasswordlessConfigV2 } from './plugin.v2';
 import { ReAuthEngineV2 } from '../../engine.v2';
 
 // Example 1: Magic Links Only
@@ -51,7 +51,7 @@ export async function examplePasswordlessUsage() {
   const engine = new ReAuthEngineV2({
     dbClient: mockDbClient,
     plugins: [
-      passwordlessPluginV2, // Use with default config, or pass custom config
+      passwordlessPluginV2 as any, // Type assertion to bypass complex generic constraints
     ],
   });
 
