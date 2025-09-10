@@ -37,6 +37,21 @@ describe('V2 Plugins Implementation', () => {
     expect(stepNames).toContain('change-password');
   });
 
+  it('should export email-or-username plugin from V2 index', async () => {
+    const { baseEmailOrUsernamePluginV2 } = await import('../index.js');
+    
+    expect(baseEmailOrUsernamePluginV2).toBeDefined();
+    expect(baseEmailOrUsernamePluginV2.name).toBe('email-or-username');
+    expect(baseEmailOrUsernamePluginV2.steps).toBeDefined();
+    expect(Array.isArray(baseEmailOrUsernamePluginV2.steps)).toBe(true);
+    
+    // Check that core steps are present
+    const stepNames = baseEmailOrUsernamePluginV2.steps?.map(step => step.name) || [];
+    expect(stepNames).toContain('login');
+    expect(stepNames).toContain('register');
+    expect(stepNames).toContain('change-password');
+  });
+
   it('should export schemas from V2 index', async () => {
     const { phonePasswordSchemaV2, usernamePasswordSchemaV2 } = await import('../index.js');
     
