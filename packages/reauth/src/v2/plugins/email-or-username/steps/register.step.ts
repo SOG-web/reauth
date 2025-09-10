@@ -143,19 +143,65 @@ export const registerStep: AuthStepV2<
 
     // Check if email verification is needed
     if (inputType === 'email' && ctx.config?.emailConfig?.verifyEmail) {
-      return {
-        success: false,
-        message: 'Registration successful. Please verify your email.',
-        status: 'eq',
-        token,
-        subject: {
-          id: subjectId,
-          [inputType]: emailOrUsername,
-          provider: inputType,
-          verified: false,
-        },
-        others,
-      };
+      // If sendCode is available, send verification code
+      if (ctx.config.emailConfig.sendCode) {
+        // Generate verification code using email plugin utils
+        const { genCode } = await import('../../email-password/utils');
+        const code = ctx.config.emailConfig.generateCode
+          ? await ctx.config.emailConfig.generateCode(emailOrUsername)
+          : genCode(ctx.config.emailConfig as any);
+        
+        // Hash the code for storage
+        const { hashPassword } = await import('../../../../lib/password');
+        const hashedCode = await hashPassword(String(code));
+        const ms = ctx.config.emailConfig.verificationCodeExpiresIn ?? 30 * 60 * 1000;
+        const expiresAt = new Date(Date.now() + ms);
+
+        // Update email_identities with verification code
+        await orm.update('email_identities', {
+          where: (b) => b('identity_id', '=', identity.id),
+          set: {
+            verification_code: hashedCode,
+            verification_code_expires_at: expiresAt,
+          },
+        });
+
+        // Send verification code using email plugin's sendCode function
+        await ctx.config.emailConfig.sendCode(
+          { id: subjectId },
+          code,
+          emailOrUsername,
+          'verify',
+        );
+
+        return {
+          success: false,
+          message: 'Registration successful. Verification code sent to your email.',
+          status: 'eq',
+          token,
+          subject: {
+            id: subjectId,
+            [inputType]: emailOrUsername,
+            provider: inputType,
+            verified: false,
+          },
+          others,
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Registration successful. Please verify your email.',
+          status: 'eq',
+          token,
+          subject: {
+            id: subjectId,
+            [inputType]: emailOrUsername,
+            provider: inputType,
+            verified: false,
+          },
+          others,
+        };
+      }
     }
 
     return {
