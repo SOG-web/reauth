@@ -125,7 +125,17 @@ export const changePhoneStep: AuthStepV2<
       };
     }
 
-    // If verification is required, generate and send code
+    // Update phone number immediately regardless of verification settings
+    await orm.updateMany('identities', {
+      where: (b) => b('id', '=', currentIdentity.id),
+      set: {
+        identifier: newPhone,
+        verified: false, // Reset verification status - will be verified on next login
+        updated_at: new Date(),
+      },
+    });
+
+    // If verification is enabled and sendCode is configured, send verification code for future login
     if (ctx.config?.verifyPhone && ctx.config.sendCode) {
       const generateCode = ctx.config.generateCode || defaultGenerateCode;
       const code = await generateCode(newPhone, check.subject);
@@ -162,43 +172,28 @@ export const changePhoneStep: AuthStepV2<
         });
       }
 
-      // Send verification code to NEW phone number
+      // Send verification code to new phone number for future login verification
       try {
         await ctx.config.sendCode(check.subject, code, newPhone, 'verify');
-      } catch (error) {
         return {
-          success: false,
-          message: 'Failed to send verification code',
-          error,
-          status: 'ic',
+          success: true,
+          message: 'Phone number changed successfully. Verification code sent for next login.',
+          status: 'su',
           others,
         };
+      } catch (error) {
+        // Even if sending fails, the phone was already updated successfully
+        return {
+          success: true,
+          message: 'Phone number changed successfully. Verification code could not be sent.',
+          status: 'su',
+          others: {
+            ...others,
+            sendCodeError: error,
+          },
+        };
       }
-
-      // Store the new phone temporarily (not yet verified)
-      // We'll store it in a temp field or wait for verification step
-      // For now, return success indicating verification is required
-      return {
-        success: true,
-        message: 'Verification code sent to new phone number. Please verify to complete the change.',
-        status: 'su',
-        others: {
-          ...others,
-          requiresVerification: true,
-          tempPhone: newPhone,
-        },
-      };
     } else {
-      // No verification required - update phone immediately
-      await orm.updateMany('identities', {
-        where: (b) => b('id', '=', currentIdentity.id),
-        set: {
-          identifier: newPhone,
-          verified: false, // Reset verification status
-          updated_at: new Date(),
-        },
-      });
-
       return {
         success: true,
         message: 'Phone number changed successfully',

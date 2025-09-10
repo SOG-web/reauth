@@ -125,7 +125,17 @@ export const changeEmailStep: AuthStepV2<
       };
     }
 
-    // If verification is required, generate and send code
+    // Update email address immediately regardless of verification settings
+    await orm.updateMany('identities', {
+      where: (b) => b('id', '=', currentIdentity.id),
+      set: {
+        identifier: newEmail,
+        verified: false, // Reset verification status - will be verified on next login
+        updated_at: new Date(),
+      },
+    });
+
+    // If verification is enabled and sendCode is configured, send verification code for future login
     if (ctx.config?.verifyEmail && ctx.config.sendCode) {
       const generateCode = ctx.config.generateCode || defaultGenerateCode;
       const code = await generateCode(newEmail, check.subject);
@@ -162,42 +172,28 @@ export const changeEmailStep: AuthStepV2<
         });
       }
 
-      // Send verification code to NEW email address
+      // Send verification code to new email address for future login verification
       try {
         await ctx.config.sendCode(check.subject, code, newEmail, 'verify');
-      } catch (error) {
         return {
-          success: false,
-          message: 'Failed to send verification code',
-          error,
-          status: 'ic',
+          success: true,
+          message: 'Email address changed successfully. Verification code sent for next login.',
+          status: 'su',
           others,
         };
+      } catch (error) {
+        // Even if sending fails, the email was already updated successfully
+        return {
+          success: true,
+          message: 'Email address changed successfully. Verification code could not be sent.',
+          status: 'su',
+          others: {
+            ...others,
+            sendCodeError: error,
+          },
+        };
       }
-
-      // Store the new email temporarily (not yet verified)
-      // We'll complete the change when they verify the code
-      return {
-        success: true,
-        message: 'Verification code sent to new email address. Please verify to complete the change.',
-        status: 'su',
-        others: {
-          ...others,
-          requiresVerification: true,
-          tempEmail: newEmail,
-        },
-      };
     } else {
-      // No verification required - update email immediately
-      await orm.updateMany('identities', {
-        where: (b) => b('id', '=', currentIdentity.id),
-        set: {
-          identifier: newEmail,
-          verified: false, // Reset verification status
-          updated_at: new Date(),
-        },
-      });
-
       return {
         success: true,
         message: 'Email address changed successfully',
