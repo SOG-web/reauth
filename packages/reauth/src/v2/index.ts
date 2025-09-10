@@ -24,6 +24,10 @@ export { basePhonePasswordPluginV2, type PhonePasswordConfigV2 } from './plugins
 export { usernamePasswordSchemaV2 } from './plugins/username/schema.v2';
 export { baseUsernamePasswordPluginV2, type UsernamePasswordConfigV2 } from './plugins/username/plugin.v2';
 
+// MCP plugin
+export { mcpSchemaV2 } from './plugins/mcp/schema.v2';
+export { default as mcpPluginV2, baseMcpPluginV2, type MCPConfigV2 } from './plugins/mcp/plugin.v2';
+
 export { createAuthPluginV2, createAuthPluginLegacyV2 } from './utils/create-plugin.v2';
 
 export type {
