@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Google OAuth configuration
@@ -28,3 +30,12 @@ export const googleOAuthPlugin = createOAuthPlugin<GoogleOAuthConfig>(
 );
 
 export default googleOAuthPlugin;
+
+export const googleOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      google_id: column('google_id', 'varchar(255)').nullable().unique(),
+      google_data: column('google_data', 'json').nullable(),
+    },
+  },
+};

@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Facebook OAuth configuration
@@ -32,3 +34,12 @@ export const facebookOAuthPlugin = createOAuthPlugin<FacebookOAuthConfig>(
 );
 
 export default facebookOAuthPlugin;
+
+export const facebookOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      facebook_id: column('facebook_id', 'varchar(255)').nullable().unique(),
+      facebook_data: column('facebook_data', 'json').nullable(),
+    },
+  },
+};

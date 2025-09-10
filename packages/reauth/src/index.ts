@@ -5,3 +5,6 @@ export * from './types';
 
 // Utility exports
 export * from './utils';
+
+// Plugin utility exports
+export * from './plugins/utils';

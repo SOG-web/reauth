@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * GitHub OAuth configuration
@@ -28,3 +30,12 @@ export const githubOAuthPlugin = createOAuthPlugin<GitHubOAuthConfig>(
 );
 
 export default githubOAuthPlugin;
+
+export const githubOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      github_id: column('github_id', 'varchar(255)').nullable().unique(),
+      github_data: column('github_data', 'json').nullable(),
+    },
+  },
+};

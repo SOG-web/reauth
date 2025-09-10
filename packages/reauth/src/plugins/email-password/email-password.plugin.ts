@@ -1,7 +1,11 @@
 import { type } from 'arktype';
 import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
-import { createAuthPlugin } from '../utils/create-plugin';
+import {
+  createAuthPlugin,
+  createAuthPluginLegacy,
+} from '../utils/create-plugin';
+
 import { passwordSchema } from '../shared/validation';
 
 const loginSchema = type({
@@ -9,6 +13,51 @@ const loginSchema = type({
   password: passwordSchema,
   others: 'object?',
 });
+
+// Helper function to check if environment supports test users
+const isTestEnvironmentAllowed = (config: EmailPasswordConfig): boolean => {
+  if (!config.testUsers?.enabled) return false;
+
+  const env = config.testUsers.environment || 'development';
+  if (env === 'all') return true;
+
+  const nodeEnv = process.env.NODE_ENV;
+  return (
+    env === nodeEnv ||
+    (env === 'development' && (!nodeEnv || nodeEnv === 'development'))
+  );
+};
+
+// Helper function to find test user
+const findTestUser = (
+  email: string,
+  password: string,
+  config: EmailPasswordConfig,
+): TestUser | null => {
+  if (!isTestEnvironmentAllowed(config)) return null;
+
+  return (
+    config.testUsers?.users.find(
+      (user) => user.email === email && user.password === password,
+    ) || null
+  );
+};
+
+// Helper function to create test entity
+const createTestEntity = (testUser: TestUser): Entity => {
+  const baseEntity = {
+    id: `test-user-${testUser.email}`,
+    role: 'user',
+    created_at: new Date(),
+    updated_at: new Date(),
+    email: testUser.email,
+    email_verified: true,
+    password_hash: 'test-hash',
+    ...testUser.profile,
+  } as Entity;
+
+  return baseEntity;
+};
 
 const plugin: AuthPlugin<EmailPasswordConfig> = {
   name: 'email',
@@ -26,6 +75,39 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { email, password, others } = input;
+
+        // Check for test user first
+        const testUser = findTestUser(email, password, config);
+        if (testUser) {
+          const testEntity = createTestEntity(testUser);
+
+          const token = await container.cradle.reAuthEngine.createSession(
+            testEntity,
+            this.name,
+          );
+
+          if (!token.success) {
+            return {
+              success: false,
+              message: token.message!,
+              error: token.error!,
+              status: 'ic',
+              others,
+            };
+          }
+
+          // Create a copy of the entity with sensitive fields redacted
+          const serializedEntity = container.cradle.serializeEntity(testEntity);
+
+          return {
+            success: true,
+            message: 'Login successful (test user)',
+            token: token.token,
+            entity: serializedEntity,
+            others,
+            status: 'su',
+          };
+        }
 
         const entity = await container.cradle.entityService.findEntity(
           email,
@@ -65,7 +147,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
 
           return {
             success: false,
-            message: 'User Email verification is requred',
+            message: 'User Email verification is required',
             status: 'eq',
             others,
           };
@@ -149,6 +231,39 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { email, password, others } = input;
+        // Check for test user registration
+        const testUser = findTestUser(email, password, config);
+        if (testUser) {
+          const testEntity = createTestEntity(testUser);
+
+          const token = config.loginOnRegister
+            ? await container.cradle.reAuthEngine.createSession(
+                testEntity,
+                this.name,
+              )
+            : undefined;
+
+          if (token && !token.success) {
+            return {
+              success: false,
+              message: token.message!,
+              error: token.error!,
+              status: 'ic',
+              others,
+            };
+          }
+
+          const serializedEntity = container.cradle.serializeEntity(testEntity);
+
+          return {
+            success: true,
+            message: 'Register successful (test user)',
+            token: token?.token,
+            entity: serializedEntity,
+            others,
+            status: 'su',
+          };
+        }
 
         const en = await container.cradle.entityService.findEntity(
           email,
@@ -418,7 +533,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           };
         }
 
-        if (!entity.email_verified && !config.verifyEmail) {
+        if (!entity.email_verified && config.verifyEmail) {
           return {
             success: false,
             message: 'Email not verified',
@@ -621,20 +736,20 @@ const emailPasswordAuth = (
     override: Partial<AuthStep<EmailPasswordConfig>>;
   }[],
 ): AuthPlugin<EmailPasswordConfig> => {
-  return createAuthPlugin(config, plugin, overrideStep, {
+  return createAuthPluginLegacy(config, plugin, overrideStep, {
     verifyEmail: false,
     loginOnRegister: true,
-    codeLenght: 4,
+    codeLength: 4,
     generateCode: async function (email, entity) {
       if (this.codeType === 'numeric') {
-        return Array(this.codeLenght!)
+        return Array(this.codeLength!)
           .fill(0)
           .map(() => String.fromCharCode(48 + Math.floor(Math.random() * 10)))
           .join('');
       }
 
       if (this.codeType === 'alphanumeric') {
-        return Array(this.codeLenght!)
+        return Array(this.codeLength!)
           .fill(0)
           .map(() =>
             String.fromCharCode(
@@ -645,17 +760,13 @@ const emailPasswordAuth = (
       }
 
       if (this.codeType === 'alphabet') {
-        return Array(this.codeLenght!)
+        return Array(this.codeLength!)
           .fill(0)
-          .map(() =>
-            String.fromCharCode(
-              97 + Math.floor(Math.random() * (122 - 97 + 1)) + 97,
-            ),
-          )
+          .map(() => String.fromCharCode(97 + Math.floor(Math.random() * 26)))
           .join('');
       }
 
-      return Array(this.codeLenght!)
+      return Array(this.codeLength!)
         .fill(0)
         .map(() =>
           String.fromCharCode(
@@ -671,6 +782,8 @@ const emailPasswordAuth = (
 
 export default emailPasswordAuth;
 
+// Export helper functions for testing and external use
+export { isTestEnvironmentAllowed, findTestUser, createTestEntity };
 declare module '../../types' {
   interface EntityExtension {
     email: string | null;
@@ -682,7 +795,7 @@ declare module '../../types' {
   }
 }
 
-interface EmailPasswordConfig {
+export interface EmailPasswordConfig {
   /**
    * @default false
    * Whether to verify the email after registration
@@ -701,7 +814,7 @@ interface EmailPasswordConfig {
   /**
    * @default 4
    */
-  codeLenght?: number;
+  codeLength?: number;
   /**
    * Send function
    * @param entity The entity to send the code to
@@ -752,6 +865,34 @@ interface EmailPasswordConfig {
    *  }
    */
   rootHooks?: RootStepHooks;
+
+  /**
+   * Test user configuration for development/testing
+   */
+  testUsers?: TestUserConfig;
+}
+
+export interface TestUser {
+  email: string;
+  password: string;
+  profile: Record<string, any>; // More flexible than Partial<Entity>
+}
+
+export interface TestUserConfig {
+  /**
+   * @default false
+   * Whether test users are enabled
+   */
+  enabled: boolean;
+  /**
+   * Array of test user configurations
+   */
+  users: TestUser[];
+  /**
+   * @default 'development'
+   * Environment where test users are allowed
+   */
+  environment?: 'development' | 'test' | 'all';
 }
 
 //TODO: use change password step as an example on the docs

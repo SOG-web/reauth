@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Microsoft OAuth configuration
@@ -37,3 +39,12 @@ export const microsoftOAuthPlugin = createOAuthPlugin<MicrosoftOAuthConfig>(
 );
 
 export default microsoftOAuthPlugin;
+
+export const microsoftOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      microsoft_id: column('microsoft_id', 'varchar(255)').nullable().unique(),
+      microsoft_data: column('microsoft_data', 'json').nullable(),
+    },
+  },
+};

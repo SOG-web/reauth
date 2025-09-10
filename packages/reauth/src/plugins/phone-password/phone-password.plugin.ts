@@ -1,5 +1,8 @@
 import { AuthPlugin, AuthStep, Entity, RootStepHooks } from '../../types';
-import { createAuthPlugin } from '../utils/create-plugin';
+import {
+  createAuthPlugin,
+  createAuthPluginLegacy,
+} from '../utils/create-plugin';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
 import { type } from 'arktype';
 import { passwordSchema, phoneSchema } from '../shared/validation';
@@ -10,11 +13,59 @@ const loginValidation = type({
   others: 'object?',
 });
 
+// Helper function to check if environment supports test users
+const isTestEnvironmentAllowed = (config: PhonePasswordConfig): boolean => {
+  if (!config.testUsers?.enabled) return false;
+
+  const env = config.testUsers.environment || 'development';
+  if (env === 'all') return true;
+
+  const nodeEnv = process.env.NODE_ENV;
+  return (
+    env === nodeEnv ||
+    (env === 'development' && (!nodeEnv || nodeEnv === 'development'))
+  );
+};
+
+// Helper function to find test user
+const findTestUser = (
+  phone: string,
+  password: string,
+  config: PhonePasswordConfig,
+): PhoneTestUser | null => {
+  if (!isTestEnvironmentAllowed(config)) return null;
+
+  return (
+    config.testUsers?.users.find(
+      (user) => user.phone === phone && user.password === password,
+    ) || null
+  );
+};
+
+// Helper function to create test entity
+const createTestEntity = (testUser: PhoneTestUser): Entity => {
+  const baseEntity = {
+    id: `test-user-${testUser.phone}`,
+    role: 'user',
+    created_at: new Date(),
+    updated_at: new Date(),
+    phone: testUser.phone,
+    phone_verified: true,
+    password_hash: 'test-hash',
+    ...testUser.profile,
+  } as Entity;
+
+  return baseEntity;
+};
+
 const plugin: AuthPlugin<PhonePasswordConfig> = {
   name: 'phone',
   getSensitiveFields: () => [
     'phone_verification_code_expires_at',
     'phone_verification_code',
+    'password_hash',
+    'reset_password_code',
+    'reset_password_code_expires_at',
   ],
   steps: [
     {
@@ -24,6 +75,38 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { phone, password, others } = input;
+
+        // Check for test user first
+        const testUser = findTestUser(phone, password, config);
+        if (testUser) {
+          const testEntity = createTestEntity(testUser);
+
+          const token = await container.cradle.reAuthEngine.createSession(
+            testEntity,
+            this.name,
+          );
+
+          if (!token.success) {
+            return {
+              success: false,
+              message: token.message!,
+              error: token.error!,
+              status: 'ic',
+              others,
+            };
+          }
+
+          const serializedEntity = container.cradle.serializeEntity(testEntity);
+
+          return {
+            success: true,
+            message: 'Login successful (test user)',
+            token: token.token,
+            entity: serializedEntity,
+            status: 'su',
+            others,
+          };
+        }
 
         const entity = await container.cradle.entityService.findEntity(
           phone,
@@ -124,6 +207,40 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { phone, password, others } = input;
+
+        // Check for test user registration
+        const testUser = findTestUser(phone, password, config);
+        if (testUser) {
+          const testEntity = createTestEntity(testUser);
+
+          const token = config.loginOnRegister
+            ? await container.cradle.reAuthEngine.createSession(
+                testEntity,
+                this.name,
+              )
+            : undefined;
+
+          if (token && !token.success) {
+            return {
+              success: false,
+              message: token.message!,
+              error: token.error!,
+              status: 'ic',
+              others,
+            };
+          }
+
+          const serializedEntity = container.cradle.serializeEntity(testEntity);
+
+          return {
+            success: true,
+            message: 'Register successful (test user)',
+            token: token?.token,
+            entity: serializedEntity,
+            status: 'su',
+            others,
+          };
+        }
 
         const savePassword = await haveIbeenPawned(password);
 
@@ -320,8 +437,8 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
     },
     //TODO: add change phone step(this block since auth checking within plugin not yet finalized)
     {
-      name: 'password-reset',
-      description: 'Reset password',
+      name: 'send-reset-password',
+      description: 'Send reset password code',
       validationSchema: type({
         phone: phoneSchema,
         others: 'object?',
@@ -401,6 +518,101 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
         },
       },
     },
+    {
+      name: 'reset-password',
+      description: 'Reset password with code',
+      validationSchema: type({
+        phone: phoneSchema,
+        code: 'string',
+        password: passwordSchema,
+        others: 'object?',
+      }),
+      outputs: type({
+        success: 'boolean',
+        message: 'string',
+        status: 'string',
+      }),
+      hooks: {},
+      inputs: ['phone', 'code', 'password', 'others'],
+      run: async (input, pluginProperties) => {
+        const { container } = pluginProperties!;
+        const { phone, code, password, others } = input;
+
+        const entity = await container.cradle.entityService.findEntity(
+          phone,
+          'phone',
+        );
+
+        if (!entity) {
+          return {
+            success: false,
+            message: 'User not found',
+            status: 'unf',
+            others,
+          };
+        }
+
+        const savePassword = await haveIbeenPawned(password);
+
+        if (!savePassword) {
+          return {
+            success: false,
+            message: 'Password has been pawned',
+            status: 'ip',
+            others,
+          };
+        }
+
+        if (
+          entity.reset_password_code !== code ||
+          !entity.reset_password_code_expires_at ||
+          entity.reset_password_code_expires_at < new Date()
+        ) {
+          await container.cradle.entityService.updateEntity(
+            entity.phone!,
+            'phone',
+            {
+              ...entity,
+              reset_password_code: undefined,
+              reset_password_code_expires_at: undefined,
+            },
+          );
+          return {
+            success: false,
+            message: 'Invalid or expired code',
+            status: 'ic',
+            others,
+          };
+        }
+
+        await container.cradle.entityService.updateEntity(
+          entity.phone!,
+          'phone',
+          {
+            ...entity,
+            password_hash: await hashPassword(password),
+            reset_password_code: undefined,
+            reset_password_code_expires_at: undefined,
+          },
+        );
+
+        return {
+          success: true,
+          message: 'Password reset successful',
+          status: 'su',
+          others,
+        };
+      },
+      protocol: {
+        http: {
+          method: 'POST',
+          unf: 401,
+          ic: 400,
+          ip: 400,
+          su: 200,
+        },
+      },
+    },
   ],
   initialize: async function (container) {
     this.container = container;
@@ -422,11 +634,23 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
             index: true,
             defaultValue: true,
           },
+          password_hash: {
+            type: 'string',
+            nullable: true,
+          },
           phone_verification_code: {
             type: 'string',
             nullable: true,
           },
           phone_verification_code_expires_at: {
+            type: 'timestamp',
+            nullable: true,
+          },
+          reset_password_code: {
+            type: 'string',
+            nullable: true,
+          },
+          reset_password_code_expires_at: {
             type: 'timestamp',
             nullable: true,
           },
@@ -454,7 +678,7 @@ export default function phonePasswordAuth(
     throw new Error('sendCode function is required for phone-password plugin');
   }
 
-  return createAuthPlugin(config, plugin, overrideStep, {
+  return createAuthPluginLegacy(config, plugin, overrideStep, {
     verifyPhone: false,
     loginOnRegister: true,
     expireTime: '10m',
@@ -497,6 +721,9 @@ export default function phonePasswordAuth(
     },
   });
 }
+
+// Export helper functions for testing and external use
+export { isTestEnvironmentAllowed, findTestUser, createTestEntity };
 
 export interface PhonePasswordConfig {
   /**
@@ -553,6 +780,34 @@ export interface PhonePasswordConfig {
    *  }
    */
   rootHooks?: RootStepHooks;
+
+  /**
+   * Test user configuration for development/testing
+   */
+  testUsers?: PhoneTestUserConfig;
+}
+
+export interface PhoneTestUser {
+  phone: string;
+  password: string;
+  profile: Record<string, any>; // More flexible than Partial<Entity>
+}
+
+export interface PhoneTestUserConfig {
+  /**
+   * @default false
+   * Whether test users are enabled
+   */
+  enabled: boolean;
+  /**
+   * Array of test user configurations
+   */
+  users: PhoneTestUser[];
+  /**
+   * @default 'development'
+   * Environment where test users are allowed
+   */
+  environment?: 'development' | 'test' | 'all';
 }
 
 declare module '../../types' {
@@ -561,5 +816,8 @@ declare module '../../types' {
     phone_verified?: boolean;
     phone_verification_code?: string | number | null;
     phone_verification_code_expires_at?: Date | null;
+    password_hash: string | null;
+    reset_password_code?: string | number | null;
+    reset_password_code_expires_at?: Date | null;
   }
 }

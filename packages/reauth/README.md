@@ -136,7 +136,7 @@ const emailPassword = emailPasswordAuth({
   verifyEmail: true, // Require email verification
   loginOnRegister: true, // Automatically login after registration
   codeType: 'numeric', // Code type for verification/reset ('numeric' | 'alphanumeric' | 'alphabet')
-  codeLenght: 6, // Length of the verification code
+  codeLength: 6, // Length of the verification code
   resetPasswordCodeExpiresIn: 30 * 60 * 1000, // 30 minutes
 
   // Required for email verification and password reset

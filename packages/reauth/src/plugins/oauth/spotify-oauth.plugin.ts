@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Spotify OAuth configuration
@@ -37,3 +39,12 @@ export const spotifyOAuthPlugin = createOAuthPlugin<SpotifyOAuthConfig>(
 );
 
 export default spotifyOAuthPlugin;
+
+export const spotifyOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      spotify_id: column('spotify_id', 'varchar(255)').nullable().unique(),
+      spotify_data: column('spotify_data', 'json').nullable(),
+    },
+  },
+};

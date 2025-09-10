@@ -10,7 +10,11 @@ import {
 import { type } from 'arktype';
 import { extractEntityId, performBanCheck } from './ban-interceptor';
 import banSteps from './ban-steps';
-import { checkDependsOn, createAuthPlugin } from '../utils';
+import {
+  checkDependsOn,
+  createAuthPlugin,
+  createAuthPluginLegacy,
+} from '../utils';
 import { hashPassword, haveIbeenPawned } from '../../lib';
 
 interface AdminConfig {
@@ -426,7 +430,7 @@ export default function adminPlugin(
     override: Partial<AuthStep<AdminConfig>>;
   }[],
 ): AuthPlugin<AdminConfig> {
-  return createAuthPlugin(config, plugin, overrideStep, {});
+  return createAuthPluginLegacy(config, plugin, overrideStep, {});
 }
 
 // Extend the Entity type to include ban fields

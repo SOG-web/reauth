@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Twitch OAuth configuration
@@ -28,3 +30,12 @@ export const twitchOAuthPlugin = createOAuthPlugin<TwitchOAuthConfig>(
 );
 
 export default twitchOAuthPlugin;
+
+export const twitchOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      twitch_id: column('twitch_id', 'varchar(255)').nullable().unique(),
+      twitch_data: column('twitch_data', 'json').nullable(),
+    },
+  },
+};

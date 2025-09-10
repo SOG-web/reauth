@@ -3,6 +3,8 @@ import {
   createOAuthPlugin,
   BaseOAuthConfig,
 } from './utils/oauth-plugin-factory';
+import { column } from 'fumadb/schema';
+import { ReauthSchemaPlugin } from '../../types';
 
 /**
  * Apple OAuth configuration
@@ -48,3 +50,12 @@ export const appleOAuthPlugin = createOAuthPlugin<AppleOAuthConfig>(
 );
 
 export default appleOAuthPlugin;
+
+export const appleOAuthSchema: ReauthSchemaPlugin = {
+  extendTables: {
+    entities: {
+      apple_id: column('apple_id', 'varchar(255)').nullable().unique(),
+      apple_data: column('apple_data', 'json').nullable(),
+    },
+  },
+};

@@ -61,19 +61,25 @@ import {
   createOAuthPlugin,
   defaultUserInfoFetchers,
 } from './utils/oauth-plugin-factory';
-import googleOAuthPlugin from './google-oauth.plugin';
-import facebookOAuthPlugin from './facebook-oauth.plugin';
-import githubOAuthPlugin from './github-oauth.plugin';
-import linkedinOAuthPlugin from './linkedin-oauth.plugin';
-import discordOAuthPlugin from './discord-oauth.plugin';
-import auth0OAuthPlugin from './auth0-oauth.plugin';
-import spotifyOAuthPlugin from './spotify-oauth.plugin';
-import microsoftOAuthPlugin from './microsoft-oauth.plugin';
-import twitterOAuthPlugin from './twitter-oauth.plugin';
-import twitchOAuthPlugin from './twitch-oauth.plugin';
-import appleOAuthPlugin from './apple-oauth.plugin';
+import googleOAuthPlugin, { googleOAuthSchema } from './google-oauth.plugin';
+import facebookOAuthPlugin, {
+  facebookOAuthSchema,
+} from './facebook-oauth.plugin';
+import githubOAuthPlugin, { githubOAuthSchema } from './github-oauth.plugin';
+import linkedinOAuthPlugin, {
+  linkedinOAuthSchema,
+} from './linkedin-oauth.plugin';
+import discordOAuthPlugin, { discordOAuthSchema } from './discord-oauth.plugin';
+import auth0OAuthPlugin, { auth0OAuthSchema } from './auth0-oauth.plugin';
+import spotifyOAuthPlugin, { spotifyOAuthSchema } from './spotify-oauth.plugin';
+import microsoftOAuthPlugin, {
+  microsoftOAuthSchema,
+} from './microsoft-oauth.plugin';
+import twitterOAuthPlugin, { twitterOAuthSchema } from './twitter-oauth.plugin';
+import twitchOAuthPlugin, { twitchOAuthSchema } from './twitch-oauth.plugin';
+import appleOAuthPlugin, { appleOAuthSchema } from './apple-oauth.plugin';
 import workosOAuthPlugin from './workos-oauth.plugin';
-import redditOAuthPlugin from './reddit-oauth.plugin';
+import redditOAuthPlugin, { redditOAuthSchema } from './reddit-oauth.plugin';
 
 // Re-export everything as a default object for convenience
 export default {
@@ -95,4 +101,20 @@ export default {
   apple: appleOAuthPlugin,
   workos: workosOAuthPlugin,
   reddit: redditOAuthPlugin,
+};
+
+// Schema helpers for providers
+export const oauthSchemaPlugins = {
+  googleOAuthSchema,
+  facebookOAuthSchema,
+  githubOAuthSchema,
+  linkedinOAuthSchema,
+  discordOAuthSchema,
+  auth0OAuthSchema,
+  spotifyOAuthSchema,
+  microsoftOAuthSchema,
+  twitterOAuthSchema,
+  twitchOAuthSchema,
+  appleOAuthSchema,
+  redditOAuthSchema,
 };

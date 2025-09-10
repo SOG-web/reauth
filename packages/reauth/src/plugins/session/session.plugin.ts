@@ -2,7 +2,7 @@
 
 import { type } from 'arktype';
 import type { AuthPlugin, AuthStep, RootStepHooks } from '../../types';
-import { createAuthPlugin } from '../utils';
+import { createAuthPlugin, createAuthPluginLegacy } from '../utils';
 
 const plugin: AuthPlugin<SessionPluginConfig> = {
   name: 'session',
@@ -192,7 +192,7 @@ const sessionPlugin = (
     override: Partial<AuthStep<SessionPluginConfig>>;
   }[],
 ): AuthPlugin<SessionPluginConfig> => {
-  return createAuthPlugin(config, plugin, overrideStep);
+  return createAuthPluginLegacy(config, plugin, overrideStep);
 };
 
 export default sessionPlugin;
