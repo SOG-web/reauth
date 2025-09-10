@@ -37,8 +37,23 @@ describe('V2 Plugins Implementation', () => {
     expect(stepNames).toContain('change-password');
   });
 
+  it('should export email-or-username plugin from V2 index', async () => {
+    const { baseEmailOrUsernamePluginV2 } = await import('../index.js');
+    
+    expect(baseEmailOrUsernamePluginV2).toBeDefined();
+    expect(baseEmailOrUsernamePluginV2.name).toBe('email-or-username');
+    expect(baseEmailOrUsernamePluginV2.steps).toBeDefined();
+    expect(Array.isArray(baseEmailOrUsernamePluginV2.steps)).toBe(true);
+    
+    // Check that core steps are present
+    const stepNames = baseEmailOrUsernamePluginV2.steps?.map(step => step.name) || [];
+    expect(stepNames).toContain('login');
+    expect(stepNames).toContain('register');
+    expect(stepNames).toContain('change-password');
+  });
+
   it('should export schemas from V2 index', async () => {
-    const { phonePasswordSchemaV2, usernamePasswordSchemaV2 } = await import('../index.js');
+    const { phonePasswordSchemaV2, usernamePasswordSchemaV2, emailOrUsernameSchemaV2 } = await import('../index.js');
     
     expect(phonePasswordSchemaV2).toBeDefined();
     expect(phonePasswordSchemaV2.tables).toBeDefined();
@@ -47,5 +62,10 @@ describe('V2 Plugins Implementation', () => {
     expect(usernamePasswordSchemaV2).toBeDefined();
     expect(usernamePasswordSchemaV2.tables).toBeDefined();
     expect(usernamePasswordSchemaV2.tables?.username_identities).toBeDefined();
+    
+    expect(emailOrUsernameSchemaV2).toBeDefined();
+    expect(emailOrUsernameSchemaV2.tables).toBeDefined();
+    expect(emailOrUsernameSchemaV2.tables?.email_identities).toBeDefined();
+    expect(emailOrUsernameSchemaV2.tables?.username_identities).toBeDefined();
   });
 });

@@ -1,0 +1,175 @@
+import { type } from 'arktype';
+import type { AuthStepV2, AuthOutput } from '../../../types.v2';
+import type { EmailOrUsernameConfigV2 } from '../types';
+import { passwordSchema } from '../../../../plugins/shared/validation';
+import { 
+  detectInputType,
+  findTestUser
+} from '../utils';
+
+export type RegisterInput = {
+  emailOrUsername: string;
+  password: string;
+  others?: Record<string, any>;
+};
+
+export const registerValidation = type({
+  emailOrUsername: 'string',
+  password: passwordSchema,
+  others: 'object?',
+});
+
+export const registerStep: AuthStepV2<
+  RegisterInput,
+  AuthOutput,
+  EmailOrUsernameConfigV2
+> = {
+  name: 'register',
+  description: 'Register a new user with email or username and password',
+  validationSchema: registerValidation,
+  protocol: {
+    http: {
+      method: 'POST',
+      codes: { 
+        su: 201,  // Created successfully
+        eq: 200,  // Created but needs email verification
+        ic: 400,  // Invalid input
+        du: 409   // Duplicate user
+      },
+    },
+  },
+  inputs: ['emailOrUsername', 'password', 'others'],
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    'error?': 'string | object',
+    status: 'string',
+    'token?': 'string',
+    'subject?': 'object',
+    'others?': 'object',
+  }),
+  async run(input, ctx) {
+    const { emailOrUsername, password, others } = input;
+    const orm = await ctx.engine.getOrm();
+    
+    // Check if test user
+    const testUser = findTestUser(emailOrUsername, password, ctx.config || {});
+    if (testUser) {
+      // For test users, just return success without creating DB records
+      const subjectRow = { id: emailOrUsername };
+      let token: string | null = null;
+      
+      if (ctx.config?.loginOnRegister) {
+        const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
+        token = await ctx.engine.createSessionFor('subject', subjectRow.id, ttl);
+      }
+      
+      const subject = {
+        id: subjectRow.id,
+        emailOrUsername,
+        provider: 'email-or-username',
+        verified: true,
+        ...testUser.profile,
+      };
+      
+      return {
+        success: true,
+        message: 'Registration successful (test user)',
+        status: 'su',
+        token,
+        subject,
+        others,
+      };
+    }
+    
+    // Detect input type (email vs username)
+    const inputType = detectInputType(emailOrUsername);
+    const providerType = inputType; // 'email' or 'username'
+    
+    // Check if user already exists
+    const existingIdentity = await orm.findFirst('identities', {
+      where: (b) =>
+        b.and(b('provider', '=', providerType), b('identifier', '=', emailOrUsername)),
+    });
+
+    if (existingIdentity) {
+      return {
+        success: false,
+        message: `User with this ${inputType} already exists`,
+        status: 'du',
+        others,
+      };
+    }
+
+    // Hash password
+    const { hashPassword } = await import('../../../../lib/password');
+    const hashedPassword = await hashPassword(password);
+
+    // Create subject
+    const subject = await orm.create('subjects', {});
+    const subjectId = subject.id as string;
+
+    // Create credentials
+    await orm.create('credentials', {
+      subject_id: subjectId,
+      password_hash: hashedPassword,
+    });
+
+    // Create identity
+    const identity = await orm.create('identities', {
+      subject_id: subjectId,
+      provider: providerType,
+      identifier: emailOrUsername,
+      verified: inputType === 'username', // Username is auto-verified, email may need verification
+    });
+
+    // Create provider-specific identity record
+    if (inputType === 'email') {
+      await orm.create('email_identities', {
+        identity_id: identity.id,
+      });
+    } else {
+      await orm.create('username_identities', {
+        identity_id: identity.id,
+      });
+    }
+
+    // Handle login after registration
+    let token: string | null = null;
+    if (ctx.config?.loginOnRegister) {
+      const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
+      token = await ctx.engine.createSessionFor('subject', subjectId, ttl);
+    }
+
+    // Check if email verification is needed
+    if (inputType === 'email' && ctx.config?.emailConfig?.verifyEmail) {
+      return {
+        success: false,
+        message: 'Registration successful. Please verify your email.',
+        status: 'eq',
+        token,
+        subject: {
+          id: subjectId,
+          [inputType]: emailOrUsername,
+          provider: inputType,
+          verified: false,
+        },
+        others,
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Registration successful',
+      status: 'su',
+      token,
+      subject: {
+        id: subjectId,
+        [inputType]: emailOrUsername,
+        provider: inputType,
+        verified: true,
+      },
+      others,
+    };
+  },
+};
