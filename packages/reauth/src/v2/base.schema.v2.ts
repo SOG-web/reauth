@@ -35,11 +35,27 @@ export default function buildSchemaV2(plugins: ReauthSchemaPlugin[] = []) {
     verified: column('verified', 'bool').defaultTo(false),
     created_at: column('created_at', 'timestamp').defaultTo$('now'),
     updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
-  }).unique('identities_provider_identifier_uk', ['identifier']);
+  }).unique('identities_provider_identifier_uk', ['provider', 'identifier']);
   // gather plugin tables
   const pluginTables = plugins
     .map((p) => p.tables ?? {})
     .reduce((acc, t) => Object.assign(acc, t), {} as Record<string, any>);
+
+  // Prevent plugin tables from shadowing core tables
+  const coreTableNames = new Set([
+    'sessions',
+    'subjects',
+    'credentials',
+    'identities',
+  ]);
+  const collisions = Object.keys(pluginTables).filter((k) =>
+    coreTableNames.has(k),
+  );
+  if (collisions.length) {
+    throw new Error(
+      `Plugin table name collision(s) with core tables: ${collisions.join(', ')}`,
+    );
+  }
 
   const tables = {
     sessions: sessionsV2,

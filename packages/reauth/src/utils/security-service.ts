@@ -126,7 +126,7 @@ export class BaseSecurityService implements SecurityService {
     // Basic implementation - production should use bcrypt or similar
     const crypto = await import('node:crypto');
     const actualSalt = salt || crypto.randomBytes(16).toString('hex');
-    const hash = crypto.pbkdf2Sync(data, actualSalt, 10000, 64, 'sha512');
+    const hash = crypto.pbkdf2Sync(data, actualSalt, 600000, 64, 'sha512');
     return `${actualSalt}:${hash.toString('hex')}`;
   }
 

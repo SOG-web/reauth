@@ -6,6 +6,10 @@ export const emailIdentities = table('email_identities', {
   id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
   identity_id: column('identity_id', 'varchar(255)'),
   verification_code: column('verification_code', 'varchar(255)').nullable(),
+  verification_code_expires_at: column(
+    'verification_code_expires_at',
+    'timestamp',
+  ).nullable(),
   reset_code: column('reset_code', 'varchar(255)').nullable(),
   reset_code_expires_at: column(
     'reset_code_expires_at',

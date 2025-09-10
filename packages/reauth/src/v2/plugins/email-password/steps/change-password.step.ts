@@ -1,7 +1,11 @@
 import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailPasswordConfigV2 } from '../types';
-import { verifyPasswordHash, hashPassword } from '../../../../lib/password';
+import {
+  verifyPasswordHash,
+  hashPassword,
+  haveIbeenPawned,
+} from '../../../../lib/password';
 import { passwordSchema } from '../../../../plugins/shared/validation';
 
 export type ChangePasswordInput = {
@@ -29,7 +33,12 @@ export const changePasswordStep: AuthStepV2<
     http: { method: 'POST', codes: { su: 200, ip: 400, ic: 400 }, auth: true },
   },
   inputs: ['token', 'oldPassword', 'newPassword', 'others'],
-  outputs: type({ success: 'boolean', message: 'string', status: 'string' }),
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    status: 'string',
+    'others?': 'object',
+  }),
   async run(input, ctx) {
     const { token, oldPassword, newPassword, others } = input;
 
@@ -62,6 +71,17 @@ export const changePasswordStep: AuthStepV2<
       return {
         success: false,
         message: 'Invalid credentials',
+        status: 'ip',
+        others,
+      };
+
+    const safePassword = await haveIbeenPawned(newPassword);
+
+    if (!safePassword)
+      return {
+        success: false,
+        message:
+          'The password has been used before in a data breach. Please choose a different one.',
         status: 'ip',
         others,
       };

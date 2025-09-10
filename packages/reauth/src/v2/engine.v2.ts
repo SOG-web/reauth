@@ -188,8 +188,8 @@ export class ReAuthEngineV2 {
       // Plugin root-level before hook
       if (plugin.rootHooks?.before) {
         const maybeNewInput = await plugin.rootHooks.before(
-          input,
-          ctx as any,
+          input as unknown as AuthInput,
+          ctx,
           step as any,
         );
         if (typeof maybeNewInput !== 'undefined') input = maybeNewInput as I;
@@ -204,7 +204,7 @@ export class ReAuthEngineV2 {
       if (plugin.rootHooks?.after) {
         const maybeNewOutput = await plugin.rootHooks.after(
           output,
-          ctx as any,
+          ctx,
           step as any,
         );
         if (typeof maybeNewOutput !== 'undefined')
@@ -291,7 +291,10 @@ export class ReAuthEngineV2 {
     let current: AuthInput | AuthOutput = data;
     const hooks = this.sessionHooks.filter((h) => h.type === type);
     if (type === 'onError' && error) {
-      await Promise.all(hooks.map((h) => h.fn(current, this.container, error)));
+      for (const h of hooks) {
+        const res = await h.fn(current, this.container, error);
+        if (typeof res !== 'undefined') current = res;
+      }
       return current;
     }
     for (const h of hooks) {
@@ -336,9 +339,9 @@ export class ReAuthEngineV2 {
   }
 
   // The DI container may store heterogeneous services; unknown is the safest accurate return type.
-  getService<T = unknown>(name: string): T {
+  getService<T = unknown>(name: string) {
     // Awilix resolve is string-keyed; casting the key is necessary.
-    return this.container.resolve(name as unknown as never) as T;
+    return this.container.resolve<T>(name as keyof ReAuthCradleV2Extension);
   }
 
   // Convenience wrapper to mirror V1's executeStep signature

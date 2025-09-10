@@ -2,6 +2,7 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailPasswordConfigV2 } from '../types';
 import { genCode } from '../utils';
+import { hashPassword } from '../../../../lib/password';
 
 export type ResendVerificationInput = {
   email: string;
@@ -28,7 +29,12 @@ export const resendVerificationStep: AuthStepV2<
     },
   },
   inputs: ['email', 'others'],
-  outputs: type({ success: 'boolean', message: 'string', status: 'string' }),
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    status: 'string',
+    'others?': 'object',
+  }),
   async run(input, ctx) {
     const { email, others } = input;
 
@@ -64,14 +70,21 @@ export const resendVerificationStep: AuthStepV2<
     const code = ctx.config?.generateCode
       ? await ctx.config.generateCode(email)
       : genCode(ctx.config);
+    const hashedCode = await hashPassword(String(code));
+    const ms = ctx.config?.verificationCodeExpiresIn ?? 30 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + ms);
 
     await orm.upsert('email_identities', {
       where: (b) => b('identity_id', '=', identity.id),
       create: {
         identity_id: identity.id,
-        verification_code: code,
+        verification_code: hashedCode,
+        verification_code_expires_at: expiresAt,
       },
-      update: { verification_code: code },
+      update: {
+        verification_code: hashedCode,
+        verification_code_expires_at: expiresAt,
+      },
     });
 
     await ctx.config.sendCode(

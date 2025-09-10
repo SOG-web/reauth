@@ -2,7 +2,11 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailPasswordConfigV2 } from '../types';
 import { passwordSchema } from '../../../../plugins/shared/validation';
-import { haveIbeenPawned, hashPassword } from '../../../../lib/password';
+import {
+  haveIbeenPawned,
+  hashPassword,
+  verifyPasswordHash,
+} from '../../../../lib/password';
 
 export type ResetPasswordInput = {
   email: string;
@@ -33,7 +37,12 @@ export const resetPasswordStep: AuthStepV2<
     },
   },
   inputs: ['email', 'code', 'newPassword', 'others'],
-  outputs: type({ success: 'boolean', message: 'string', status: 'string' }),
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    status: 'string',
+    'others?': 'object',
+  }),
   async run(input, ctx) {
     const { email, code, newPassword, others } = input;
     const orm = await ctx.engine.getOrm();
@@ -46,8 +55,8 @@ export const resetPasswordStep: AuthStepV2<
     if (!identity)
       return {
         success: false,
-        message: 'User not found',
-        status: 'unf',
+        message: 'Invalid email or code',
+        status: 'ip',
         others,
       };
 
@@ -61,25 +70,40 @@ export const resetPasswordStep: AuthStepV2<
     if (!meta?.reset_code)
       return {
         success: false,
-        message: 'No reset pending',
-        status: 'ic',
+        message: 'Invalid email or code',
+        status: 'ip',
         others,
       };
 
-    if (String(meta.reset_code) !== String(code))
-      return { success: false, message: 'Invalid code', status: 'ip', others };
+    const validCode = await verifyPasswordHash(
+      String(meta.reset_code),
+      String(code),
+    );
+    if (!validCode)
+      return {
+        success: false,
+        message: 'Invalid email or code',
+        status: 'ip',
+        others,
+      };
 
     if (
       meta.reset_code_expires_at &&
       new Date(meta.reset_code_expires_at).getTime() < Date.now()
     )
-      return { success: false, message: 'Code expired', status: 'ip', others };
+      return {
+        success: false,
+        message: 'Invalid email or code',
+        status: 'ip',
+        others,
+      };
 
     const safe = await haveIbeenPawned(newPassword);
     if (!safe)
       return {
         success: false,
-        message: 'Password has been pawned',
+        message:
+          'The password has been used before in a data breach. Please choose a different one.',
         status: 'ip',
         others,
       };

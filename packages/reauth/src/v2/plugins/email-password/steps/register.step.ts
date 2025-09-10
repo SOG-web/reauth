@@ -33,13 +33,16 @@ export const registerStep: AuthStepV2<
     status: 'string',
     'token?': 'string',
     'subject?': 'object',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { email, password, others } = input;
     const orm = await ctx.engine.getOrm();
 
     // Test user registration (parity with V1)
-    const tu = findTestUser(email, password, ctx.config || ({} as any));
+    const tu = ctx.config
+      ? findTestUser(email, password, ctx.config)
+      : undefined;
     if (tu) {
       const subject = { id: email };
       const loginOnRegister = ctx.config?.loginOnRegister ?? true;
@@ -82,7 +85,7 @@ export const registerStep: AuthStepV2<
     if (existing)
       return {
         success: false,
-        message: 'User already exist',
+        message: 'User already exists',
         status: 'ip',
         others,
       };
@@ -92,7 +95,8 @@ export const registerStep: AuthStepV2<
     if (!safePassword)
       return {
         success: false,
-        message: 'Password has been pawned',
+        message:
+          'The password has been used before in a data breach. Please choose a different one.',
         status: 'ip',
         others,
       };
@@ -110,16 +114,21 @@ export const registerStep: AuthStepV2<
       verified: false,
     });
 
-    if (ctx.config?.verifyEmail && ctx.config.sendCode) {
+    if (ctx.config?.verifyEmail) {
       const code = ctx.config?.generateCode
         ? await ctx.config.generateCode(email, { id: subject.id })
         : genCode(ctx.config);
+      const hashedCode = await hashPassword(String(code));
+      const ms = ctx.config?.verificationCodeExpiresIn ?? 30 * 60 * 1000;
+      const expiresAt = new Date(Date.now() + ms);
       await orm.create('email_identities', {
         identity_id: identity.id,
-        verification_code: code,
+        verification_code: hashedCode,
+        verification_code_expires_at: expiresAt,
       });
-
-      await ctx.config.sendCode({ id: subject.id }, code, email, 'verify');
+      if (ctx.config?.sendCode) {
+        await ctx.config.sendCode({ id: subject.id }, code, email, 'verify');
+      }
     }
 
     const loginOnRegister = ctx.config?.loginOnRegister ?? true;

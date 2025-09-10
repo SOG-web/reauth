@@ -6,13 +6,29 @@ import type {
 } from './types.v2';
 
 function defaultTokenFactory(): string {
-  // NOTE: Replace with a cryptographically secure generator in production
-  // or inject your own tokenFactory that uses crypto/webcrypto.
-  return (
-    Date.now().toString(36) +
-    Math.random().toString(36).slice(2) +
-    Math.random().toString(36).slice(2)
-  );
+  const g: any = globalThis as any;
+  // Prefer Web Crypto when available (browser/Node 19+).
+  if (g?.crypto?.randomUUID) {
+    return g.crypto.randomUUID();
+  }
+  if (g?.crypto?.getRandomValues) {
+    const buf = new Uint8Array(32);
+    g.crypto.getRandomValues(buf);
+    return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  try {
+    // Node fallback.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { randomBytes } = require('node:crypto');
+    return randomBytes(32).toString('hex');
+  } catch {
+    // Last-resort legacy fallback to preserve current behavior.
+    return (
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2) +
+      Math.random().toString(36).slice(2)
+    );
+  }
 }
 
 export class FumaSessionServiceV2 implements SessionServiceV2 {
@@ -30,6 +46,10 @@ export class FumaSessionServiceV2 implements SessionServiceV2 {
     const token = this.tokenFactory();
     const version = await this.dbClient.version();
     const orm = this.dbClient.orm(version);
+
+    if (ttlSeconds && ttlSeconds < 30) {
+      throw new Error("'ttlSeconds' must be greater than or equal to 30");
+    }
 
     const expiresAt = ttlSeconds
       ? new Date(Date.now() + ttlSeconds * 1000)

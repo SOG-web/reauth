@@ -39,48 +39,59 @@ export default function buildSchema(
 
   // merge extensions into core columns
   for (const [tableName, columns] of Object.entries(extendTableMaps)) {
-    if (!coreColumnMaps[tableName] && !pluginTables[tableName]) {
-      // if a plugin tries to extend a non-existent table, create it as plugin table
-      coreColumnMaps[tableName] = {};
+    // merge extensions into core columns
+    for (const [tableName, columns] of Object.entries(extendTableMaps)) {
+      if (!coreColumnMaps[tableName]) {
+        if (pluginTables[tableName]) {
+          // Table exists in plugin tables, skip extending to avoid conflicts
+          console.warn(
+            `Cannot extend plugin table "${tableName}" - plugin tables cannot be extended`,
+          );
+          continue;
+        }
+        // Create new table entry for extension
+        coreColumnMaps[tableName] = {};
+      }
+      coreColumnMaps[tableName] = {
+        ...(coreColumnMaps[tableName] ?? {}),
+        ...columns,
+      };
     }
-    coreColumnMaps[tableName] = {
-      ...(coreColumnMaps[tableName] ?? {}),
-      ...columns,
-    };
-  }
 
-  // rebuild tables from merged column maps (core + extended), then overlay plugin-provided tables
-  const rebuiltTables = Object.fromEntries(
-    Object.entries(coreColumnMaps).map(([name, cols]) => [
-      name,
-      table(name, cols),
-    ]),
-  );
+    // rebuild tables from merged column maps (core + extended), then overlay plugin-provided tables
+    const rebuiltTables = Object.fromEntries(
+      Object.entries(coreColumnMaps).map(([name, cols]) => [
+        name,
+        table(name, cols),
+      ]),
+    );
 
-  const tables = { ...rebuiltTables, ...pluginTables };
+    const tables = { ...rebuiltTables, ...pluginTables };
 
-  const relationLists: Record<
-    string,
-    Array<(b: any) => Record<string, unknown>>
-  > = {};
-  for (const p of plugins) {
-    for (const [tableName, factory] of Object.entries(p.relations ?? {})) {
-      (relationLists[tableName] ||= []).push(factory);
+    const relationLists: Record<
+      string,
+      Array<(b: any) => Record<string, unknown>>
+    > = {};
+    for (const p of plugins) {
+      for (const [tableName, factory] of Object.entries(p.relations ?? {})) {
+        (relationLists[tableName] ||= []).push(factory);
+      }
     }
+
+    const relations = Object.fromEntries(
+      Object.entries(relationLists).map(([tableName, factories]) => [
+        tableName,
+        (builder: any) =>
+          Object.assign({}, ...factories.map((f) => f(builder))),
+      ]),
+    );
+
+    return schema({
+      version: '1.0.0',
+      tables,
+      relations,
+    });
   }
-
-  const relations = Object.fromEntries(
-    Object.entries(relationLists).map(([tableName, factories]) => [
-      tableName,
-      (builder: any) => Object.assign({}, ...factories.map((f) => f(builder))),
-    ]),
-  );
-
-  return schema({
-    version: '1.0.0',
-    tables,
-    relations,
-  });
 }
 
 // // app setup

@@ -146,7 +146,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
 
           return {
             success: false,
-            message: 'User Email verification is requred',
+            message: 'User Email verification is required',
             status: 'eq',
             others,
           };
@@ -533,7 +533,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
           };
         }
 
-        if (!entity.email_verified && !config.verifyEmail) {
+        if (!entity.email_verified && config.verifyEmail) {
           return {
             success: false,
             message: 'Email not verified',
@@ -739,17 +739,17 @@ const emailPasswordAuth = (
   return createAuthPluginLegacy(config, plugin, overrideStep, {
     verifyEmail: false,
     loginOnRegister: true,
-    codeLenght: 4,
+    codeLength: 4,
     generateCode: async function (email, entity) {
       if (this.codeType === 'numeric') {
-        return Array(this.codeLenght!)
+        return Array(this.codeLength!)
           .fill(0)
           .map(() => String.fromCharCode(48 + Math.floor(Math.random() * 10)))
           .join('');
       }
 
       if (this.codeType === 'alphanumeric') {
-        return Array(this.codeLenght!)
+        return Array(this.codeLength!)
           .fill(0)
           .map(() =>
             String.fromCharCode(
@@ -760,17 +760,13 @@ const emailPasswordAuth = (
       }
 
       if (this.codeType === 'alphabet') {
-        return Array(this.codeLenght!)
+        return Array(this.codeLength!)
           .fill(0)
-          .map(() =>
-            String.fromCharCode(
-              97 + Math.floor(Math.random() * (122 - 97 + 1)) + 97,
-            ),
-          )
+          .map(() => String.fromCharCode(97 + Math.floor(Math.random() * 26)))
           .join('');
       }
 
-      return Array(this.codeLenght!)
+      return Array(this.codeLength!)
         .fill(0)
         .map(() =>
           String.fromCharCode(
@@ -819,7 +815,7 @@ export interface EmailPasswordConfig {
   /**
    * @default 4
    */
-  codeLenght?: number;
+  codeLength?: number;
   /**
    * Send function
    * @param entity The entity to send the code to

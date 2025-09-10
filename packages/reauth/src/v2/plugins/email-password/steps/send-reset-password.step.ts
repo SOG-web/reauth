@@ -2,6 +2,7 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailPasswordConfigV2 } from '../types';
 import { genCode } from '../utils';
+import { hashPassword } from '../../../../lib/password';
 
 export type SendResetInput = { email: string; others?: Record<string, any> };
 export const sendResetValidation = type({
@@ -25,7 +26,12 @@ export const sendResetStep: AuthStepV2<
     },
   },
   inputs: ['email', 'others'],
-  outputs: type({ success: 'boolean', message: 'string', status: 'string' }),
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    status: 'string',
+    'others?': 'object',
+  }),
   async run(input, ctx) {
     const { email, others } = input;
 
@@ -44,17 +50,17 @@ export const sendResetStep: AuthStepV2<
 
     if (!identity)
       return {
-        success: false,
-        message: 'User not found',
-        status: 'unf',
+        success: true,
+        message: 'If the account exists, we sent a reset code',
+        status: 'su',
         others,
       };
 
-    if (!identity.verified && !(ctx.config?.verifyEmail ?? false)) {
+    if (!identity.verified && ctx.config?.verifyEmail) {
       return {
-        success: false,
-        message: 'Email not verified',
-        status: 'ev',
+        success: true,
+        message: 'Please verify your email first',
+        status: 'su',
         others,
       };
     }
@@ -62,6 +68,7 @@ export const sendResetStep: AuthStepV2<
     const code = ctx.config?.generateCode
       ? await ctx.config.generateCode(email)
       : genCode(ctx.config);
+    const hashedCode = await hashPassword(String(code));
 
     const ms = ctx.config?.resetPasswordCodeExpiresIn ?? 30 * 60 * 1000;
     const expiresAt = new Date(Date.now() + ms);
@@ -70,10 +77,10 @@ export const sendResetStep: AuthStepV2<
       where: (b) => b('identity_id', '=', identity.id),
       create: {
         identity_id: identity.id,
-        reset_code: code,
+        reset_code: hashedCode,
         reset_code_expires_at: expiresAt,
       },
-      update: { reset_code: code, reset_code_expires_at: expiresAt },
+      update: { reset_code: hashedCode, reset_code_expires_at: expiresAt },
     });
 
     await ctx.config.sendCode(

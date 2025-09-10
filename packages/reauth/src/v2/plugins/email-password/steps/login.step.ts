@@ -3,7 +3,7 @@ import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import { findTestUser, genCode } from '../utils';
 import type { EmailPasswordConfigV2 } from '../types';
 import { passwordSchema } from '../../../../plugins/shared/validation';
-import { verifyPasswordHash } from '../../../../lib/password';
+import { verifyPasswordHash, hashPassword } from '../../../../lib/password';
 
 export type LoginInput = {
   email: string;
@@ -28,7 +28,7 @@ export const loginStep: AuthStepV2<
   protocol: {
     http: {
       method: 'POST',
-      codes: { unf: 401, ip: 400, su: 200, eq: 300, ic: 400 },
+      codes: { unf: 401, ip: 401, su: 200, eq: 403, ic: 400 },
     },
   },
   inputs: ['email', 'password', 'others'],
@@ -39,6 +39,7 @@ export const loginStep: AuthStepV2<
     status: 'string',
     'token?': 'string',
     'subject?': 'object',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { email, password, others } = input;
@@ -84,45 +85,12 @@ export const loginStep: AuthStepV2<
     if (!identity)
       return {
         success: false,
-        message: 'User not found',
-        status: 'unf',
+        message: 'Invalid email or password',
+        status: 'ip',
         others,
       };
 
-    if (ctx.config?.verifyEmail && !identity.verified) {
-      if (!ctx.config.sendCode) {
-        throw new Error(
-          'email verification is on but no sendCode function provider. Please check the email-password plugin config option',
-        );
-      }
-      // generate and send code if configured
-      const code = ctx.config.generateCode
-        ? await ctx.config.generateCode(email, { id: identity.subject_id })
-        : genCode(ctx.config);
-
-      await orm.upsert('email_identities', {
-        where: (b) => b('identity_id', '=', identity.id),
-        create: {
-          identity_id: identity.id,
-          verification_code: code,
-        },
-        update: { verification_code: code },
-      });
-
-      if (ctx.config.sendCode)
-        await ctx.config.sendCode(
-          { id: identity.subject_id },
-          code,
-          email,
-          'verify',
-        );
-      return {
-        success: false,
-        message: 'User Email verification is requred',
-        status: 'eq',
-        others,
-      };
-    }
+    // defer verify-email flow until after password verification
 
     // Load credentials for subject
     const creds = await orm.findFirst('credentials', {
@@ -146,10 +114,55 @@ export const loginStep: AuthStepV2<
     if (!ok)
       return {
         success: false,
-        message: 'Invalid password',
+        message: 'Invalid email or password',
         status: 'ip',
         others,
       };
+
+    // Only after successful password verification, handle verify-email flow
+    if (ctx.config?.verifyEmail && !identity.verified) {
+      if (!ctx.config.sendCode) {
+        throw new Error(
+          'email verification is on but no sendCode function provider. Please check the email-password plugin config option',
+        );
+      }
+
+      // generate and send code if configured
+      const code = ctx.config.generateCode
+        ? await ctx.config.generateCode(email, { id: identity.subject_id })
+        : genCode(ctx.config);
+      // store hash of code and set expiry (TTL)
+      const hashedCode = await hashPassword(String(code));
+      const ms = ctx.config?.verificationCodeExpiresIn ?? 30 * 60 * 1000;
+      const expiresAt = new Date(Date.now() + ms);
+
+      await orm.upsert('email_identities', {
+        where: (b) => b('identity_id', '=', identity.id),
+        create: {
+          identity_id: identity.id,
+          verification_code: hashedCode,
+          verification_code_expires_at: expiresAt,
+        },
+        update: {
+          verification_code: hashedCode,
+          verification_code_expires_at: expiresAt,
+        },
+      });
+
+      if (ctx.config.sendCode)
+        await ctx.config.sendCode(
+          { id: identity.subject_id },
+          code,
+          email,
+          'verify',
+        );
+      return {
+        success: false,
+        message: 'Email verification required',
+        status: 'eq',
+        others,
+      };
+    }
 
     const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
     const token = await ctx.engine.createSessionFor(

@@ -1,4 +1,5 @@
 import { type } from 'arktype';
+import { verifyPasswordHash } from '../../../../lib/password';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailPasswordConfigV2 } from '../types';
 
@@ -29,7 +30,12 @@ export const verifyEmailStep: AuthStepV2<
     },
   },
   inputs: ['email', 'code', 'others'],
-  outputs: type({ success: 'boolean', message: 'string', status: 'string' }),
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    status: 'string',
+    others: 'object?',
+  }),
   async run(input, ctx) {
     const { email, code, others } = input;
     const orm = await ctx.engine.getOrm();
@@ -42,8 +48,8 @@ export const verifyEmailStep: AuthStepV2<
     if (!identity)
       return {
         success: false,
-        message: 'User not found',
-        status: 'unf',
+        message: 'Invalid Email or Code',
+        status: 'ic',
         others,
       };
 
@@ -57,18 +63,41 @@ export const verifyEmailStep: AuthStepV2<
 
     const meta = (await orm.findFirst('email_identities', {
       where: (b: any) => b('identity_id', '=', identity.id),
-    })) as { verification_code?: string | null } | null;
+    })) as {
+      verification_code?: string | null;
+      verification_code_expires_at?: Date | null;
+    } | null;
 
     if (!meta || !meta.verification_code)
       return {
         success: false,
-        message: 'No verification pending',
+        message: 'Invalid Email or Code',
         status: 'ic',
         others,
       };
 
-    if (String(meta.verification_code) !== String(code))
-      return { success: false, message: 'Invalid code', status: 'ip', others };
+    if (
+      meta.verification_code_expires_at &&
+      new Date(meta.verification_code_expires_at).getTime() < Date.now()
+    )
+      return {
+        success: false,
+        message: 'Invalid Email or Code',
+        status: 'ic',
+        others,
+      };
+
+    const ok = await verifyPasswordHash(
+      String(meta.verification_code),
+      String(code),
+    );
+    if (!ok)
+      return {
+        success: false,
+        message: 'Invalid Email or Code',
+        status: 'ic',
+        others,
+      };
 
     await (orm as any).updateMany('identities', {
       where: (b: any) => b('id', '=', identity.id),
@@ -77,7 +106,7 @@ export const verifyEmailStep: AuthStepV2<
 
     await (orm as any).updateMany('email_identities', {
       where: (b: any) => b('identity_id', '=', identity.id),
-      set: { verification_code: null },
+      set: { verification_code: null, verification_code_expires_at: null },
     });
 
     return { success: true, message: 'Email verified', status: 'su', others };
