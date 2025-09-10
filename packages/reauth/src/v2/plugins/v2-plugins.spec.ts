@@ -53,7 +53,7 @@ describe('V2 Plugins Implementation', () => {
   });
 
   it('should export schemas from V2 index', async () => {
-    const { phonePasswordSchemaV2, usernamePasswordSchemaV2, emailOrUsernameSchemaV2 } = await import('../index.js');
+    const { phonePasswordSchemaV2, usernamePasswordSchemaV2 } = await import('../index.js');
     
     expect(phonePasswordSchemaV2).toBeDefined();
     expect(phonePasswordSchemaV2.tables).toBeDefined();
@@ -62,10 +62,5 @@ describe('V2 Plugins Implementation', () => {
     expect(usernamePasswordSchemaV2).toBeDefined();
     expect(usernamePasswordSchemaV2.tables).toBeDefined();
     expect(usernamePasswordSchemaV2.tables?.username_identities).toBeDefined();
-    
-    expect(emailOrUsernameSchemaV2).toBeDefined();
-    expect(emailOrUsernameSchemaV2.tables).toBeDefined();
-    expect(emailOrUsernameSchemaV2.tables?.email_identities).toBeDefined();
-    expect(emailOrUsernameSchemaV2.tables?.username_identities).toBeDefined();
   });
 });

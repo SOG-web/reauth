@@ -23,15 +23,17 @@ describe('Email-or-username Plugin Implementation', () => {
     expect(stepNames).toContain('change-password');
   });
 
-  it('should export schema correctly', async () => {
-    const { emailOrUsernameSchemaV2 } = await import('./schema.v2');
+  it('should use schemas from underlying plugins', async () => {
+    // This plugin doesn't have its own schema - it delegates to underlying plugins
+    const { emailPasswordSchemaV2 } = await import('../email-password/schema.v2');
+    const { usernamePasswordSchemaV2 } = await import('../username/schema.v2');
     
-    expect(emailOrUsernameSchemaV2).toBeDefined();
-    expect(emailOrUsernameSchemaV2.tables).toBeDefined();
+    // Verify that underlying plugin schemas are available
+    expect(emailPasswordSchemaV2).toBeDefined();
+    expect(emailPasswordSchemaV2.tables?.email_identities).toBeDefined();
     
-    // Should include tables from both underlying plugins
-    expect(emailOrUsernameSchemaV2.tables?.email_identities).toBeDefined();
-    expect(emailOrUsernameSchemaV2.tables?.username_identities).toBeDefined();
+    expect(usernamePasswordSchemaV2).toBeDefined();
+    expect(usernamePasswordSchemaV2.tables?.username_identities).toBeDefined();
   });
 
   it('should export utility functions', async () => {

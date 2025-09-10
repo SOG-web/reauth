@@ -103,7 +103,8 @@ describe('Email-or-Username Plugin Usage Examples', () => {
   
   it('should demonstrate plugin composition benefits', async () => {
     const { baseEmailOrUsernamePluginV2 } = await import('./plugin.v2');
-    const { emailOrUsernameSchemaV2 } = await import('./schema.v2');
+    const { emailPasswordSchemaV2 } = await import('../email-password/schema.v2');
+    const { usernamePasswordSchemaV2 } = await import('../username/schema.v2');
     
     // Plugin provides unified interface
     expect(baseEmailOrUsernamePluginV2.name).toBe('email-or-username');
@@ -114,9 +115,9 @@ describe('Email-or-Username Plugin Usage Examples', () => {
     expect(stepNames).toContain('register');
     expect(stepNames).toContain('change-password');
     
-    // Schema includes all necessary tables
-    expect(emailOrUsernameSchemaV2.tables?.email_identities).toBeDefined();
-    expect(emailOrUsernameSchemaV2.tables?.username_identities).toBeDefined();
+    // Uses schemas from underlying plugins (no conflicts)
+    expect(emailPasswordSchemaV2.tables?.email_identities).toBeDefined();
+    expect(usernamePasswordSchemaV2.tables?.username_identities).toBeDefined();
     
     // Configuration supports both underlying plugins
     const config = baseEmailOrUsernamePluginV2.config;

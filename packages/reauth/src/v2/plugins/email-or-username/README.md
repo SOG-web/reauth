@@ -74,11 +74,11 @@ const config: EmailOrUsernameConfigV2 = {
 ### Basic Setup
 
 ```typescript
-import { ReAuthEngineV2, baseEmailOrUsernamePluginV2, emailOrUsernameSchemaV2 } from '@re-auth/reauth/v2';
+import { ReAuthEngineV2, baseEmailOrUsernamePluginV2, emailPasswordSchemaV2, usernamePasswordSchemaV2 } from '@re-auth/reauth/v2';
 
 const engine = new ReAuthEngineV2({
   plugins: [baseEmailOrUsernamePluginV2],
-  schemas: [emailOrUsernameSchemaV2]
+  schemas: [emailPasswordSchemaV2, usernamePasswordSchemaV2]
 });
 ```
 
@@ -144,9 +144,13 @@ Finds matching test user from configuration.
 
 ## Schema
 
-The plugin uses a combined schema that includes tables from both email-password and username plugins:
+This plugin doesn't define its own schema - instead it uses the schemas from the underlying email-password and username plugins. When setting up the engine, include both underlying schemas:
 
-- `subjects` - User subjects
+- `emailPasswordSchemaV2` - Provides email authentication tables
+- `usernamePasswordSchemaV2` - Provides username authentication tables
+
+The combined schemas provide these tables:
+- `subjects` - User subjects  
 - `credentials` - Password hashes
 - `identities` - Provider identities (email/username)
 - `email_identities` - Email-specific metadata
