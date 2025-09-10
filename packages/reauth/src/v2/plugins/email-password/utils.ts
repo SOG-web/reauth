@@ -47,3 +47,8 @@ export const genCode = (config?: EmailPasswordConfigV2) => {
     .map(() => String.fromCharCode(48 + rand(0, 74)))
     .join('');
 };
+
+export const generateCode = async (email: string, subject?: any): Promise<string> => {
+  // Default code generation for email verification
+  return genCode();
+};

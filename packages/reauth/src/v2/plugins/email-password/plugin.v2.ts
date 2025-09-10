@@ -8,6 +8,7 @@ import { resendVerificationStep } from './steps/resend-verify-email.step';
 import { sendResetStep } from './steps/send-reset-password.step';
 import { resetPasswordStep } from './steps/reset-password.step';
 import { changePasswordStep } from './steps/change-password.step';
+import { changeEmailStep } from './steps/change-email.step';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
 
 // Config type moved to ./types
@@ -48,6 +49,7 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
     sendResetStep,
     resetPasswordStep,
     changePasswordStep,
+    changeEmailStep,
   ],
   rootHooks: {
     // Opportunistic cleanup for expired codes (acts as a soft TTL). This avoids DB-specific TTL features.

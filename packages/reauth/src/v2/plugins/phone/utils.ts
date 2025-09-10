@@ -47,3 +47,8 @@ export const genCode = (config?: PhonePasswordConfigV2) => {
     .map(() => String.fromCharCode(48 + rand(0, 74)))
     .join('');
 };
+
+export const generateCode = async (phone: string, subject?: any): Promise<string> => {
+  // Default code generation for phone verification
+  return genCode();
+};

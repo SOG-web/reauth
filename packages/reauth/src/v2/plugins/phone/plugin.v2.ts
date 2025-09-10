@@ -8,6 +8,7 @@ import { resendVerifyPhoneStep } from './steps/resend-verify-phone.step';
 import { sendResetPasswordStep } from './steps/send-reset-password.step';
 import { resetPasswordStep } from './steps/reset-password.step';
 import { changePasswordStep } from './steps/change-password.step';
+import { changePhoneStep } from './steps/change-phone.step';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
 
 export const basePhonePasswordPluginV2: AuthPluginV2<PhonePasswordConfigV2> = {
@@ -44,6 +45,7 @@ export const basePhonePasswordPluginV2: AuthPluginV2<PhonePasswordConfigV2> = {
     sendResetPasswordStep,
     resetPasswordStep,
     changePasswordStep,
+    changePhoneStep,
   ],
   rootHooks: {
     // Opportunistic cleanup for expired codes (acts as a soft TTL). This avoids DB-specific TTL features.
