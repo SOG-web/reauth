@@ -1,128 +1,128 @@
-name: Deploy Packages
+# name: Deploy Packages
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+# on:
+#   push:
+#     branches:
+#       - main
+#   workflow_dispatch:
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      issues: write
+# jobs:
+#   build-and-deploy:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#       packages: write
+#       pull-requests: write
+#       issues: write
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: 'https://registry.npmjs.org'
+#       - name: Set up Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 20
+#           registry-url: 'https://registry.npmjs.org'
 
-      - name: Enable Corepack
-        run: npm install -g pnpm
+#       - name: Enable Corepack
+#         run: npm install -g pnpm
 
-      - name: Install dependencies
-        run: pnpm install --ignore-scripts
+#       - name: Install dependencies
+#         run: pnpm install --ignore-scripts
 
-      - name: Set Git user name and email
-        run: |
-          git config --local user.email "github-actions@github.com"
-          git config --local user.name "GitHub Actions"
+#       - name: Set Git user name and email
+#         run: |
+#           git config --local user.email "github-actions@github.com"
+#           git config --local user.name "GitHub Actions"
 
-      - name: Generate Release Notes
-        id: release_notes
-        run: |
-          # Get the latest version tag
-          git fetch --tags
-          LATEST_TAG=$(git tag -l "v*" --sort=-v:refname | head -n 1 || echo "v0.0.0")
+#       - name: Generate Release Notes
+#         id: release_notes
+#         run: |
+#           # Get the latest version tag
+#           git fetch --tags
+#           LATEST_TAG=$(git tag -l "v*" --sort=-v:refname | head -n 1 || echo "v0.0.0")
 
-          # Generate release notes
-          echo "## What's Changed" > RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
+#           # Generate release notes
+#           echo "## What's Changed" > RELEASE_NOTES.md
+#           echo "" >> RELEASE_NOTES.md
 
-          # Add changeset entries
-          for f in .changeset/*.md; do
-            if [ -f "$f" ] && [ "$f" != ".changeset/README.md" ]; then
-              echo "Processing changeset: $f"
-              # Extract the content between the frontmatter
-              sed -n '/^---$/,/^---$/!p' "$f" >> RELEASE_NOTES.md
-              echo "" >> RELEASE_NOTES.md
-            fi
-          done
+#           # Add changeset entries
+#           for f in .changeset/*.md; do
+#             if [ -f "$f" ] && [ "$f" != ".changeset/README.md" ]; then
+#               echo "Processing changeset: $f"
+#               # Extract the content between the frontmatter
+#               sed -n '/^---$/,/^---$/!p' "$f" >> RELEASE_NOTES.md
+#               echo "" >> RELEASE_NOTES.md
+#             fi
+#           done
 
-          # Add commit history
-          echo "### Commits" >> RELEASE_NOTES.md
-          git log ${LATEST_TAG}..HEAD --pretty=format:"* %s (%h)" >> RELEASE_NOTES.md
+#           # Add commit history
+#           echo "### Commits" >> RELEASE_NOTES.md
+#           git log ${LATEST_TAG}..HEAD --pretty=format:"* %s (%h)" >> RELEASE_NOTES.md
 
-      # Build packages using Turborepo
-      - name: Build packages
-        run: |
-          pnpm turbo run build --filter=./packages/reauth
+#       # Build packages using Turborepo
+#       - name: Build packages
+#         run: |
+#           pnpm turbo run build --filter=./packages/reauth
 
-      - name: Create Release Pull Request or Publish to npm
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          commit: 'chore: update versions'
-          title: 'chore: update versions'
-          publish: pnpm release
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Create Release Pull Request or Publish to npm
+#         id: changesets
+#         uses: changesets/action@v1
+#         with:
+#           commit: 'chore: update versions'
+#           title: 'chore: update versions'
+#           publish: pnpm release
+#         env:
+#           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.changesets.outputs.version }}
-          name: Release v${{ steps.changesets.outputs.version }}
-          body_path: RELEASE_NOTES.md
-          draft: false
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Create GitHub Release
+#         uses: softprops/action-gh-release@v1
+#         with:
+#           tag_name: v${{ steps.changesets.outputs.version }}
+#           name: Release v${{ steps.changesets.outputs.version }}
+#           body_path: RELEASE_NOTES.md
+#           draft: false
+#           prerelease: true
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Set up npm registry
-      - name: Setup npm authentication
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          echo "@re-auth:registry=https://registry.npmjs.org/" >> ~/.npmrc
+#       # Set up npm registry
+#       - name: Setup npm authentication
+#         run: |
+#           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+#           echo "@re-auth:registry=https://registry.npmjs.org/" >> ~/.npmrc
 
-      # Publish packages in correct order
-      - name: Publish packages
-        run: |
-          # Get current version from package.json
-          CURRENT_VERSION=$(cat packages/reauth/package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
+#       # Publish packages in correct order
+#       - name: Publish packages
+#         run: |
+#           # Get current version from package.json
+#           CURRENT_VERSION=$(cat packages/reauth/package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
 
-          # Check if version exists on npm
-          if npm view @re-auth/reauth@$CURRENT_VERSION version 2>/dev/null; then
-            echo "Version $CURRENT_VERSION already exists on npm. Skipping publish."
-            exit 0
-          fi
+#           # Check if version exists on npm
+#           if npm view @re-auth/reauth@$CURRENT_VERSION version 2>/dev/null; then
+#             echo "Version $CURRENT_VERSION already exists on npm. Skipping publish."
+#             exit 0
+#           fi
 
-          # Publish packages in correct order
-          for pkg in reauth; do
-            echo "Publishing @re-auth/$pkg..."
-            cd "packages/$pkg"
-            if [ -f "package.json" ]; then
-              pnpm publish --no-git-checks --access public
-            fi
-            cd ../..
-          done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+#           # Publish packages in correct order
+#           for pkg in reauth; do
+#             echo "Publishing @re-auth/$pkg..."
+#             cd "packages/$pkg"
+#             if [ -f "package.json" ]; then
+#               pnpm publish --no-git-checks --access public
+#             fi
+#             cd ../..
+#           done
+#         env:
+#           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Auto-merge release PR
-        if: steps.changesets.outputs.pullRequestNumber != ''
-        run: |
-          gh pr merge ${{ steps.changesets.outputs.pullRequestNumber }} --squash --delete-branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Auto-merge release PR
+#         if: steps.changesets.outputs.pullRequestNumber != ''
+#         run: |
+#           gh pr merge ${{ steps.changesets.outputs.pullRequestNumber }} --squash --delete-branch
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
