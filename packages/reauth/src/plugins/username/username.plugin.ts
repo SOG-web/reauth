@@ -1,7 +1,7 @@
 import { type } from 'arktype';
-import type { AuthPlugin, AuthStep, RootStepHooks } from '../../types';
+import type { AuthPlugin, AuthStep, RootStepHooks, Entity } from '../../types';
 import { hashPassword, haveIbeenPawned, verifyPasswordHash } from '../../lib';
-import { createAuthPlugin } from '../utils/create-plugin';
+import { createAuthPluginLegacy } from '../utils/create-plugin';
 import { usernameSchema, passwordSchema } from '../shared/validation';
 
 const loginSchema = type({
@@ -22,6 +22,50 @@ const changePasswordSchema = type({
   others: 'object?',
 });
 
+// Helper function to check if environment supports test users
+const isTestEnvironmentAllowed = (config: UsernamePasswordConfig): boolean => {
+  if (!config.testUsers?.enabled) return false;
+
+  const env = config.testUsers.environment || 'development';
+  if (env === 'all') return true;
+
+  const nodeEnv = process.env.NODE_ENV;
+  return (
+    env === nodeEnv ||
+    (env === 'development' && (!nodeEnv || nodeEnv === 'development'))
+  );
+};
+
+// Helper function to find test user
+const findTestUser = (
+  username: string,
+  password: string,
+  config: UsernamePasswordConfig,
+): UsernameTestUser | null => {
+  if (!isTestEnvironmentAllowed(config)) return null;
+
+  return (
+    config.testUsers?.users.find(
+      (user) => user.username === username && user.password === password,
+    ) || null
+  );
+};
+
+// Helper function to create test entity
+const createTestEntity = (testUser: UsernameTestUser): Entity => {
+  const baseEntity = {
+    id: `test-user-${testUser.username}`,
+    role: 'user',
+    created_at: new Date(),
+    updated_at: new Date(),
+    username: testUser.username,
+    password_hash: 'test-hash',
+    ...testUser.profile,
+  } as Entity;
+
+  return baseEntity;
+};
+
 const plugin: AuthPlugin<UsernamePasswordConfig> = {
   name: 'username',
   getSensitiveFields: () => ['password_hash'],
@@ -41,6 +85,36 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { username, password, others } = input;
+
+        // Check for test user first
+        const testUser = findTestUser(username, password, config);
+        if (testUser) {
+          const testEntity = createTestEntity(testUser);
+
+          const token = await container.cradle.reAuthEngine.createSession(
+            testEntity,
+            this.name,
+          );
+
+          if (!token.success) {
+            return {
+              success: false,
+              message: token.message!,
+              error: token.error!,
+              status: 'ic',
+            };
+          }
+
+          const serializedEntity = container.cradle.serializeEntity(testEntity);
+
+          return {
+            success: true,
+            message: 'Login successful (test user)',
+            token: token.token,
+            entity: serializedEntity,
+            status: 'su',
+          };
+        }
 
         const entity = await container.cradle.entityService.findEntity(
           username,
@@ -118,6 +192,40 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
         const { username, password, others } = input;
+
+        // Check for test user registration
+        const testUser = findTestUser(username, password, config);
+        if (testUser) {
+          const testEntity = createTestEntity(testUser);
+
+          const token = config.loginOnRegister
+            ? await container.cradle.reAuthEngine.createSession(
+                testEntity,
+                this.name,
+              )
+            : undefined;
+
+          if (token && !token.success) {
+            return {
+              success: false,
+              message: token.message!,
+              error: token.error!,
+              status: 'ic',
+              others,
+            };
+          }
+
+          const serializedEntity = container.cradle.serializeEntity(testEntity);
+
+          return {
+            success: true,
+            message: 'Registration successful (test user)',
+            token: token?.token,
+            entity: serializedEntity,
+            status: 'su',
+            others,
+          };
+        }
 
         const existingEntity = await container.cradle.entityService.findEntity(
           username,
@@ -295,28 +403,8 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
       },
     },
   ],
-  initialize: async (container) => {
-    // TODO: Username plugin is not yet complete. Missing features:
-    // - Comprehensive testing and validation
-    // - Username validation security assessment
-    // - Rate limiting for login attempts
-    // - Account lockout mechanisms
-    // - Password policy enforcement testing
-    // - Integration testing with other plugins
-    // - Documentation completion and review
-    // - Performance optimization for auth flows
-    // - Security audit for password handling
-    // - Username uniqueness constraint testing
-    // - Multi-environment configuration support
-    // - Brute force protection validation
-    throw new Error(
-      'Username plugin is not yet ready for production use. This is a work in progress.',
-    );
-
-    // This code will be enabled when the plugin is ready:
-    /*
+  initialize: async function (container) {
     this.container = container;
-    */
   },
   migrationConfig: {
     pluginName: 'username-password',
@@ -349,20 +437,24 @@ const usernamePasswordAuth = (
     override: Partial<AuthStep<UsernamePasswordConfig>>;
   }[],
 ): AuthPlugin<UsernamePasswordConfig> => {
-  return createAuthPlugin(config, plugin, overrideStep, {
+  return createAuthPluginLegacy(config, plugin, overrideStep, {
     loginOnRegister: true,
   });
 };
 
 export default usernamePasswordAuth;
 
+// Export helper functions for testing and external use
+export { isTestEnvironmentAllowed, findTestUser, createTestEntity };
+
 declare module '../../types' {
   interface EntityExtension {
     username?: string | null;
+    password_hash: string | null;
   }
 }
 
-interface UsernamePasswordConfig {
+export interface UsernamePasswordConfig {
   /**
    * @default true
    * Whether to login the user after registration
@@ -377,4 +469,32 @@ interface UsernamePasswordConfig {
    *  }
    */
   rootHooks?: RootStepHooks;
+
+  /**
+   * Test user configuration for development/testing
+   */
+  testUsers?: UsernameTestUserConfig;
+}
+
+export interface UsernameTestUser {
+  username: string;
+  password: string;
+  profile: Record<string, any>; // More flexible than Partial<Entity>
+}
+
+export interface UsernameTestUserConfig {
+  /**
+   * @default false
+   * Whether test users are enabled
+   */
+  enabled: boolean;
+  /**
+   * Array of test user configurations
+   */
+  users: UsernameTestUser[];
+  /**
+   * @default 'development'
+   * Environment where test users are allowed
+   */
+  environment?: 'development' | 'test' | 'all';
 }
