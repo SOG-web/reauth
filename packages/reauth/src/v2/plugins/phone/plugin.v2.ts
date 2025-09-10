@@ -1,22 +1,18 @@
 import type { AuthPluginV2, OrmLike } from '../../types.v2';
-import type { EmailPasswordConfigV2 } from './types';
-export type { EmailPasswordConfigV2 } from './types';
+import type { PhonePasswordConfigV2 } from './types';
+export type { PhonePasswordConfigV2 } from './types';
 import { loginStep } from './steps/login.step';
 import { registerStep } from './steps/register.step';
-import { verifyEmailStep } from './steps/verify-email.step';
-import { resendVerificationStep } from './steps/resend-verify-email.step';
-import { sendResetStep } from './steps/send-reset-password.step';
+import { verifyPhoneStep } from './steps/verify-phone.step';
+import { resendVerifyPhoneStep } from './steps/resend-verify-phone.step';
+import { sendResetPasswordStep } from './steps/send-reset-password.step';
 import { resetPasswordStep } from './steps/reset-password.step';
 import { changePasswordStep } from './steps/change-password.step';
-import { changeEmailStep } from './steps/change-email.step';
+import { changePhoneStep } from './steps/change-phone.step';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
 
-// Config type moved to ./types
-
-// Steps are imported from ./steps/*.step.ts
-
-export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
-  name: 'email-password',
+export const basePhonePasswordPluginV2: AuthPluginV2<PhonePasswordConfigV2> = {
+  name: 'phone-password',
   initialize(engine) {
     engine.registerSessionResolver('subject', {
       async getById(id: string, orm: OrmLike) {
@@ -33,7 +29,7 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
     });
   },
   config: {
-    verifyEmail: false,
+    verifyPhone: false,
     loginOnRegister: true,
     sessionTtlSeconds: 3600,
     codeType: 'numeric',
@@ -44,12 +40,12 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
   steps: [
     loginStep,
     registerStep,
-    verifyEmailStep,
-    resendVerificationStep,
-    sendResetStep,
+    verifyPhoneStep,
+    resendVerifyPhoneStep,
+    sendResetPasswordStep,
     resetPasswordStep,
     changePasswordStep,
-    changeEmailStep,
+    changePhoneStep,
   ],
   rootHooks: {
     // Opportunistic cleanup for expired codes (acts as a soft TTL). This avoids DB-specific TTL features.
@@ -58,7 +54,7 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
         const orm = await ctx.engine.getOrm();
         const now = new Date();
         // Remove expired verification codes
-        await orm.deleteMany('email_identities', {
+        await orm.deleteMany('phone_identities', {
           where: (b: any) =>
             b.and(
               b('verification_code_expires_at', '!=', null),
@@ -66,7 +62,7 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
             ),
         });
         // Remove expired reset codes
-        await orm.deleteMany('email_identities', {
+        await orm.deleteMany('phone_identities', {
           where: (b: any) =>
             b.and(
               b('reset_code_expires_at', '!=', null),
@@ -81,14 +77,14 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
 };
 
 // Export a configured plugin creator that validates config at construction time.
-const emailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = createAuthPluginV2<EmailPasswordConfigV2>(
-  baseEmailPasswordPluginV2,
+const phonePasswordPluginV2: AuthPluginV2<PhonePasswordConfigV2> = createAuthPluginV2<PhonePasswordConfigV2>(
+  basePhonePasswordPluginV2,
   {
     validateConfig: (config) => {
       const errs: string[] = [];
-      if (config.verifyEmail && typeof (config as any).sendCode !== 'function') {
+      if (config.verifyPhone && typeof (config as any).sendCode !== 'function') {
         errs.push(
-          "verifyEmail is true but 'sendCode' is not provided. Supply sendCode(subject, code, email, type) in plugin config.",
+          "verifyPhone is true but 'sendCode' is not provided. Supply sendCode(subject, code, phone, type) in plugin config.",
         );
       }
       return errs.length ? errs : null;
@@ -96,4 +92,4 @@ const emailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = createAuthPlu
   },
 );
 
-export default emailPasswordPluginV2;
+export default phonePasswordPluginV2;
