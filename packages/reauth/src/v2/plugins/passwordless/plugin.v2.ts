@@ -32,7 +32,7 @@ export const basePasswordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = {
     magicLinkTtlMinutes: 30,
     magicLinks: false,
     webauthn: false,
-  },
+  } as any, // Default config may not be fully valid, validation happens at creation time
   steps: [
     sendMagicLinkStep,
     verifyMagicLinkStep,
@@ -55,52 +55,58 @@ export const basePasswordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = {
 };
 
 // Export a configured plugin creator that validates config at construction time
-const passwordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = createAuthPluginV2<PasswordlessConfigV2>(
-  basePasswordlessPluginV2,
-  {
-    validateConfig: (config) => {
-      const errs: string[] = [];
-      
-      // At least one authentication method must be enabled
-      if (!config.magicLinks && !config.webauthn) {
-        errs.push(
-          'At least one authentication method must be enabled. Set magicLinks: true or webauthn: true.',
-        );
-      }
-      
-      // Magic links validation
-      if (config.magicLinks && typeof (config as any).sendMagicLink !== 'function') {
-        errs.push(
-          "magicLinks is true but 'sendMagicLink' function is not provided. Supply sendMagicLink(email, token, subject) in plugin config.",
-        );
-      }
-      
-      // WebAuthn validation
-      if (config.webauthn) {
-        if (!config.rpId || typeof config.rpId !== 'string') {
+const passwordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = basePasswordlessPluginV2;
+
+// Factory function for creating validated passwordless plugin
+export function createPasswordlessPluginV2(config: PasswordlessConfigV2): AuthPluginV2<PasswordlessConfigV2> {
+  return createAuthPluginV2<PasswordlessConfigV2>(
+    basePasswordlessPluginV2,
+    {
+      config,
+      validateConfig: (config) => {
+        const errs: string[] = [];
+        
+        // At least one authentication method must be enabled
+        if (!config.magicLinks && !config.webauthn) {
           errs.push(
-            "webauthn is true but 'rpId' is not provided. Supply rpId (Relying Party ID/domain) in plugin config.",
+            'At least one authentication method must be enabled. Set magicLinks: true or webauthn: true.',
           );
         }
-        if (!config.rpName || typeof config.rpName !== 'string') {
+        
+        // Magic links validation
+        if (config.magicLinks && typeof (config as any).sendMagicLink !== 'function') {
           errs.push(
-            "webauthn is true but 'rpName' is not provided. Supply rpName (Relying Party Name) in plugin config.",
+            "magicLinks is true but 'sendMagicLink' function is not provided. Supply sendMagicLink(email, token, subject) in plugin config.",
           );
         }
-      }
-      
-      // TTL validations
-      if (config.sessionTtlSeconds && (config.sessionTtlSeconds <= 0 || config.sessionTtlSeconds > 86400 * 30)) {
-        errs.push('sessionTtlSeconds must be between 1 and 2,592,000 (30 days)');
-      }
-      
-      if (config.magicLinkTtlMinutes && (config.magicLinkTtlMinutes <= 0 || config.magicLinkTtlMinutes > 1440)) {
-        errs.push('magicLinkTtlMinutes must be between 1 and 1440 (24 hours)');
-      }
-      
-      return errs.length ? errs : null;
+        
+        // WebAuthn validation
+        if (config.webauthn) {
+          if (!config.rpId || typeof config.rpId !== 'string') {
+            errs.push(
+              "webauthn is true but 'rpId' is not provided. Supply rpId (Relying Party ID/domain) in plugin config.",
+            );
+          }
+          if (!config.rpName || typeof config.rpName !== 'string') {
+            errs.push(
+              "webauthn is true but 'rpName' is not provided. Supply rpName (Relying Party Name) in plugin config.",
+            );
+          }
+        }
+        
+        // TTL validations
+        if (config.sessionTtlSeconds && (config.sessionTtlSeconds <= 0 || config.sessionTtlSeconds > 86400 * 30)) {
+          errs.push('sessionTtlSeconds must be between 1 and 2,592,000 (30 days)');
+        }
+        
+        if (config.magicLinkTtlMinutes && (config.magicLinkTtlMinutes <= 0 || config.magicLinkTtlMinutes > 1440)) {
+          errs.push('magicLinkTtlMinutes must be between 1 and 1440 (24 hours)');
+        }
+        
+        return errs.length ? errs : null;
+      },
     },
-  },
-);
+  );
+}
 
 export default passwordlessPluginV2;
