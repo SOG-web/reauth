@@ -12,7 +12,7 @@ export type LoginInput = {
 };
 
 export const loginValidation = type({
-  phone: phoneSchema,
+  phone: 'string',
   password: passwordSchema,
   others: 'object?',
 });

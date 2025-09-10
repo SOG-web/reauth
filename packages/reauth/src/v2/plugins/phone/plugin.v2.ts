@@ -52,28 +52,20 @@ export const basePhonePasswordPluginV2: AuthPluginV2<PhonePasswordConfigV2> = {
         const orm = await ctx.engine.getOrm();
         const now = new Date();
         // Remove expired verification codes
-        await orm.updateMany('phone_identities', {
+        await orm.deleteMany('phone_identities', {
           where: (b: any) =>
             b.and(
               b('verification_code_expires_at', '!=', null),
               b('verification_code_expires_at', '<', now),
             ),
-          data: {
-            verification_code: null,
-            verification_code_expires_at: null,
-          },
         });
         // Remove expired reset codes
-        await orm.updateMany('phone_identities', {
+        await orm.deleteMany('phone_identities', {
           where: (b: any) =>
             b.and(
               b('reset_code_expires_at', '!=', null),
               b('reset_code_expires_at', '<', now),
             ),
-          data: {
-            reset_code: null,
-            reset_code_expires_at: null,
-          },
         });
       } catch (_) {
         // Best effort cleanup; never block auth flows

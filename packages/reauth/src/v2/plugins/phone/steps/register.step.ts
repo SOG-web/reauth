@@ -12,19 +12,7 @@ export type RegisterInput = {
 };
 
 export const registerValidation = type({
-  phone: phoneSchema,
-  password: passwordSchema,
-  others: 'object?',
-});
-
-export type RegisterInput = {
-  phone: string;
-  password: string;
-  others?: Record<string, any>;
-};
-
-export const registerValidation = type({
-  phone: 'string.phone',
+  phone: 'string',
   password: passwordSchema,
   others: 'object?',
 });
@@ -62,7 +50,7 @@ export const registerStep: AuthStepV2<
     if (tu) {
       const subjectRow = { id: phone };
 
-      let token = null;
+      let token: string | null = null;
       if (ctx.config?.loginOnRegister) {
         const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
         token = await ctx.engine.createSessionFor('subject', subjectRow.id, ttl);
@@ -102,7 +90,7 @@ export const registerStep: AuthStepV2<
     }
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await checkPasswordSafety(password);
+    const isSafe = await haveIbeenPawned(password);
     if (!isSafe) {
       return {
         success: false,
@@ -113,19 +101,19 @@ export const registerStep: AuthStepV2<
     }
 
     // Create subject
-    const subject = await orm.insertOne('subjects', {});
-    const subjectId = subject.id;
+    const subject = await orm.create('subjects', {});
+    const subjectId = subject.id as string;
 
     // Create credentials (hashed password)
     const passwordHash = await hashPassword(password);
-    await orm.insertOne('credentials', {
+    await orm.create('credentials', {
       subject_id: subjectId,
       password_hash: passwordHash,
     });
 
     // Create identity
     const verified = !ctx.config?.verifyPhone;
-    const identity = await orm.insertOne('identities', {
+    const identity = await orm.create('identities', {
       subject_id: subjectId,
       provider: 'phone',
       identifier: phone,
@@ -150,7 +138,7 @@ export const registerStep: AuthStepV2<
       const ms = ctx.config?.verificationCodeExpiresIn ?? 30 * 60 * 1000;
       const expiresAt = new Date(Date.now() + ms);
 
-      await orm.insertOne('phone_identities', {
+      await orm.create('phone_identities', {
         identity_id: identity.id,
         verification_code: hashedCode,
         verification_code_expires_at: expiresAt,
@@ -174,7 +162,7 @@ export const registerStep: AuthStepV2<
     }
 
     // Create session if loginOnRegister is true
-    let token = null;
+    let token: string | null = null;
     if (ctx.config?.loginOnRegister) {
       const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
       token = await ctx.engine.createSessionFor('subject', subjectId, ttl);
