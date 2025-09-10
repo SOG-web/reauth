@@ -5,4 +5,6 @@ export type AnonymousConfigV2 = {
   allowSessionExtension?: boolean; // whether guests can extend their session (default true)
   maxSessionExtensions?: number; // max number of extensions per session (default 3)
   fingerprintRequired?: boolean; // whether device fingerprint is required (default true)
+  cleanupIntervalMs?: number; // how often to run cleanup in background (default 300000 = 5 minutes)
+  enableBackgroundCleanup?: boolean; // whether to enable automatic background cleanup (default true)
 };

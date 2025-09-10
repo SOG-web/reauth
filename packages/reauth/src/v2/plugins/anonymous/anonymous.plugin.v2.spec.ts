@@ -14,6 +14,8 @@ describe('Anonymous Plugin V2', () => {
       allowSessionExtension: true,
       maxSessionExtensions: 3,
       fingerprintRequired: true,
+      cleanupIntervalMs: 300000, // 5 minutes
+      enableBackgroundCleanup: true,
     });
   });
 

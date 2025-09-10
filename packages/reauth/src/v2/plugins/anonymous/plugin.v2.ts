@@ -48,6 +48,30 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
         return sanitized;
       },
     });
+
+    // Register background cleanup task if enabled
+    const config = this.config || {};
+    if (config.enableBackgroundCleanup !== false) {
+      const cleanupIntervalMs = config.cleanupIntervalMs || 300000; // Default 5 minutes
+      
+      engine.registerCleanupTask({
+        name: 'expired-sessions',
+        pluginName: 'anonymous',
+        intervalMs: cleanupIntervalMs,
+        enabled: true,
+        runner: async (orm, pluginConfig) => {
+          try {
+            const cleaned = await cleanupExpiredSessions(orm, pluginConfig);
+            return { cleaned };
+          } catch (error) {
+            return { 
+              cleaned: 0, 
+              errors: [`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`] 
+            };
+          }
+        },
+      });
+    }
   },
   config: {
     sessionTtlSeconds: 1800, // 30 minutes (shorter than regular sessions)
@@ -56,6 +80,8 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
     allowSessionExtension: true,
     maxSessionExtensions: 3,
     fingerprintRequired: true,
+    cleanupIntervalMs: 300000, // 5 minutes
+    enableBackgroundCleanup: true,
   },
   steps: [
     createGuestStep,
@@ -63,17 +89,8 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
     convertGuestStep,
     cleanupExpiredStep,
   ],
-  rootHooks: {
-    // Opportunistic cleanup for expired sessions before each operation
-    async before(_input, ctx) {
-      try {
-        const orm = await ctx.engine.getOrm();
-        await cleanupExpiredSessions(orm, ctx.config);
-      } catch (_) {
-        // Best effort cleanup; never block auth flows
-      }
-    },
-  },
+  // Removed rootHooks to avoid affecting response time
+  // Background cleanup now handles expired session removal
 };
 
 // Export a configured plugin creator that validates config at construction time.
@@ -109,6 +126,14 @@ const anonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = createAuthPluginV2<An
       
       if (config.maxSessionExtensions && config.maxSessionExtensions > 10) {
         errs.push('maxSessionExtensions cannot exceed 10 for security reasons');
+      }
+      
+      if (config.cleanupIntervalMs && config.cleanupIntervalMs < 60000) {
+        errs.push('cleanupIntervalMs must be at least 60000ms (1 minute) to avoid excessive cleanup frequency');
+      }
+      
+      if (config.cleanupIntervalMs && config.cleanupIntervalMs > 86400000) {
+        errs.push('cleanupIntervalMs cannot exceed 86400000ms (24 hours) for effective cleanup');
       }
       
       return errs.length ? errs : null;

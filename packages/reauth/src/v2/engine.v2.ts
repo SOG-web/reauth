@@ -6,6 +6,7 @@ import {
 } from 'awilix';
 import { InMemorySessionResolvers } from './session-resolvers.v2';
 import { FumaSessionServiceV2 } from './session-service.v2';
+import { SimpleCleanupScheduler } from './cleanup-scheduler.v2';
 import type {
   FumaClient,
   ReAuthCradleV2,
@@ -20,12 +21,15 @@ import type {
   OrmLike,
   AuthInput,
   AuthOutput,
+  CleanupTask,
+  CleanupScheduler,
 } from './types.v2';
 
 export class ReAuthEngineV2 {
   private container: AwilixContainer<ReAuthCradleV2Extension>;
   private sessionResolvers: SessionResolvers;
   private sessionService: SessionServiceV2;
+  private cleanupScheduler: CleanupScheduler;
   private plugins: AuthPluginV2[] = [];
   private pluginMap = new Map<string, AuthPluginV2>();
   private authHooks: AuthHookV2[] = [];
@@ -37,6 +41,7 @@ export class ReAuthEngineV2 {
     tokenFactory?: () => string;
     authHooks?: AuthHookV2[];
     sessionHooks?: AuthHookV2[];
+    enableCleanupScheduler?: boolean; // Default true
   }) {
     this.container = createContainer({
       injectionMode: InjectionMode.CLASSIC,
@@ -49,6 +54,7 @@ export class ReAuthEngineV2 {
       this.sessionResolvers,
       config.tokenFactory,
     );
+    this.cleanupScheduler = new SimpleCleanupScheduler(() => this.getOrm());
 
     this.container.register({
       dbClient: asValue(config.dbClient),
@@ -59,11 +65,22 @@ export class ReAuthEngineV2 {
     for (const plugin of config.plugins || []) this.registerPlugin(plugin);
     if (config.authHooks) this.authHooks.push(...config.authHooks);
     if (config.sessionHooks) this.sessionHooks.push(...config.sessionHooks);
+
+    // Start cleanup scheduler by default unless explicitly disabled
+    if (config.enableCleanupScheduler !== false) {
+      this.startCleanupScheduler();
+    }
   }
 
   private registerPlugin(plugin: AuthPluginV2) {
     this.plugins.push(plugin);
     this.pluginMap.set(plugin.name, plugin);
+    
+    // Set plugin config in cleanup scheduler for task access
+    if (plugin.config) {
+      (this.cleanupScheduler as SimpleCleanupScheduler).setPluginConfig(plugin.name, plugin.config);
+    }
+    
     plugin.initialize?.(this);
   }
 
@@ -74,6 +91,23 @@ export class ReAuthEngineV2 {
   registerSessionResolver(subjectType: string, resolver: SubjectResolver) {
     this.sessionResolvers.register(subjectType, resolver);
     return this;
+  }
+
+  registerCleanupTask(task: CleanupTask) {
+    this.cleanupScheduler.registerTask(task);
+    return this;
+  }
+
+  async startCleanupScheduler(): Promise<void> {
+    await this.cleanupScheduler.start();
+  }
+
+  async stopCleanupScheduler(): Promise<void> {
+    await this.cleanupScheduler.stop();
+  }
+
+  getCleanupScheduler(): CleanupScheduler {
+    return this.cleanupScheduler;
   }
 
   // Provide ORM instance for plugin steps
