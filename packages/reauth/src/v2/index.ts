@@ -8,7 +8,9 @@ export { InMemorySessionResolvers } from './session-resolvers.v2';
 export { FumaSessionServiceV2 } from './session-service.v2';
 export { ReAuthEngineV2 } from './engine.v2';
 export { emailPasswordSchemaV2 } from './plugins/email-password/schema.v2';
-export { emailPasswordPluginV2, type EmailPasswordConfigV2 } from './plugins/email-password/plugin.v2';
+export { default as emailPasswordPluginV2, type EmailPasswordConfigV2 } from './plugins/email-password/plugin.v2';
+export { anonymousSchemaV2 } from './plugins/anonymous/schema.v2';
+export { default as anonymousPluginV2, type AnonymousConfigV2 } from './plugins/anonymous/plugin.v2';
 export { createAuthPluginV2, createAuthPluginLegacyV2 } from './utils/create-plugin.v2';
 
 export type {
@@ -22,5 +24,5 @@ export type {
   AuthOutput,
 } from './types.v2';
 
-// Example helper
-export { runExample as runEmailPasswordExample } from './examples/email-password.example';
+// Example helper (commented out until example file is created)
+// export { runExample as runEmailPasswordExample } from './examples/email-password.example';
