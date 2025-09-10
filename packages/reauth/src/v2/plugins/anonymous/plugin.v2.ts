@@ -61,11 +61,17 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
         enabled: true,
         runner: async (orm, pluginConfig) => {
           try {
-            const cleaned = await cleanupExpiredSessions(orm, pluginConfig);
-            return { cleaned };
+            const result = await cleanupExpiredSessions(orm, pluginConfig);
+            return { 
+              cleaned: result.sessionsDeleted + result.subjectsDeleted,
+              sessionsDeleted: result.sessionsDeleted,
+              subjectsDeleted: result.subjectsDeleted
+            };
           } catch (error) {
             return { 
               cleaned: 0, 
+              sessionsDeleted: 0,
+              subjectsDeleted: 0,
               errors: [`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`] 
             };
           }
@@ -77,6 +83,7 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
     sessionTtlSeconds: 1800, // 30 minutes (shorter than regular sessions)
     maxGuestsPerFingerprint: 3,
     guestDataRetentionDays: 7,
+    guestSubjectRetentionDays: 7, // Same as session retention by default
     allowSessionExtension: true,
     maxSessionExtensions: 3,
     fingerprintRequired: true,
@@ -118,6 +125,10 @@ const anonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = createAuthPluginV2<An
       
       if (config.guestDataRetentionDays && config.guestDataRetentionDays < 1) {
         errs.push('guestDataRetentionDays must be at least 1 day');
+      }
+      
+      if (config.guestSubjectRetentionDays && config.guestSubjectRetentionDays < 1) {
+        errs.push('guestSubjectRetentionDays must be at least 1 day');
       }
       
       if (config.maxSessionExtensions && config.maxSessionExtensions < 0) {

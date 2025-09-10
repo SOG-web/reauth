@@ -52,27 +52,63 @@ export const canCreateGuestSession = async (
 };
 
 /**
- * Clean up expired anonymous sessions
+ * Clean up expired anonymous sessions and orphaned guest subjects
  */
 export const cleanupExpiredSessions = async (
   orm: OrmLike,
   config?: AnonymousConfigV2
-): Promise<number> => {
+): Promise<{ sessionsDeleted: number; subjectsDeleted: number }> => {
   const now = new Date();
-  const retentionDays = config?.guestDataRetentionDays ?? 7;
-  const cutoffDate = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  const sessionRetentionDays = config?.guestDataRetentionDays ?? 7;
+  const subjectRetentionDays = config?.guestSubjectRetentionDays ?? sessionRetentionDays;
   
-  // Delete sessions that are both expired AND past retention period
-  const result = await orm.deleteMany('anonymous_sessions', {
+  const sessionCutoffDate = new Date(now.getTime() - sessionRetentionDays * 24 * 60 * 60 * 1000);
+  const subjectCutoffDate = new Date(now.getTime() - subjectRetentionDays * 24 * 60 * 60 * 1000);
+
+  // Step 1: Delete sessions that are both expired AND past retention period
+  const sessionResult = await orm.deleteMany('anonymous_sessions', {
     where: (b: any) =>
       b.and(
         b('expires_at', '<', now),
-        b('created_at', '<', cutoffDate)
+        b('created_at', '<', sessionCutoffDate)
       ),
   });
   
-  // Handle deleteMany return type
-  return typeof result === 'number' ? result : 0;
+  const sessionsDeleted = typeof sessionResult === 'number' ? sessionResult : 0;
+
+  // Step 2: Find and delete orphaned subjects that were created for anonymous sessions
+  // but no longer have any anonymous_sessions records
+  
+  // First, get all subjects that have ever had anonymous sessions (to identify guest subjects)
+  const guestSubjects = await orm.findMany('subjects', {
+    where: (b: any) => b('created_at', '<', subjectCutoffDate),
+  });
+
+  let subjectsDeleted = 0;
+  
+  if (guestSubjects && Array.isArray(guestSubjects)) {
+    for (const subject of guestSubjects) {
+      // Check if this subject still has any anonymous_sessions
+      const hasActiveSessions = await orm.findFirst('anonymous_sessions', {
+        where: (b: any) => b('subject_id', '=', subject.id),
+      });
+      
+      // If no active sessions and subject is old enough, it's an orphaned guest subject
+      if (!hasActiveSessions) {
+        try {
+          await orm.deleteMany('subjects', {
+            where: (b: any) => b('id', '=', subject.id),
+          });
+          subjectsDeleted++;
+        } catch (error) {
+          // Continue with other subjects if one fails
+          continue;
+        }
+      }
+    }
+  }
+
+  return { sessionsDeleted, subjectsDeleted };
 };
 
 /**

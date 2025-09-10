@@ -11,6 +11,7 @@ describe('Anonymous Plugin V2', () => {
       sessionTtlSeconds: 1800, // 30 minutes
       maxGuestsPerFingerprint: 3,
       guestDataRetentionDays: 7,
+      guestSubjectRetentionDays: 7, // Same as session retention by default
       allowSessionExtension: true,
       maxSessionExtensions: 3,
       fingerprintRequired: true,
