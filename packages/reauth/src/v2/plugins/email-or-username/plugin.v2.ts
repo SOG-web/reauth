@@ -9,6 +9,24 @@ import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
 export const baseEmailOrUsernamePluginV2: AuthPluginV2<EmailOrUsernameConfigV2> = {
   name: 'email-or-username',
   initialize(engine) {
+    // Check that required plugins are present
+    const emailPlugin = engine.getPlugin('email-password');
+    const usernamePlugin = engine.getPlugin('username');
+    
+    if (!emailPlugin) {
+      throw new Error(
+        'email-or-username plugin requires the email-password plugin to be registered. ' +
+        'Please add the email-password plugin to your engine configuration.'
+      );
+    }
+    
+    if (!usernamePlugin) {
+      throw new Error(
+        'email-or-username plugin requires the username plugin to be registered. ' +
+        'Please add the username plugin to your engine configuration.'
+      );
+    }
+    
     // Register session resolver for subjects (shared with underlying plugins)
     engine.registerSessionResolver('subject', {
       async getById(id: string, orm: OrmLike) {

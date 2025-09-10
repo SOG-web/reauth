@@ -133,12 +133,56 @@ export const loginStep: AuthStepV2<
 
     // For email users, check verification if required
     if (inputType === 'email' && ctx.config?.emailConfig?.verifyEmail && !identity.verified) {
-      return {
-        success: false,
-        message: 'Email verification required',
-        status: 'eq',
-        others,
-      };
+      // If sendCode is available, send verification code
+      if (ctx.config.emailConfig.sendCode) {
+        // Generate verification code using email plugin utils
+        const { genCode } = await import('../../email-password/utils');
+        const code = ctx.config.emailConfig.generateCode
+          ? await ctx.config.emailConfig.generateCode(emailOrUsername)
+          : genCode(ctx.config.emailConfig as any);
+        
+        // Hash the code for storage
+        const { hashPassword } = await import('../../../../lib/password');
+        const hashedCode = await hashPassword(String(code));
+        const ms = ctx.config.emailConfig.verificationCodeExpiresIn ?? 30 * 60 * 1000;
+        const expiresAt = new Date(Date.now() + ms);
+
+        // Store verification code in email_identities table
+        await orm.upsert('email_identities', {
+          where: (b) => b('identity_id', '=', identity.id),
+          create: {
+            identity_id: identity.id,
+            verification_code: hashedCode,
+            verification_code_expires_at: expiresAt,
+          },
+          update: {
+            verification_code: hashedCode,
+            verification_code_expires_at: expiresAt,
+          },
+        });
+
+        // Send verification code using email plugin's sendCode function
+        await ctx.config.emailConfig.sendCode(
+          { id: identity.subject_id },
+          code,
+          emailOrUsername,
+          'verify',
+        );
+
+        return {
+          success: false,
+          message: 'Email verification required. Verification code sent.',
+          status: 'eq',
+          others,
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Email verification required',
+          status: 'eq',
+          others,
+        };
+      }
     }
 
     // Create session
