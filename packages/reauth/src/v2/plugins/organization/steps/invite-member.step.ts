@@ -152,7 +152,7 @@ export const inviteMemberStep: AuthStepV2<
       
       const invitationId = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       
-      await orm.insertOne('organization_invitations', {
+      await orm.create('organization_invitations', {
         id: invitationId,
         organization_id,
         email,

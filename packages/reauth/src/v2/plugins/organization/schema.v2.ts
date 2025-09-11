@@ -13,8 +13,7 @@ export const organizations = table('organizations', {
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
   is_active: column('is_active', 'bool').defaultTo$(() => true),
 })
-  .unique('org_slug_uk', ['slug'])
-  .index('org_parent_idx', ['parent_id']);
+  .unique('org_slug_uk', ['slug']);
 
 // Organization memberships table for user-organization relationships
 export const organizationMemberships = table('organization_memberships', {
@@ -29,10 +28,7 @@ export const organizationMemberships = table('organization_memberships', {
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
 })
-  .unique('org_membership_uk', ['subject_id', 'organization_id'])
-  .index('org_membership_subject_idx', ['subject_id'])
-  .index('org_membership_org_idx', ['organization_id'])
-  .index('org_membership_status_idx', ['status']);
+  .unique('org_membership_uk', ['subject_id', 'organization_id']);
 
 // Organization invitations table for pending invitations
 export const organizationInvitations = table('organization_invitations', {
@@ -48,11 +44,7 @@ export const organizationInvitations = table('organization_invitations', {
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
 })
-  .unique('org_invitation_token_uk', ['token'])
-  .index('org_invitation_org_idx', ['organization_id'])
-  .index('org_invitation_email_idx', ['email'])
-  .index('org_invitation_status_idx', ['status'])
-  .index('org_invitation_expires_idx', ['expires_at']);
+  .unique('org_invitation_token_uk', ['token']);
 
 export const organizationSchemaV2: ReauthSchemaPlugin = {
   tables: {

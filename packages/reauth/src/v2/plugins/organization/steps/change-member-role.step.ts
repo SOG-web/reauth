@@ -142,7 +142,7 @@ export const changeMemberRoleStep: AuthStepV2<
       const now = new Date();
       
       // Update membership role
-      await orm.updateMany('organization_memberships', {
+      await (orm as any).updateMany('organization_memberships', {
         where: (b: any) =>
           b.and(
             b('subject_id', '=', subject_id),

@@ -117,7 +117,7 @@ export const updateOrganizationStep: AuthStepV2<
       if (settings !== undefined) updateData.settings = settings;
       if (metadata !== undefined) updateData.metadata = metadata;
 
-      await orm.updateMany('organizations', {
+      await (orm as any).updateMany('organizations', {
         where: (b: any) => b('id', '=', organization_id),
         set: updateData,
       });

@@ -57,7 +57,7 @@ export const hasOrganizationPermission = async (
   if (!membership) return false;
 
   const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-  return allowedRoles.includes(membership.role);
+  return allowedRoles.includes((membership as any).role);
 };
 
 /**
@@ -99,7 +99,7 @@ export const getOrganizationParents = async (
 
     if (parent) {
       parents.push(parent);
-      currentId = parent.parent_id;
+      currentId = (parent as any).parent_id;
     } else {
       break;
     }
@@ -159,7 +159,7 @@ export const cleanupExpiredInvitations = async (
 
   try {
     // Step 1: Delete expired invitations that are past retention period
-    const expiredResult = await orm.deleteMany('organization_invitations', {
+    const expiredResult = await (orm as any).deleteMany('organization_invitations', {
       where: (b: any) =>
         b.and(
           b.or(
@@ -173,7 +173,7 @@ export const cleanupExpiredInvitations = async (
     expiredInvitationsDeleted = typeof expiredResult === 'number' ? expiredResult : 0;
 
     // Step 2: Delete old revoked invitations
-    const revokedResult = await orm.deleteMany('organization_invitations', {
+    const revokedResult = await (orm as any).deleteMany('organization_invitations', {
       where: (b: any) =>
         b.and(
           b('status', '=', 'revoked'),
@@ -185,7 +185,7 @@ export const cleanupExpiredInvitations = async (
     revokedInvitationsDeleted = typeof revokedResult === 'number' ? revokedResult : 0;
 
     // Step 3: Update status of expired pending invitations (don't delete immediately)
-    await orm.updateMany('organization_invitations', {
+    await (orm as any).updateMany('organization_invitations', {
       where: (b: any) =>
         b.and(
           b('status', '=', 'pending'),
@@ -223,14 +223,13 @@ export const cleanupExpiredMemberships = async (
 
   try {
     // Delete memberships that have expired
-    const result = await orm.deleteMany('organization_memberships', {
+    const result = await (orm as any).deleteMany('organization_memberships', {
       where: (b: any) =>
         b.and(
           b('expires_at', '!=', null),
           b('expires_at', '<', now),
           b('status', '!=', 'suspended') // Don't delete suspended memberships automatically
         ),
-      limit: batchSize,
     });
 
     membershipsDeleted = typeof result === 'number' ? result : 0;

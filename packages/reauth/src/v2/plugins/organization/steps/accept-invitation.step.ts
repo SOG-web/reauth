@@ -60,10 +60,10 @@ export const acceptInvitationStep: AuthStepV2<
 
     // Check if invitation has expired
     const now = new Date();
-    if (new Date(invitation.expires_at) < now) {
+    if (new Date((invitation as any).expires_at) < now) {
       // Update invitation status to expired
-      await orm.updateMany('organization_invitations', {
-        where: (b: any) => b('id', '=', invitation.id),
+      await (orm as any).updateMany('organization_invitations', {
+        where: (b: any) => b('id', '=', (invitation as any).id),
         set: {
           status: 'expired',
           updated_at: now,
@@ -136,7 +136,7 @@ export const acceptInvitationStep: AuthStepV2<
       });
 
       if (existingIdentity) {
-        subjectId = existingIdentity.subject_id;
+        subjectId = (existingIdentity as any).subject_id;
       } else {
         // In a real implementation, you might want to require the user to register first
         // For now, we'll return an error requiring authentication
@@ -170,12 +170,12 @@ export const acceptInvitationStep: AuthStepV2<
       const membershipId = `mem_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       
       // Create membership
-      await orm.insertOne('organization_memberships', {
+      await orm.create('organization_memberships', {
         id: membershipId,
         subject_id: subjectId,
-        organization_id: invitation.organization_id,
-        role: invitation.role,
-        invited_by: invitation.invited_by,
+        organization_id: (invitation as any).organization_id,
+        role: (invitation as any).role,
+        invited_by: (invitation as any).invited_by,
         joined_at: now,
         expires_at: null,
         status: 'active',
@@ -184,8 +184,8 @@ export const acceptInvitationStep: AuthStepV2<
       });
 
       // Update invitation status
-      await orm.updateMany('organization_invitations', {
-        where: (b: any) => b('id', '=', invitation.id),
+      await (orm as any).updateMany('organization_invitations', {
+        where: (b: any) => b('id', '=', (invitation as any).id),
         set: {
           status: 'accepted',
           accepted_at: now,
@@ -199,8 +199,8 @@ export const acceptInvitationStep: AuthStepV2<
         status: 'su',
         membership: {
           id: membershipId,
-          organization_id: invitation.organization_id,
-          role: invitation.role,
+          organization_id: (invitation as any).organization_id,
+          role: (invitation as any).role,
         },
       };
     } catch (error) {
