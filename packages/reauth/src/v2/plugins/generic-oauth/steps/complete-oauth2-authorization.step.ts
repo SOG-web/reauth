@@ -44,7 +44,12 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
   validationSchema: completeOAuth2AuthorizationInputSchema,
   inputs: ['sessionId', 'code', 'state', 'error', 'errorDescription'],
   outputs: completeOAuth2AuthorizationOutputSchema,
-  protocol: 'generic-oauth.complete-oauth2-authorization.v1',
+  protocol: {
+    type: 'generic-oauth.complete-oauth2-authorization.v1',
+    description: 'Complete OAuth 2.0 authorization',
+    method: 'POST',
+    path: '/oauth2/complete',
+  },
   
   async run(input, ctx) {
     const { sessionId, code, state, error, errorDescription } = input;

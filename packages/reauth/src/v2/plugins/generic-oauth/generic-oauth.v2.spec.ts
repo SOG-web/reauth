@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createGenericOAuthPlugin, type GenericOAuthConfigV2 } from './plugin.v2';
 import { 
   CrossPlatformCrypto,
@@ -147,21 +147,21 @@ describe('Generic OAuth Plugin V2', () => {
     });
 
     it('should have begin-oauth2-authorization step', () => {
-      const step = plugin.steps.find(s => s.name === 'begin-oauth2-authorization');
+      const step = plugin.steps?.find(s => s.name === 'begin-oauth2-authorization');
       expect(step).toBeDefined();
-      expect(step?.protocol).toBe('generic-oauth.begin-oauth2-authorization.v1');
+      expect(step?.protocol?.type).toBe('generic-oauth.begin-oauth2-authorization.v1');
     });
 
     it('should have complete-oauth2-authorization step', () => {
-      const step = plugin.steps.find(s => s.name === 'complete-oauth2-authorization');
+      const step = plugin.steps?.find(s => s.name === 'complete-oauth2-authorization');
       expect(step).toBeDefined();
-      expect(step?.protocol).toBe('generic-oauth.complete-oauth2-authorization.v1');
+      expect(step?.protocol?.type).toBe('generic-oauth.complete-oauth2-authorization.v1');
     });
 
     it('should have refresh-oauth2-token step', () => {
-      const step = plugin.steps.find(s => s.name === 'refresh-oauth2-token');
+      const step = plugin.steps?.find(s => s.name === 'refresh-oauth2-token');
       expect(step).toBeDefined();
-      expect(step?.protocol).toBe('generic-oauth.refresh-oauth2-token.v1');
+      expect(step?.protocol?.type).toBe('generic-oauth.refresh-oauth2-token.v1');
     });
   });
 
@@ -182,9 +182,9 @@ describe('Generic OAuth Plugin V2', () => {
     });
 
     it('should have begin-oauth1-authorization step', () => {
-      const step = plugin.steps.find(s => s.name === 'begin-oauth1-authorization');
+      const step = plugin.steps?.find(s => s.name === 'begin-oauth1-authorization');
       expect(step).toBeDefined();
-      expect(step?.protocol).toBe('generic-oauth.begin-oauth1-authorization.v1');
+      expect(step?.protocol?.type).toBe('generic-oauth.begin-oauth1-authorization.v1');
     });
   });
 
@@ -416,7 +416,7 @@ describe('Generic OAuth Plugin V2', () => {
         },
       });
 
-      const stepNames = plugin.steps.map(s => s.name);
+      const stepNames = plugin.steps?.map(s => s.name) || [];
       expect(stepNames).toContain('begin-oauth2-authorization');
       expect(stepNames).toContain('complete-oauth2-authorization');
       expect(stepNames).toContain('refresh-oauth2-token');
@@ -436,16 +436,16 @@ describe('Generic OAuth Plugin V2', () => {
         },
       });
 
-      const stepNames = plugin.steps.map(s => s.name);
+      const stepNames = plugin.steps?.map(s => s.name) || [];
       expect(stepNames).toContain('begin-oauth1-authorization');
     });
 
     it('should have correct step protocols', () => {
       const plugin = createGenericOAuthPlugin({ config: { providers: {} } });
       
-      plugin.steps.forEach(step => {
-        expect(step.protocol).toMatch(/^generic-oauth\./);
-        expect(step.protocol).toMatch(/\.v1$/);
+      plugin.steps?.forEach(step => {
+        expect(step.protocol?.type).toMatch(/^generic-oauth\./);
+        expect(step.protocol?.type).toMatch(/\.v1$/);
       });
     });
   });
