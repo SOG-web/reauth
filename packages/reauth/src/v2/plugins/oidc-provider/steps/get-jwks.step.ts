@@ -3,22 +3,20 @@
  * Implements RFC 7517 JSON Web Key Set standard
  */
 
-import { type, string } from 'arktype';
-import { createStepV2 } from '../../../utils/create-step.v2';
+import { type } from 'arktype';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OIDCProviderConfigV2 } from '../types';
 
 // Input schema for JWKS request
-const GetJwksInput = type({
-  // JWKS endpoint typically doesn't need parameters
-  // but we include this for consistency
-  keyId: string.optional(),
+const getJwksInputSchema = type({
+  'keyId?': 'string',
 });
 
 // Output schema for JWKS response
-const GetJwksOutput = type({
-  success: 'true',
-  status: '"jwks_retrieved"',
+const getJwksOutputSchema = type({
+  success: 'boolean',
   message: 'string',
+  status: 'string',
   jwks: 'unknown', // Will contain the JWK Set
 });
 
@@ -35,41 +33,41 @@ const GetJwksOutput = type({
  * console.log(result.jwks.keys); // Array of JWK objects
  * ```
  */
-export const getJwksStep = createStepV2({
+export const getJwksStep: AuthStepV2<
+  typeof getJwksInputSchema.infer,
+  typeof getJwksOutputSchema.infer,
+  OIDCProviderConfigV2,
+  OrmLike
+> = {
   name: 'get-jwks',
-  
-  inputs: GetJwksInput,
-  outputs: GetJwksOutput,
-  
-  protocol: 'oidc-provider.get-jwks.v1',
-  
-  meta: {
-    http: {
-      method: 'GET',
-      codes: {
-        jwks_retrieved: 200,
-        no_keys_found: 404,
-        key_error: 500,
-      },
-      auth: false, // JWKS is public endpoint
-    },
+  validationSchema: getJwksInputSchema,
+  inputs: ['keyId'],
+  outputs: getJwksOutputSchema,
+  protocol: {
+    type: 'oidc-provider.get-jwks',
+    description: 'Get JWKS (JSON Web Key Set)',
+    method: 'GET',
+    path: '/.well-known/jwks.json',
   },
 
-  async handler(input, { orm, config }) {
-    const oidcConfig = config as OIDCProviderConfigV2;
+  async run(input, ctx) {
+    const oidcConfig = ctx.config as OIDCProviderConfigV2;
+    const orm = await ctx.engine.getOrm();
 
     try {
       // Get active signing keys from database
       const activeKeys = await orm.findMany('oidc_keys', {
         where: (b: any) => b('is_active', '=', true)
           .and(b('key_use', '=', 'sig')),
-        orderBy: (b: any) => b('created_at', 'desc'),
+        orderBy: [
+          ['created_at', 'desc'],
+        ],
       });
 
       if (!activeKeys || activeKeys.length === 0) {
         return {
-          success: false as const,
-          status: 'no_keys_found' as const,
+          success: false,
+          status: 'no_keys_found',
           message: 'No active signing keys found',
           jwks: null,
         };
@@ -101,8 +99,8 @@ export const getJwksStep = createStepV2({
       };
 
       return {
-        success: true as const,
-        status: 'jwks_retrieved' as const,
+        success: true,
+        status: 'jwks_retrieved',
         message: 'JWKS retrieved successfully',
         jwks,
       };
@@ -110,11 +108,11 @@ export const getJwksStep = createStepV2({
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
       return {
-        success: false as const,
-        status: 'key_error' as const,
+        success: false,
+        status: 'key_error',
         message: `Failed to retrieve JWKS: ${errorMessage}`,
         jwks: null,
       };
     }
   },
-});
+};
