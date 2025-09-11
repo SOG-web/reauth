@@ -45,6 +45,53 @@ app.use('/api/auth', adapter.createMiddleware());
 const authRouter = adapter.createRouter();
 app.use('/api/auth', authRouter);
 
+// OPTION 1: Use user middleware globally to populate req.user on all requests
+app.use(adapter.createUserMiddleware());
+
+// OPTION 2: Use user middleware on specific routes only
+// app.use('/api/protected', adapter.createUserMiddleware());
+
+// Example protected route using req.user (populated by middleware)
+app.get('/api/profile', (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  res.json({
+    message: 'Profile data',
+    user: req.user.subject,
+    sessionValid: req.user.valid,
+  });
+});
+
+// Example route manually checking for current user
+app.get('/api/dashboard', async (req, res) => {
+  const user = await adapter.getCurrentUser(req);
+  
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  res.json({
+    message: 'Dashboard data',
+    user: user.subject,
+    lastAccessed: user.metadata?.lastAccessed,
+  });
+});
+
+// Example route with optional authentication
+app.get('/api/content', async (req, res) => {
+  const user = await adapter.getCurrentUser(req);
+  
+  res.json({
+    message: 'Content data',
+    isAuthenticated: !!user,
+    user: user?.subject || null,
+    // Show different content based on authentication status
+    content: user ? 'Premium content' : 'Public content',
+  });
+});
+
 // Optional: Add health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });

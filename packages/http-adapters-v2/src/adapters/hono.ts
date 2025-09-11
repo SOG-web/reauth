@@ -3,6 +3,7 @@ import type {
   FrameworkAdapterV2,
   HttpRequest,
   HttpResponse,
+  AuthenticatedUser,
 } from '../types.js';
 import { ReAuthHttpAdapterV2 } from '../base-adapter.js';
 
@@ -23,6 +24,38 @@ export class HonoAdapterV2 {
       c.set('reauth', this.adapter);
       await next();
     };
+  }
+
+  /**
+   * Create Hono user middleware that populates c.get('user')
+   */
+  createUserMiddleware() {
+    return async (c: any, next: any) => {
+      try {
+        const httpReq = this.extractRequest(c);
+        const user = await this.adapter.getCurrentUser(httpReq);
+        c.set('user', user);
+      } catch (error) {
+        // Don't fail the request if user lookup fails
+        c.set('user', null);
+      }
+      await next();
+    };
+  }
+
+  /**
+   * Get current user from Hono context
+   */
+  async getCurrentUser(c: any): Promise<AuthenticatedUser | null> {
+    // If user is already populated by middleware, return it
+    const user = c.get('user');
+    if (user !== undefined) {
+      return user;
+    }
+
+    // Otherwise, check session
+    const httpReq = this.extractRequest(c);
+    return await this.adapter.getCurrentUser(httpReq);
   }
 
   /**

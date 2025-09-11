@@ -8,6 +8,7 @@ V2 HTTP protocol adapters for ReAuth - framework-agnostic integration with Expre
 - 🔒 **Security First**: Built-in CORS, rate limiting, and security headers
 - 🛡️ **Type Safe**: Full TypeScript integration with V2 engine types
 - 🔌 **Plugin Aware**: Automatically discovers and exposes V2 plugin endpoints
+- 👤 **User Access**: Easy current user retrieval with middleware and utilities
 - 📊 **Introspection**: Built-in API documentation and health checks
 - ⚡ **Performance**: Optimized for high-throughput scenarios
 
@@ -47,6 +48,10 @@ const adapter = createExpressAdapter({
 });
 
 app.use('/api/auth', adapter.createRouter());
+
+// Enable user population on all requests (optional)
+app.use(adapter.createUserMiddleware());
+
 app.listen(3000);
 ```
 
@@ -66,6 +71,10 @@ const adapter = createFastifyAdapter({
 });
 
 fastify.register(adapter.createPlugin());
+
+// Enable user population on all requests (optional)
+fastify.register(adapter.createUserPlugin());
+
 fastify.listen({ port: 3000 });
 ```
 
@@ -85,6 +94,10 @@ const adapter = createHonoAdapter({
 });
 
 adapter.registerRoutes(app, '/api/auth');
+
+// Enable user population on all requests (optional)
+app.use('*', adapter.createUserMiddleware());
+
 // or use a standalone app
 // const authApp = adapter.createApp();
 // app.route('/api/auth', authApp);
@@ -97,6 +110,157 @@ Complete examples with detailed configurations are available in the `examples/` 
 - **[Express Example](./examples/express-example.ts)** - Full Express.js integration with middleware, security, and error handling
 - **[Fastify Example](./examples/fastify-example.ts)** - High-performance Fastify setup with schema validation  
 - **[Hono Example](./examples/hono-example.ts)** - Edge-optimized Hono deployment for serverless environments
+
+## Getting Current User
+
+The V2 HTTP adapters provide multiple ways to access the current authenticated user in your route handlers.
+
+### Method 1: Using User Middleware (Recommended)
+
+Automatically populate user information on all requests:
+
+#### Express.js
+```typescript
+// Add user middleware globally
+app.use(adapter.createUserMiddleware());
+
+// Access user in any route handler
+app.get('/api/profile', (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  res.json({
+    message: 'Profile data',
+    user: req.user.subject,
+    sessionValid: req.user.valid,
+  });
+});
+```
+
+#### Fastify
+```typescript
+// Register user plugin globally
+fastify.register(adapter.createUserPlugin());
+
+// Access user in any route handler
+fastify.get('/api/profile', async (request, reply) => {
+  const user = (request as any).user;
+  
+  if (!user) {
+    return reply.status(401).send({ error: 'Authentication required' });
+  }
+  
+  return {
+    message: 'Profile data',
+    user: user.subject,
+    sessionValid: user.valid,
+  };
+});
+```
+
+#### Hono
+```typescript
+// Add user middleware globally
+app.use('*', adapter.createUserMiddleware());
+
+// Access user in any route handler
+app.get('/api/profile', (c) => {
+  const user = c.get('user');
+  
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+  
+  return c.json({
+    message: 'Profile data',
+    user: user.subject,
+    sessionValid: user.valid,
+  });
+});
+```
+
+### Method 2: Manual User Lookup
+
+Check for current user when needed:
+
+```typescript
+// Express
+app.get('/api/dashboard', async (req, res) => {
+  const user = await adapter.getCurrentUser(req);
+  
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  res.json({ user: user.subject });
+});
+
+// Fastify
+fastify.get('/api/dashboard', async (request, reply) => {
+  const user = await adapter.getCurrentUser(request);
+  
+  if (!user) {
+    return reply.status(401).send({ error: 'Authentication required' });
+  }
+  
+  return { user: user.subject };
+});
+
+// Hono
+app.get('/api/dashboard', async (c) => {
+  const user = await adapter.getCurrentUser(c);
+  
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+  
+  return c.json({ user: user.subject });
+});
+```
+
+### Method 3: Optional Authentication
+
+Handle routes that work with or without authentication:
+
+```typescript
+app.get('/api/content', async (req, res) => {
+  const user = await adapter.getCurrentUser(req);
+  
+  res.json({
+    message: 'Content data',
+    isAuthenticated: !!user,
+    user: user?.subject || null,
+    content: user ? 'Premium content' : 'Public content',
+  });
+});
+```
+
+### AuthenticatedUser Type
+
+The user object contains:
+
+```typescript
+interface AuthenticatedUser {
+  subject: any;           // The authenticated user data from the session
+  token: string;          // The session token
+  valid: boolean;         // Whether the session is valid
+  metadata?: {            // Optional session metadata
+    expiresAt?: string;
+    createdAt?: string;
+    lastAccessed?: string;
+    [key: string]: any;
+  };
+}
+```
+
+### Session Token Sources
+
+The adapters automatically check for session tokens in:
+
+1. **Authorization header**: `Bearer <token>`
+2. **Cookies**: `reauth-session=<token>`
+3. **Request body**: `{ "token": "<token>" }`
 
 ## Configuration
 

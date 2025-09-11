@@ -5,6 +5,7 @@ import type {
   HttpRequest,
   HttpResponse,
   MiddlewareFunction,
+  AuthenticatedUser,
 } from '../types.js';
 import { ReAuthHttpAdapterV2 } from '../base-adapter.js';
 
@@ -17,7 +18,24 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   }
 
   /**
-   * Create Express middleware
+   * Create Express middleware that populates req.user
+   */
+  createUserMiddleware(): (req: Request, res: Response, next: NextFunction) => Promise<void> {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        const httpReq = this.extractRequest(req);
+        (req as any).user = await this.adapter.getCurrentUser(httpReq);
+        next();
+      } catch (error) {
+        // Don't fail the request if user lookup fails, just continue with req.user = null
+        (req as any).user = null;
+        next();
+      }
+    };
+  }
+
+  /**
+   * Create Express middleware that adds adapter to request
    */
   createMiddleware(): (req: Request, res: Response, next: NextFunction) => Promise<void> {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -77,6 +95,9 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
 
     // Add middleware
     router.use(this.createMiddleware());
+
+    // Optionally add user middleware if configured
+    // Users can add this separately: router.use(adapter.createUserMiddleware());
 
     // Authentication step routes
     router.post('/auth/:plugin/:step', this.createStepHandler());
@@ -220,6 +241,20 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
         this.handleError(res, error as Error);
       }
     };
+  }
+
+  /**
+   * Get current user from Express request
+   */
+  async getCurrentUser(req: Request): Promise<AuthenticatedUser | null> {
+    // If user is already populated by middleware, return it
+    if ((req as any).user !== undefined) {
+      return (req as any).user;
+    }
+
+    // Otherwise, check session
+    const httpReq = this.extractRequest(req);
+    return await this.adapter.getCurrentUser(httpReq);
   }
 
   /**

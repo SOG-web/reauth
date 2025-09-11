@@ -4,6 +4,7 @@ import type {
   FrameworkAdapterV2,
   HttpRequest,
   HttpResponse,
+  AuthenticatedUser,
 } from '../types.js';
 import { ReAuthHttpAdapterV2 } from '../base-adapter.js';
 
@@ -20,6 +21,27 @@ export class FastifyAdapterV2 implements FrameworkAdapterV2<FastifyRequest, Fast
    */
   createMiddleware(): never {
     throw new Error('Fastify uses plugin system, use createPlugin() instead');
+  }
+
+  /**
+   * Create user middleware (Fastify hook)
+   */
+  createUserMiddleware(): never {
+    throw new Error('Fastify uses plugin system with hooks, use createPlugin() with user population instead');
+  }
+
+  /**
+   * Get current user from Fastify request
+   */
+  async getCurrentUser(req: FastifyRequest): Promise<AuthenticatedUser | null> {
+    // If user is already populated by hook, return it
+    if ((req as any).user !== undefined) {
+      return (req as any).user;
+    }
+
+    // Otherwise, check session
+    const httpReq = this.extractRequest(req);
+    return await this.adapter.getCurrentUser(httpReq);
   }
 
   /**
@@ -61,6 +83,19 @@ export class FastifyAdapterV2 implements FrameworkAdapterV2<FastifyRequest, Fast
         timestamp: new Date().toISOString(),
       },
     });
+  }
+
+  /**
+   * Create Fastify plugin with user population
+   */
+  createUserPlugin(): FastifyPluginAsync {
+    return async (fastify: FastifyInstance): Promise<void> => {
+      // Add preHandler hook to populate user on every request
+      fastify.addHook('preHandler', async (request: FastifyRequest) => {
+        const httpReq = this.extractRequest(request);
+        (request as any).user = await this.adapter.getCurrentUser(httpReq);
+      });
+    };
   }
 
   /**

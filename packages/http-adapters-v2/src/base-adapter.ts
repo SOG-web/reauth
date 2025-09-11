@@ -14,6 +14,7 @@ import type {
   AuthStepResponse,
   SessionResponse,
   PluginListResponse,
+  AuthenticatedUser,
 } from './types.js';
 import {
   HttpAdapterError,
@@ -87,7 +88,7 @@ export class ReAuthHttpAdapterV2 {
 
     // Check authentication if required
     if (endpoint.requiresAuth) {
-      await this.validateAuthentication(req);
+      await this.requireAuthentication(req);
     }
 
     // Extract input from request
@@ -369,19 +370,57 @@ export class ReAuthHttpAdapterV2 {
   }
 
   /**
-   * Validate authentication for protected endpoints
+   * Get current authenticated user from request
    */
-  private async validateAuthentication(req: HttpRequest): Promise<void> {
+  async getCurrentUser(req: HttpRequest): Promise<AuthenticatedUser | null> {
     const token = this.extractSessionToken(req);
     
     if (!token) {
+      return null;
+    }
+
+    try {
+      const session = await this.engine.checkSession(token);
+      
+      if (!session.valid || !session.subject) {
+        return null;
+      }
+
+      return {
+        subject: session.subject,
+        token: session.token || token,
+        valid: session.valid,
+        metadata: {
+          // Add any available metadata from the session
+          lastAccessed: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      // Silently return null if session check fails
+      return null;
+    }
+  }
+
+  /**
+   * Authenticate request and return user or throw error
+   */
+  async requireAuthentication(req: HttpRequest): Promise<AuthenticatedUser> {
+    const user = await this.getCurrentUser(req);
+    
+    if (!user) {
       throw new AuthenticationError('Authentication required');
     }
 
-    const session = await this.engine.checkSession(token);
-    if (!session.valid) {
-      throw new AuthenticationError('Invalid or expired session');
-    }
+    return user;
+  }
+
+  /**
+   * Create user authentication middleware that populates request.user
+   */
+  createUserMiddleware() {
+    return async (req: HttpRequest): Promise<void> => {
+      req.user = await this.getCurrentUser(req);
+    };
   }
 
   /**

@@ -74,8 +74,6 @@ export interface ReAuthEngineV2 {
   };
 }
 
-import type { Request, Response, NextFunction } from 'express';
-
 // Base HTTP adapter configuration
 export interface HttpAdapterV2Config {
   engine: ReAuthEngineV2;
@@ -162,6 +160,25 @@ export interface HttpRequest {
   cookies?: Record<string, string>;
   ip?: string;
   userAgent?: string;
+  // Current authenticated user information
+  user?: AuthenticatedUser | null;
+}
+
+// Authenticated user information from session
+export interface AuthenticatedUser {
+  /** The authenticated subject from the session */
+  subject: any;
+  /** The session token */
+  token: string;
+  /** Whether the session is valid */
+  valid: boolean;
+  /** Session metadata */
+  metadata?: {
+    expiresAt?: string;
+    createdAt?: string;
+    lastAccessed?: string;
+    [key: string]: any;
+  };
 }
 
 export interface HttpResponse {
@@ -177,9 +194,11 @@ export interface HttpResponse {
 export interface FrameworkAdapterV2<TRequest = any, TResponse = any, TNext = any> {
   name: string;
   createMiddleware(): (req: TRequest, res: TResponse, next: TNext) => Promise<void> | void;
+  createUserMiddleware(): (req: TRequest, res: TResponse, next: TNext) => Promise<void> | void;
   extractRequest(req: TRequest): HttpRequest;
   sendResponse(res: TResponse, data: any, statusCode?: number): void;
   handleError(res: TResponse, error: Error, statusCode?: number): void;
+  getCurrentUser(req: TRequest): Promise<AuthenticatedUser | null>;
 }
 
 // Route handler types

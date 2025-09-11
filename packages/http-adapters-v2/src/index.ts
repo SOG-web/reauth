@@ -39,6 +39,7 @@ export type {
   PluginListResponse,
   MiddlewareFunction,
   SecurityMiddleware,
+  AuthenticatedUser,
 } from './types.js';
 
 // Error classes

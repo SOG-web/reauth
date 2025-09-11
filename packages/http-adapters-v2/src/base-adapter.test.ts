@@ -124,4 +124,120 @@ describe('ReAuth HTTP Adapter V2', () => {
     expect(result.data?.plugins).toHaveLength(1);
     expect(result.data?.version).toBe('2.0.0');
   });
+
+  it('should get current user from valid session', async () => {
+    const adapter = new ReAuthHttpAdapterV2({
+      engine: mockEngine,
+    });
+
+    const mockRequest = {
+      method: 'GET',
+      url: '/test',
+      path: '/test',
+      query: {},
+      params: {},
+      body: {},
+      headers: {
+        authorization: 'Bearer valid-token',
+      },
+    };
+
+    const user = await adapter.getCurrentUser(mockRequest);
+    
+    expect(user).toBeDefined();
+    expect(user?.subject.id).toBe('test-user');
+    expect(user?.valid).toBe(true);
+    expect(user?.token).toBe('mock-token');
+  });
+
+  it('should return null for invalid session', async () => {
+    const mockEngineInvalid: ReAuthEngineV2 = {
+      ...mockEngine,
+      checkSession: async () => ({
+        subject: null,
+        token: null,
+        valid: false,
+      }),
+    };
+
+    const adapter = new ReAuthHttpAdapterV2({
+      engine: mockEngineInvalid,
+    });
+
+    const mockRequest = {
+      method: 'GET',
+      url: '/test',
+      path: '/test',
+      query: {},
+      params: {},
+      body: {},
+      headers: {
+        authorization: 'Bearer invalid-token',
+      },
+    };
+
+    const user = await adapter.getCurrentUser(mockRequest);
+    expect(user).toBe(null);
+  });
+
+  it('should return null for no session token', async () => {
+    const adapter = new ReAuthHttpAdapterV2({
+      engine: mockEngine,
+    });
+
+    const mockRequest = {
+      method: 'GET',
+      url: '/test',
+      path: '/test',
+      query: {},
+      params: {},
+      body: {},
+      headers: {},
+    };
+
+    const user = await adapter.getCurrentUser(mockRequest);
+    expect(user).toBe(null);
+  });
+
+  it('should require authentication and return user', async () => {
+    const adapter = new ReAuthHttpAdapterV2({
+      engine: mockEngine,
+    });
+
+    const mockRequest = {
+      method: 'GET',
+      url: '/test',
+      path: '/test',
+      query: {},
+      params: {},
+      body: {},
+      headers: {
+        authorization: 'Bearer valid-token',
+      },
+    };
+
+    const user = await adapter.requireAuthentication(mockRequest);
+    
+    expect(user).toBeDefined();
+    expect(user.subject.id).toBe('test-user');
+    expect(user.valid).toBe(true);
+  });
+
+  it('should throw error when authentication required but no token', async () => {
+    const adapter = new ReAuthHttpAdapterV2({
+      engine: mockEngine,
+    });
+
+    const mockRequest = {
+      method: 'GET',
+      url: '/test',
+      path: '/test',
+      query: {},
+      params: {},
+      body: {},
+      headers: {},
+    };
+
+    await expect(adapter.requireAuthentication(mockRequest)).rejects.toThrow('Authentication required');
+  });
 });

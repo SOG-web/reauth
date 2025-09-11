@@ -36,6 +36,12 @@ const adapter = createFastifyAdapter({
 // Register the ReAuth plugin
 fastify.register(adapter.createPlugin());
 
+// OPTION 1: Register user plugin globally to populate request.user on all requests
+fastify.register(adapter.createUserPlugin());
+
+// OPTION 2: Register user plugin on specific contexts only
+// fastify.register(adapter.createUserPlugin(), { prefix: '/api/protected' });
+
 // Optional: Add schema validation for better performance
 fastify.addSchema({
   $id: 'authResponse',
@@ -50,6 +56,49 @@ fastify.addSchema({
       },
     },
   },
+});
+
+// Example protected route using request.user (populated by hook)
+fastify.get('/api/profile', async (request, reply) => {
+  const user = (request as any).user;
+  
+  if (!user) {
+    return reply.status(401).send({ error: 'Authentication required' });
+  }
+  
+  return {
+    message: 'Profile data',
+    user: user.subject,
+    sessionValid: user.valid,
+  };
+});
+
+// Example route manually checking for current user
+fastify.get('/api/dashboard', async (request, reply) => {
+  const user = await adapter.getCurrentUser(request);
+  
+  if (!user) {
+    return reply.status(401).send({ error: 'Authentication required' });
+  }
+  
+  return {
+    message: 'Dashboard data',
+    user: user.subject,
+    lastAccessed: user.metadata?.lastAccessed,
+  };
+});
+
+// Example route with optional authentication
+fastify.get('/api/content', async (request, reply) => {
+  const user = await adapter.getCurrentUser(request);
+  
+  return {
+    message: 'Content data',
+    isAuthenticated: !!user,
+    user: user?.subject || null,
+    // Show different content based on authentication status
+    content: user ? 'Premium content' : 'Public content',
+  };
 });
 
 // Health check route

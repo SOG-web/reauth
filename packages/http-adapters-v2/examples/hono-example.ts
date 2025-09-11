@@ -45,12 +45,61 @@ const adapter = createHonoAdapter({
   },
 });
 
+// OPTION 1: Use user middleware globally to populate c.get('user') on all requests
+app.use('*', adapter.createUserMiddleware());
+
+// OPTION 2: Use user middleware on specific routes only
+// app.use('/api/protected/*', adapter.createUserMiddleware());
+
 // Method 1: Register routes directly on main app
 adapter.registerRoutes(app, '/api/auth');
 
 // Method 2: Alternative - Create dedicated auth app and mount it
 // const authApp = adapter.createApp();
 // app.route('/api/auth', authApp);
+
+// Example protected route using c.get('user') (populated by middleware)
+app.get('/api/profile', (c) => {
+  const user = c.get('user');
+  
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+  
+  return c.json({
+    message: 'Profile data',
+    user: user.subject,
+    sessionValid: user.valid,
+  });
+});
+
+// Example route manually checking for current user
+app.get('/api/dashboard', async (c) => {
+  const user = await adapter.getCurrentUser(c);
+  
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+  
+  return c.json({
+    message: 'Dashboard data',
+    user: user.subject,
+    lastAccessed: user.metadata?.lastAccessed,
+  });
+});
+
+// Example route with optional authentication
+app.get('/api/content', async (c) => {
+  const user = await adapter.getCurrentUser(c);
+  
+  return c.json({
+    message: 'Content data',
+    isAuthenticated: !!user,
+    user: user?.subject || null,
+    // Show different content based on authentication status
+    content: user ? 'Premium content' : 'Public content',
+  });
+});
 
 // Health and info endpoints
 app.get('/health', (c) => {
