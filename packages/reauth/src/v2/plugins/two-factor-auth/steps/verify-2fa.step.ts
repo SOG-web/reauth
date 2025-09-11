@@ -126,20 +126,20 @@ async function verifyTotpCode(
   const whereCondition = methodId ? 
     (b: any) => b.and([
       b('id', '=', methodId),
-      b('userId', '=', userId),
-      b('methodType', '=', 'totp')
+      b('user_id', '=', userId),
+      b('method_type', '=', 'totp')
     ]) :
     (b: any) => b.and([
-      b('userId', '=', userId),
-      b('methodType', '=', 'totp'),
-      b('isVerified', '=', true)
+      b('user_id', '=', userId),
+      b('method_type', '=', 'totp'),
+      b('is_verified', '=', true)
     ]);
 
   const method = await orm.findFirst('two_factor_methods', {
     where: whereCondition,
   });
 
-  if (!method || !method.secretEncrypted) {
+  if (!method || !method.secret_encrypted) {
     return false;
   }
 
@@ -153,7 +153,7 @@ async function verifyTotpCode(
   // Verify the TOTP code
   return await verifyTotp(
     code,
-    method.secretEncrypted, // TODO: Decrypt in production
+    method.secret_encrypted, // TODO: Decrypt in production
     totpConfig.window,
     undefined,
     totpConfig.digits,
@@ -174,22 +174,22 @@ async function verifyTemporaryCode(
   // Find the most recent unused code for this user and method
   const whereCondition = methodId ?
     (b: any) => b.and([
-      b('userId', '=', userId),
-      b('methodId', '=', methodId),
-      b('methodType', '=', methodType),
-      b('usedAt', 'IS', null),
-      b('expiresAt', '>', new Date())
+      b('user_id', '=', userId),
+      b('method_id', '=', methodId),
+      b('method_type', '=', methodType),
+      b('used_at', 'IS', null),
+      b('expires_at', '>', new Date())
     ]) :
     (b: any) => b.and([
-      b('userId', '=', userId),
-      b('methodType', '=', methodType),
-      b('usedAt', 'IS', null),
-      b('expiresAt', '>', new Date())
+      b('user_id', '=', userId),
+      b('method_type', '=', methodType),
+      b('used_at', 'IS', null),
+      b('expires_at', '>', new Date())
     ]);
 
   const codeRecord = await orm.findFirst('two_factor_codes', {
     where: whereCondition,
-    orderBy: { createdAt: 'desc' },
+    orderBy: [['created_at', 'desc']],
   });
 
   if (!codeRecord) {
@@ -197,7 +197,7 @@ async function verifyTemporaryCode(
   }
 
   // Increment attempts counter
-  await orm.update('two_factor_codes', {
+  await orm.updateMany('two_factor_codes', {
     where: (b: any) => b('id', '=', codeRecord.id),
     set: {
       attempts: codeRecord.attempts + 1,
@@ -205,12 +205,12 @@ async function verifyTemporaryCode(
   });
 
   // Check if code matches
-  if (codeRecord.codeHash === hashedCode) {
+  if (codeRecord.code_hash === hashedCode) {
     // Mark code as used
-    await orm.update('two_factor_codes', {
+    await orm.updateMany('two_factor_codes', {
       where: (b: any) => b('id', '=', codeRecord.id),
       set: {
-        usedAt: new Date(),
+        used_at: new Date(),
       },
     });
     return true;
@@ -229,9 +229,9 @@ async function verifyBackupCode(
   // Find unused backup code
   const backupCode = await orm.findFirst('two_factor_backup_codes', {
     where: (b: any) => b.and([
-      b('userId', '=', userId),
-      b('codeHash', '=', hashedCode),
-      b('usedAt', 'IS', null)
+      b('user_id', '=', userId),
+      b('code_hash', '=', hashedCode),
+      b('used_at', 'IS', null)
     ]),
   });
 
@@ -239,8 +239,8 @@ async function verifyBackupCode(
     // Count remaining backup codes
     const remaining = await orm.findMany('two_factor_backup_codes', {
       where: (b: any) => b.and([
-        b('userId', '=', userId),
-        b('usedAt', 'IS', null)
+        b('user_id', '=', userId),
+        b('used_at', 'IS', null)
       ]),
     });
 
@@ -248,18 +248,18 @@ async function verifyBackupCode(
   }
 
   // Mark backup code as used
-  await orm.update('two_factor_backup_codes', {
+  await orm.updateMany('two_factor_backup_codes', {
     where: (b: any) => b('id', '=', backupCode.id),
     set: {
-      usedAt: new Date(),
+      used_at: new Date(),
     },
   });
 
   // Count remaining backup codes
   const remaining = await orm.findMany('two_factor_backup_codes', {
     where: (b: any) => b.and([
-      b('userId', '=', userId),
-      b('usedAt', 'IS', null)
+      b('user_id', '=', userId),
+      b('used_at', 'IS', null)
     ]),
   });
 

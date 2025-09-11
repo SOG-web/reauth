@@ -49,8 +49,8 @@ export const generateBackupCodesStep: AuthStepV2<
       if (!regenerate) {
         const existingCodes = await orm.findMany('two_factor_backup_codes', {
           where: (b: any) => b.and([
-            b('userId', '=', userId),
-            b('usedAt', 'IS', null)
+            b('user_id', '=', userId),
+            b('used_at', 'IS', null)
           ]),
         });
 
@@ -68,7 +68,7 @@ export const generateBackupCodesStep: AuthStepV2<
       // If regenerating, remove all existing backup codes for this user
       if (regenerate) {
         await orm.deleteMany('two_factor_backup_codes', {
-          where: (b: any) => b('userId', '=', userId),
+          where: (b: any) => b('user_id', '=', userId),
         });
       }
 
@@ -78,23 +78,19 @@ export const generateBackupCodesStep: AuthStepV2<
       
       // Generate new backup codes
       const backupCodes: string[] = [];
-      const codeInserts = [];
 
       for (let i = 0; i < count; i++) {
         const code = generateRandomString(length, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
         const hashedCode = await hashString(code);
         
         backupCodes.push(code);
-        codeInserts.push({
-          userId,
-          codeHash: hashedCode,
-          createdAt: new Date(),
+        
+        // Insert each backup code individually 
+        await orm.create('two_factor_backup_codes', {
+          user_id: userId,
+          code_hash: hashedCode,
+          created_at: new Date(),
         });
-      }
-
-      // Insert all backup codes
-      for (const codeData of codeInserts) {
-        await orm.insertOne('two_factor_backup_codes', codeData);
       }
 
       return {

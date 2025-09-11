@@ -32,19 +32,19 @@ export const listMethodsStep: AuthStepV2<
     try {
       // Get all 2FA methods for the user
       const methods = await orm.findMany('two_factor_methods', {
-        where: (b: any) => b('userId', '=', userId),
-        orderBy: { createdAt: 'desc' },
+        where: (b: any) => b('user_id', '=', userId),
+        orderBy: [['created_at', 'desc']],
       });
 
       // Transform methods for safe output (mask sensitive data)
       const safeMethods = methods.map((method: any) => ({
         id: method.id,
-        methodType: method.methodType,
-        isPrimary: method.isPrimary,
-        isVerified: method.isVerified,
-        lastUsedAt: method.lastUsedAt,
+        methodType: method.method_type,
+        isPrimary: method.is_primary,
+        isVerified: method.is_verified,
+        lastUsedAt: method.last_used_at,
         maskedIdentifier: maskSensitiveIdentifier(method),
-        createdAt: method.createdAt,
+        createdAt: method.created_at,
       }));
 
       return {
@@ -69,15 +69,15 @@ export const listMethodsStep: AuthStepV2<
  * Mask sensitive identifiers for safe display
  */
 function maskSensitiveIdentifier(method: any): string | undefined {
-  if (method.methodType === 'totp') {
+  if (method.method_type === 'totp') {
     return 'Authenticator App';
-  } else if (method.methodType === 'sms' && method.phoneNumberEncrypted) {
+  } else if (method.method_type === 'sms' && method.phone_number_encrypted) {
     // In production, decrypt first then mask
-    const phone = method.phoneNumberEncrypted; // TODO: Decrypt
+    const phone = method.phone_number_encrypted; // TODO: Decrypt
     return phone.length > 4 ? `***-***-${phone.slice(-4)}` : '***-***';
-  } else if (method.methodType === 'email' && method.emailEncrypted) {
+  } else if (method.method_type === 'email' && method.email_encrypted) {
     // In production, decrypt first then mask
-    const email = method.emailEncrypted; // TODO: Decrypt
+    const email = method.email_encrypted; // TODO: Decrypt
     const [localPart, domain] = email.split('@');
     if (localPart && domain) {
       const maskedLocal = localPart.length > 2 ? 
@@ -86,7 +86,7 @@ function maskSensitiveIdentifier(method: any): string | undefined {
       return `${maskedLocal}@${domain}`;
     }
     return '***@***';
-  } else if (method.methodType === 'hardware') {
+  } else if (method.method_type === 'hardware') {
     return `Security Key (${method.name || 'Unnamed'})`;
   }
   

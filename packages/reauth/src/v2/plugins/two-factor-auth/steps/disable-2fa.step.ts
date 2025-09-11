@@ -64,7 +64,7 @@ export const disable2faStep: AuthStepV2<
         const method = await orm.findFirst('two_factor_methods', {
           where: (b: any) => b.and([
             b('id', '=', methodId),
-            b('userId', '=', userId)
+            b('user_id', '=', userId)
           ]),
         });
 
@@ -81,7 +81,7 @@ export const disable2faStep: AuthStepV2<
       } else {
         // Disable all methods for user
         methodsToDisable = await orm.findMany('two_factor_methods', {
-          where: (b: any) => b('userId', '=', userId),
+          where: (b: any) => b('user_id', '=', userId),
         });
 
         if (methodsToDisable.length === 0) {
@@ -104,7 +104,7 @@ export const disable2faStep: AuthStepV2<
       // Remove the 2FA methods
       let disabledCount = 0;
       for (const method of methodsToDisable) {
-        await orm.delete('two_factor_methods', {
+        await orm.deleteMany('two_factor_methods', {
           where: (b: any) => b('id', '=', method.id),
         });
         disabledCount++;
@@ -148,29 +148,29 @@ async function cleanupRelatedData(orm: any, userId: string, methods: any[]): Pro
   if (methodIds.length > 0) {
     await orm.deleteMany('two_factor_codes', {
       where: (b: any) => b.and([
-        b('userId', '=', userId),
-        b('methodId', 'IN', methodIds)
+        b('user_id', '=', userId),
+        b('method_id', 'IN', methodIds)
       ]),
     });
   }
 
   // If all methods are being disabled, clean up backup codes and failed attempts
   const remainingMethods = await orm.findMany('two_factor_methods', {
-    where: (b: any) => b('userId', '=', userId),
+    where: (b: any) => b('user_id', '=', userId),
   });
 
   if (remainingMethods.length === 0) {
     // No 2FA methods left, clean up all related data
     await orm.deleteMany('two_factor_backup_codes', {
-      where: (b: any) => b('userId', '=', userId),
+      where: (b: any) => b('user_id', '=', userId),
     });
 
     await orm.deleteMany('two_factor_failed_attempts', {
-      where: (b: any) => b('userId', '=', userId),
+      where: (b: any) => b('user_id', '=', userId),
     });
 
     await orm.deleteMany('two_factor_codes', {
-      where: (b: any) => b('userId', '=', userId),
+      where: (b: any) => b('user_id', '=', userId),
     });
   }
 }
