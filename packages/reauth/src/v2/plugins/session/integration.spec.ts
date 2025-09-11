@@ -6,14 +6,17 @@ describe('Session Plugin V2 Integration', () => {
     expect(sessionPluginV2.name).toBe('session');
   });
 
-  it('should have list-sessions and cleanup-expired steps', () => {
+  it('should have all session management steps', () => {
     const plugin = sessionPluginV2;
     expect(plugin.steps).toBeDefined();
-    expect(plugin.steps?.length).toBe(2);
+    expect(plugin.steps?.length).toBe(5);
     
     const stepNames = plugin.steps?.map(s => s.name) || [];
     expect(stepNames).toContain('list-sessions');
     expect(stepNames).toContain('cleanup-expired');
+    expect(stepNames).toContain('logout');
+    expect(stepNames).toContain('logout-all');
+    expect(stepNames).toContain('get-session');
   });
 
   it('should have correct default configuration', () => {
@@ -54,6 +57,9 @@ describe('Session Plugin V2 Integration', () => {
     const plugin = sessionPluginV2;
     const listSessionsStep = plugin.steps?.find(s => s.name === 'list-sessions');
     const cleanupStep = plugin.steps?.find(s => s.name === 'cleanup-expired');
+    const logoutStep = plugin.steps?.find(s => s.name === 'logout');
+    const logoutAllStep = plugin.steps?.find(s => s.name === 'logout-all');
+    const getSessionStep = plugin.steps?.find(s => s.name === 'get-session');
 
     expect(listSessionsStep).toBeDefined();
     expect(listSessionsStep?.validationSchema).toBeDefined();
@@ -64,5 +70,24 @@ describe('Session Plugin V2 Integration', () => {
     expect(cleanupStep?.validationSchema).toBeDefined();
     expect(cleanupStep?.run).toBeDefined();
     expect(typeof cleanupStep?.run).toBe('function');
+
+    // Test new session management steps
+    expect(logoutStep).toBeDefined();
+    expect(logoutStep?.validationSchema).toBeDefined();
+    expect(logoutStep?.run).toBeDefined();
+    expect(typeof logoutStep?.run).toBe('function');
+    expect(logoutStep?.protocol?.http?.method).toBe('POST');
+
+    expect(logoutAllStep).toBeDefined();
+    expect(logoutAllStep?.validationSchema).toBeDefined();
+    expect(logoutAllStep?.run).toBeDefined();
+    expect(typeof logoutAllStep?.run).toBe('function');
+    expect(logoutAllStep?.protocol?.http?.method).toBe('POST');
+
+    expect(getSessionStep).toBeDefined();
+    expect(getSessionStep?.validationSchema).toBeDefined();
+    expect(getSessionStep?.run).toBeDefined();
+    expect(typeof getSessionStep?.run).toBe('function');
+    expect(getSessionStep?.protocol?.http?.method).toBe('GET');
   });
 });

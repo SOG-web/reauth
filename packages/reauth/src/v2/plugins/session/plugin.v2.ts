@@ -7,6 +7,9 @@ import { cleanupExpiredSessionData, createSessionManager } from './utils';
 import {
   listSessionsStep,
   cleanupExpiredStep,
+  logoutStep,
+  logoutAllStep,
+  getSessionStep,
 } from './steps';
 
 /**
@@ -120,6 +123,9 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
   steps: [
     listSessionsStep,
     cleanupExpiredStep,
+    logoutStep,
+    logoutAllStep,
+    getSessionStep,
   ],
   // Background cleanup now handles expired session removal via SimpleCleanupScheduler
 };
