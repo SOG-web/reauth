@@ -1,4 +1,5 @@
 import { column, idColumn, table } from 'fumadb/schema';
+import type { ReauthSchemaPlugin } from '../../../types';
 
 // Extended session device tracking table
 export const sessionDevices = table('session_devices', {
@@ -31,3 +32,11 @@ export const sessionPluginTables = [
   sessionDevices,
   sessionMetadata,
 ];
+
+export const sessionSchemaV2: ReauthSchemaPlugin = {
+  tables: {
+    session_devices: sessionDevices,
+    session_metadata: sessionMetadata,
+  },
+  relations: {},
+};

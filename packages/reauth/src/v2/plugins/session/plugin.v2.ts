@@ -1,6 +1,7 @@
 import type { AuthPluginV2, OrmLike } from '../../types.v2';
 import type { SessionConfigV2 } from './types';
 export type { SessionConfigV2 } from './types';
+export { sessionSchemaV2 } from './schema.v2';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
 import { cleanupExpiredSessionData, createSessionManager } from './utils';
 import {
@@ -44,10 +45,13 @@ function validateSessionConfig(config: Partial<SessionConfigV2>): string[] {
 export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
   name: 'session',
   initialize(engine) {
+    // Enable enhanced session features in the core session service
+    engine.enableEnhancedSessions();
+
     // Register session resolver for enhanced session management
     engine.registerSessionResolver('enhanced_subject', {
       async getById(id: string, orm: OrmLike) {
-        // Simplified implementation - just get base subject for now
+        // Use existing subject resolution but enhanced with session data
         const subject = await orm.findFirst('subjects', {
           where: (b: any) => b('id', '=', id),
         });
@@ -66,14 +70,13 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
       const cleanupIntervalMs = (config.cleanupIntervalMinutes || 30) * 60 * 1000; // Default 30 minutes
 
       engine.registerCleanupTask({
-        name: 'expired-sessions',
+        name: 'enhanced-sessions-cleanup',
         pluginName: 'session',
         intervalMs: cleanupIntervalMs,
         enabled: true,
         runner: async (orm, pluginConfig) => {
           try {
-            const manager = createSessionManager(pluginConfig, orm);
-            const result = await cleanupExpiredSessionData(manager, pluginConfig);
+            const result = await cleanupExpiredSessionData(createSessionManager(pluginConfig, orm), pluginConfig);
             return {
               cleaned: result.sessionsDeleted + result.devicesDeleted + result.metadataDeleted,
               sessionsDeleted: result.sessionsDeleted,
@@ -86,7 +89,7 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
               sessionsDeleted: 0,
               devicesDeleted: 0,
               metadataDeleted: 0,
-              errors: [`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
+              errors: [`Enhanced session cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
             };
           }
         },

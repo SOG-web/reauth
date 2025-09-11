@@ -37,17 +37,54 @@ export interface SessionResolvers<OrmT extends OrmLike = OrmLike> {
   get(subjectType: string): SubjectResolver<OrmT> | undefined;
 }
 
+// Additional session metadata for enhanced session management
+export interface SessionMetadata {
+  deviceInfo?: {
+    fingerprint?: string;
+    userAgent?: string;
+    ipAddress?: string;
+    isTrusted?: boolean;
+    deviceName?: string;
+  };
+  metadata?: Record<string, any>;
+}
+
+// Enhanced session creation options
+export interface CreateSessionOptions {
+  ttlSeconds?: number;
+  deviceInfo?: SessionMetadata['deviceInfo'];
+  metadata?: Record<string, any>;
+}
+
 export interface SessionServiceV2<OrmT extends OrmLike = OrmLike> {
   createSession(
     subjectType: string,
     subjectId: string,
     ttlSeconds?: number,
   ): Promise<string>;
+  // Enhanced version for advanced session features
+  createSessionWithMetadata?(
+    subjectType: string,
+    subjectId: string,
+    options: CreateSessionOptions,
+  ): Promise<string>;
   verifySession(
     token: string,
   ): Promise<{ subject: any | null; token: string | null }>;
   destroySession(token: string): Promise<void>;
   destroyAllSessions(subjectType: string, subjectId: string): Promise<void>;
+  // Enhanced session listing
+  listSessionsForSubject?(
+    subjectType: string,
+    subjectId: string,
+  ): Promise<Array<{
+    sessionId: string;
+    token: string;
+    createdAt: Date;
+    expiresAt: Date | null;
+    deviceInfo?: SessionMetadata['deviceInfo'];
+    metadata?: Record<string, any>;
+  }>>;
 }
 
 // ---------------- Step/Plugin Types (V2) ----------------
@@ -121,6 +158,7 @@ export interface EngineInitApiV2<OrmT extends OrmLike = OrmLike>
     resolver: SubjectResolver<OrmT>,
   ): this;
   registerCleanupTask(task: CleanupTask): this;
+  enableEnhancedSessions(): this;
 }
 
 export interface AuthPluginV2<Cfg = unknown, OrmT extends OrmLike = OrmLike> {
@@ -162,6 +200,7 @@ export interface EngineApiV2<OrmT extends OrmLike = OrmLike> {
     token: string | null;
     valid: boolean;
   }>;
+  getSessionService?(): SessionServiceV2<OrmT>;
 }
 
 export interface ReAuthCradleV2Extension<OrmT extends OrmLike = OrmLike> {

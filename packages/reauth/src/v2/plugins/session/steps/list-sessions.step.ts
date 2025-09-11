@@ -62,19 +62,47 @@ export const listSessionsStep: AuthStepV2<
         };
       }
 
-      // Return simplified session data for now
-      const sessions = [{
-        sessionId: 'current-session',
-        createdAt: new Date().toISOString(),
-        isCurrent: true,
-      }];
+      // Get the enhanced session service from the engine
+      const sessionService = (ctx.engine as any).getSessionService();
+      
+      // Use the enhanced session listing if available
+      let sessions: any[] = [];
+      let totalSessions = 0;
+
+      if (sessionService.listSessionsForSubject) {
+        // Extract subject type and ID - this assumes a standard format
+        const subjectType = subject.type || 'subject';
+        const subjectId = subject.id;
+
+        const enhancedSessions = await sessionService.listSessionsForSubject(subjectType, subjectId);
+        
+        sessions = enhancedSessions.map((session: any) => ({
+          sessionId: session.sessionId,
+          token: session.token === token ? '*current*' : session.token.substring(0, 8) + '...',
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt,
+          isCurrent: session.token === token,
+          deviceInfo: session.deviceInfo,
+          metadata: session.metadata,
+        }));
+        totalSessions = sessions.length;
+      } else {
+        // Fallback to simple session data
+        sessions = [{
+          sessionId: 'current-session',
+          token: '*current*',
+          createdAt: new Date().toISOString(),
+          isCurrent: true,
+        }];
+        totalSessions = 1;
+      }
 
       return {
         success: true,
-        message: `Found ${sessions.length} active sessions`,
+        message: `Found ${totalSessions} active sessions`,
         status: 'su',
         sessions,
-        totalSessions: sessions.length,
+        totalSessions,
         others,
       };
     } catch (error) {
