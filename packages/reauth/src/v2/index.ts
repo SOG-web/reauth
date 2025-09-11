@@ -28,6 +28,19 @@ export { basePhonePasswordPluginV2, type PhonePasswordConfigV2 } from './plugins
 export { usernamePasswordSchemaV2 } from './plugins/username/schema.v2';
 export { baseUsernamePasswordPluginV2, type UsernamePasswordConfigV2 } from './plugins/username/plugin.v2';
 
+// MCP plugin
+export { mcpSchemaV2 } from './plugins/mcp/schema.v2';
+export { default as mcpPluginV2, baseMcpPluginV2, type MCPConfigV2 } from './plugins/mcp/plugin.v2';
+
+// OAuth Discovery plugin (preparation for advanced OIDC auth plugins)
+export { 
+  default as oAuthDiscoveryPluginV2,
+  baseOAuthDiscoveryPluginV2,
+  createOAuthDiscoveryPluginV2,
+  type OAuthDiscoveryConfigV2,
+  type OAuthDiscoveryMetadata,
+  type OAuthProtectedResourceMetadata 
+} from './plugins/oauth-discovery/plugin.v2';
 // Email-or-username plugin
 export { baseEmailOrUsernamePluginV2, type EmailOrUsernameConfigV2 } from './plugins/email-or-username/plugin.v2';
 
