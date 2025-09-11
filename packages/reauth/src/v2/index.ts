@@ -32,6 +32,14 @@ export { baseUsernamePasswordPluginV2, type UsernamePasswordConfigV2 } from './p
 export { mcpSchemaV2 } from './plugins/mcp/schema.v2';
 export { default as mcpPluginV2, baseMcpPluginV2, type MCPConfigV2 } from './plugins/mcp/plugin.v2';
 
+// Two-Factor Authentication plugin
+export { twoFactorAuthSchema } from './plugins/two-factor-auth/schema.v2';
+export { 
+  default as twoFactorAuthPluginV2,
+  baseTwoFactorAuthPluginV2,
+  type TwoFactorAuthConfigV2 
+} from './plugins/two-factor-auth/plugin.v2';
+
 // OAuth Discovery plugin (preparation for advanced OIDC auth plugins)
 export { 
   default as oAuthDiscoveryPluginV2,
