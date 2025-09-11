@@ -90,6 +90,14 @@ adapter.registerRoutes(app, '/api/auth');
 // app.route('/api/auth', authApp);
 ```
 
+## Full Examples
+
+Complete examples with detailed configurations are available in the `examples/` directory:
+
+- **[Express Example](./examples/express-example.ts)** - Full Express.js integration with middleware, security, and error handling
+- **[Fastify Example](./examples/fastify-example.ts)** - High-performance Fastify setup with schema validation  
+- **[Hono Example](./examples/hono-example.ts)** - Edge-optimized Hono deployment for serverless environments
+
 ## Configuration
 
 ### Basic Configuration
