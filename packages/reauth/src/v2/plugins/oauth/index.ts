@@ -45,6 +45,13 @@ export { createFacebookOAuthPlugin, type FacebookOAuthConfig } from './providers
 export { createDiscordOAuthPlugin, type DiscordOAuthConfig } from './providers/discord';
 export { createMicrosoftOAuthPlugin, type MicrosoftOAuthConfig } from './providers/microsoft';
 export { createAppleOAuthPlugin, type AppleOAuthConfig } from './providers/apple';
+export { createAuth0OAuthPlugin, type Auth0OAuthConfig } from './providers/auth0';
+export { createLinkedInOAuthPlugin, type LinkedInOAuthConfig } from './providers/linkedin';
+export { createRedditOAuthPlugin, type RedditOAuthConfig } from './providers/reddit';
+export { createSpotifyOAuthPlugin, type SpotifyOAuthConfig } from './providers/spotify';
+export { createTwitchOAuthPlugin, type TwitchOAuthConfig } from './providers/twitch';
+export { createTwitterOAuthPlugin, type TwitterOAuthConfig } from './providers/twitter';
+export { createWorkOSOAuthPlugin, type WorkOSOAuthConfig } from './providers/workos';
 
 // Default export
 export { baseOAuthPluginV2 as default } from './plugin.v2';

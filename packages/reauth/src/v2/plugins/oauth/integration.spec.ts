@@ -7,6 +7,13 @@ import { createFacebookOAuthPlugin } from './providers/facebook';
 import { createDiscordOAuthPlugin } from './providers/discord';
 import { createMicrosoftOAuthPlugin } from './providers/microsoft';
 import { createAppleOAuthPlugin } from './providers/apple';
+import { createAuth0OAuthPlugin } from './providers/auth0';
+import { createLinkedInOAuthPlugin } from './providers/linkedin';
+import { createRedditOAuthPlugin } from './providers/reddit';
+import { createSpotifyOAuthPlugin } from './providers/spotify';
+import { createTwitchOAuthPlugin } from './providers/twitch';
+import { createTwitterOAuthPlugin } from './providers/twitter';
+import { createWorkOSOAuthPlugin } from './providers/workos';
 
 describe('OAuth Plugin V2 Integration', () => {
   const mockDbClient = {
@@ -257,6 +264,119 @@ describe('OAuth Plugin V2 Integration', () => {
     expect(result.success).toBe(true);
     expect(result.authorizationUrl).toContain('login.microsoftonline.com/common/oauth2/v2.0/authorize');
     expect(result.authorizationUrl).toContain('scope=openid+profile+email');
+  });
+
+  it('should integrate Auth0 OAuth plugin with engine', async () => {
+    const auth0Plugin = createAuth0OAuthPlugin({
+      clientId: 'auth0-test-client',
+      clientSecret: 'auth0-test-secret',
+      redirectUri: 'http://localhost:3000/auth/auth0/callback',
+      domain: 'test-domain.auth0.com',
+      scopes: ['openid', 'profile', 'email'],
+    });
+
+    const engine = new ReAuthEngineV2({
+      dbClient: mockDbClient as any,
+      plugins: [auth0Plugin],
+      enableCleanupScheduler: false,
+    });
+
+    const plugin = engine.getPlugin('oauth');
+    expect(plugin).toBeDefined();
+
+    const result = await engine.executeStep('oauth', 'initiate-oauth', {
+      provider: 'auth0',
+      redirectUri: 'http://localhost:3000/auth/auth0/callback',
+      state: 'auth0-state-abc',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.authorizationUrl).toContain('test-domain.auth0.com/authorize');
+    expect(result.authorizationUrl).toContain('scope=openid+profile+email');
+  });
+
+  it('should integrate LinkedIn OAuth plugin with engine', async () => {
+    const linkedinPlugin = createLinkedInOAuthPlugin({
+      clientId: 'linkedin-test-client',
+      clientSecret: 'linkedin-test-secret',
+      redirectUri: 'http://localhost:3000/auth/linkedin/callback',
+      scopes: ['openid', 'profile', 'email'],
+    });
+
+    const engine = new ReAuthEngineV2({
+      dbClient: mockDbClient as any,
+      plugins: [linkedinPlugin],
+      enableCleanupScheduler: false,
+    });
+
+    const plugin = engine.getPlugin('oauth');
+    expect(plugin).toBeDefined();
+
+    const result = await engine.executeStep('oauth', 'initiate-oauth', {
+      provider: 'linkedin',
+      redirectUri: 'http://localhost:3000/auth/linkedin/callback',
+      state: 'linkedin-state-xyz',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.authorizationUrl).toContain('linkedin.com/oauth/v2/authorization');
+    expect(result.authorizationUrl).toContain('scope=openid+profile+email');
+  });
+
+  it('should integrate additional OAuth providers (Reddit, Spotify, Twitch, Twitter, WorkOS)', async () => {
+    const redditPlugin = createRedditOAuthPlugin({
+      clientId: 'reddit-client',
+      clientSecret: 'reddit-secret',
+      redirectUri: 'http://localhost:3000/auth/reddit/callback',
+    });
+
+    const spotifyPlugin = createSpotifyOAuthPlugin({
+      clientId: 'spotify-client',
+      clientSecret: 'spotify-secret',
+      redirectUri: 'http://localhost:3000/auth/spotify/callback',
+    });
+
+    const twitchPlugin = createTwitchOAuthPlugin({
+      clientId: 'twitch-client',
+      clientSecret: 'twitch-secret',
+      redirectUri: 'http://localhost:3000/auth/twitch/callback',
+    });
+
+    const twitterPlugin = createTwitterOAuthPlugin({
+      clientId: 'twitter-client',
+      clientSecret: 'twitter-secret',
+      redirectUri: 'http://localhost:3000/auth/twitter/callback',
+    });
+
+    const workosPlugin = createWorkOSOAuthPlugin({
+      clientId: 'workos-client',
+      clientSecret: 'workos-secret',
+      redirectUri: 'http://localhost:3000/auth/workos/callback',
+    });
+
+    // Test each plugin individually
+    const plugins = [redditPlugin, spotifyPlugin, twitchPlugin, twitterPlugin, workosPlugin];
+    const providerNames = ['reddit', 'spotify', 'twitch', 'twitter', 'workos'];
+
+    for (let i = 0; i < plugins.length; i++) {
+      const engine = new ReAuthEngineV2({
+        dbClient: mockDbClient as any,
+        plugins: [plugins[i]],
+        enableCleanupScheduler: false,
+      });
+
+      const plugin = engine.getPlugin('oauth');
+      expect(plugin).toBeDefined();
+
+      const result = await engine.executeStep('oauth', 'initiate-oauth', {
+        provider: providerNames[i],
+        redirectUri: `http://localhost:3000/auth/${providerNames[i]}/callback`,
+        state: `${providerNames[i]}-state-test`,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.authorizationUrl).toBeDefined();
+    }
   });
 
   it('should validate OAuth plugin configuration', () => {

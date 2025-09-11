@@ -55,20 +55,7 @@ export {
   redditOAuthPlugin,
   type RedditOAuthConfig,
 } from './reddit-oauth.plugin';
-export { gitlabOAuthPlugin, type GitLabOAuthConfig } from './gitlab-oauth.plugin';
-export { slackOAuthPlugin, type SlackOAuthConfig } from './slack-oauth.plugin';
-export {
-  bitbucketOAuthPlugin,
-  type BitbucketOAuthConfig,
-} from './bitbucket-oauth.plugin';
-export {
-  dropboxOAuthPlugin,
-  type DropboxOAuthConfig,
-} from './dropbox-oauth.plugin';
-export {
-  salesforceOAuthPlugin,
-  type SalesforceOAuthConfig,
-} from './salesforce-oauth.plugin';
+
 
 // Import for re-export object
 import {
@@ -94,15 +81,6 @@ import twitchOAuthPlugin, { twitchOAuthSchema } from './twitch-oauth.plugin';
 import appleOAuthPlugin, { appleOAuthSchema } from './apple-oauth.plugin';
 import workosOAuthPlugin, { workosOAuthSchema } from './workos-oauth.plugin';
 import redditOAuthPlugin, { redditOAuthSchema } from './reddit-oauth.plugin';
-import gitlabOAuthPlugin, { gitlabOAuthSchema } from './gitlab-oauth.plugin';
-import slackOAuthPlugin, { slackOAuthSchema } from './slack-oauth.plugin';
-import bitbucketOAuthPlugin, {
-  bitbucketOAuthSchema,
-} from './bitbucket-oauth.plugin';
-import dropboxOAuthPlugin, { dropboxOAuthSchema } from './dropbox-oauth.plugin';
-import salesforceOAuthPlugin, {
-  salesforceOAuthSchema,
-} from './salesforce-oauth.plugin';
 
 // Re-export everything as a default object for convenience
 export default {
@@ -124,11 +102,6 @@ export default {
   apple: appleOAuthPlugin,
   workos: workosOAuthPlugin,
   reddit: redditOAuthPlugin,
-  gitlab: gitlabOAuthPlugin,
-  slack: slackOAuthPlugin,
-  bitbucket: bitbucketOAuthPlugin,
-  dropbox: dropboxOAuthPlugin,
-  salesforce: salesforceOAuthPlugin,
 };
 
 // Schema helpers for providers
@@ -146,9 +119,4 @@ export const oauthSchemaPlugins = {
   appleOAuthSchema,
   workosOAuthSchema,
   redditOAuthSchema,
-  gitlabOAuthSchema,
-  slackOAuthSchema,
-  bitbucketOAuthSchema,
-  dropboxOAuthSchema,
-  salesforceOAuthSchema,
 };
