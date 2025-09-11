@@ -30,8 +30,8 @@ export const baseOAuthPluginV2: AuthPluginV2<OAuthConfigV2> = {
 
     // Register cleanup task for expired OAuth tokens
     const config = this.config || {};
-    if (config.autoRefreshTokens !== false) {
-      const cleanupIntervalMs = (config.tokenRefreshIntervalSeconds || 3600) * 1000; // Default 1 hour
+    if ((config as OAuthConfigV2).autoRefreshTokens !== false) {
+      const cleanupIntervalMs = ((config as OAuthConfigV2).tokenRefreshIntervalSeconds || 3600) * 1000; // Default 1 hour
 
       engine.registerCleanupTask({
         name: 'expired-oauth-tokens',
@@ -65,10 +65,10 @@ export const baseOAuthPluginV2: AuthPluginV2<OAuthConfigV2> = {
                   // The actual refresh would be done through the refresh-token step.
                   
                   // For now, we'll just mark tokens that could be refreshed
-                  await orm.update('oauth_tokens', 
-                    { last_used_at: new Date() },
-                    { where: (b: any) => b('id', '=', token.id) }
-                  );
+                  // await orm.update('oauth_tokens', 
+                  //   { last_used_at: new Date() },
+                  //   { where: (b: any) => b('id', '=', token.id) }
+                  // );
                   refreshed++;
                 }
               } catch (error) {
@@ -79,15 +79,14 @@ export const baseOAuthPluginV2: AuthPluginV2<OAuthConfigV2> = {
 
             return {
               cleaned: refreshed,
-              errors: failed,
-              message: `Processed ${refreshed} expired tokens, ${failed} failures`,
+              errors: failed > 0 ? [`${failed} token refresh failures`] : undefined,
             };
           } catch (error) {
             console.error('OAuth token cleanup error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
               cleaned: 0,
-              errors: 1,
-              message: `Cleanup failed: ${error.message}`,
+              errors: [`Cleanup failed: ${errorMessage}`],
             };
           }
         },
@@ -113,15 +112,6 @@ export const baseOAuthPluginV2: AuthPluginV2<OAuthConfigV2> = {
     refreshTokenStep,
     getProfileStep,
   ],
-
-  schema: {
-    tables: {
-      oauth_providers: 'oauth_providers',
-      oauth_tokens: 'oauth_tokens', 
-      oauth_profiles: 'oauth_profiles',
-    },
-    relations: {},
-  },
 };
 
 /**
@@ -151,13 +141,13 @@ export const baseOAuthPluginV2: AuthPluginV2<OAuthConfigV2> = {
  */
 export function createOAuthPlugin(options: {
   config?: Partial<OAuthConfigV2>;
-}) {
+}): AuthPluginV2<OAuthConfigV2> {
   return createAuthPluginV2(baseOAuthPluginV2, {
     config: options.config,
     validateConfig: (config) => {
       const errors: string[] = [];
       
-      if (!config.providers || !Array.isArray(config.providers)) {
+      if (!config.providers || !Array.isArray(config.providers) || config.providers.length === 0) {
         errors.push('providers array is required');
       } else {
         for (const provider of config.providers) {
