@@ -1,10 +1,12 @@
 /**
- * OAuth 2.0 Discovery Metadata utilities for MCP and other plugins
+ * OAuth 2.0 Discovery Metadata utilities for MCP plugin V2
  * Implements RFC 8414 (OAuth 2.0 Authorization Server Metadata)
  * and RFC 8693 (OAuth 2.0 Token Exchange)
+ * 
+ * This is part of the MCP V2 plugin as preparation for advanced OIDC auth plugins
  */
 
-import type { ReAuthEngine } from '../auth-engine';
+import type { ReAuthEngineV2 } from '../../engine.v2';
 
 export interface OAuthDiscoveryMetadata {
   issuer: string;
@@ -29,11 +31,11 @@ export interface OAuthProtectedResourceMetadata {
 }
 
 /**
- * Creates an OAuth 2.0 Authorization Server Metadata endpoint handler
+ * Creates an OAuth 2.0 Authorization Server Metadata endpoint handler for MCP
  * Per RFC 8414: https://tools.ietf.org/html/rfc8414
  */
-export function oAuthDiscoveryMetadata(
-  auth: ReAuthEngine,
+export function createOAuthDiscoveryMetadata(
+  auth: ReAuthEngineV2,
   options: {
     issuer: string;
     baseUrl?: string;
@@ -53,11 +55,10 @@ export function oAuthDiscoveryMetadata(
         'openid',
         'profile', 
         'email',
-        'auth://users',
-        'auth://sessions',
-        'auth://plugins',
-        'auth://audit',
-        'auth://resources'
+        'mcp://servers',
+        'mcp://sessions',
+        'mcp://resources',
+        'mcp://audit'
       ],
       response_types_supported: [
         'code',
@@ -80,7 +81,7 @@ export function oAuthDiscoveryMetadata(
         'private_key_jwt',
         'client_secret_jwt'
       ],
-      service_documentation: `${baseUrl}/docs/oauth`,
+      service_documentation: `${baseUrl}/docs/mcp-oauth`,
       ui_locales_supported: ['en']
     };
 
@@ -98,11 +99,11 @@ export function oAuthDiscoveryMetadata(
 }
 
 /**
- * Creates an OAuth 2.0 Protected Resource Metadata endpoint handler
+ * Creates an OAuth 2.0 Protected Resource Metadata endpoint handler for MCP
  * Per RFC 8693: https://tools.ietf.org/html/rfc8693
  */
-export function oAuthProtectedResourceMetadata(
-  auth: ReAuthEngine,
+export function createOAuthProtectedResourceMetadata(
+  auth: ReAuthEngineV2,
   options: {
     resource: string;
     authorizationServers?: string[];
@@ -119,18 +120,17 @@ export function oAuthProtectedResourceMetadata(
         'read',
         'write', 
         'admin',
-        'auth://users',
-        'auth://sessions',
-        'auth://plugins',
-        'auth://audit',
-        'auth://resources'
+        'mcp://servers',
+        'mcp://sessions',
+        'mcp://resources',
+        'mcp://audit'
       ],
       bearer_methods_supported: [
         'header',
         'body',
         'query'
       ],
-      resource_documentation: `${options.resource}/docs`
+      resource_documentation: `${options.resource}/docs/mcp`
     };
 
     return new Response(JSON.stringify(metadata, null, 2), {
@@ -148,11 +148,11 @@ export function oAuthProtectedResourceMetadata(
 }
 
 /**
- * OAuth-style authentication middleware for MCP handlers
+ * OAuth-style authentication middleware for MCP handlers V2
  * Validates session tokens and provides session context
  */
-export function withMcpAuth<T = any>(
-  auth: ReAuthEngine,
+export function createMcpAuthMiddleware<T = any>(
+  auth: ReAuthEngineV2,
   handler: (request: Request, session: T) => Promise<Response>
 ) {
   return async function authenticatedHandler(request: Request): Promise<Response> {
@@ -182,7 +182,7 @@ export function withMcpAuth<T = any>(
         });
       }
 
-      // Validate token using ReAuth engine
+      // Validate token using ReAuth V2 engine
       const orm = await auth.getOrm();
       
       // Look for MCP session with this token
@@ -204,7 +204,7 @@ export function withMcpAuth<T = any>(
       }
 
       // Check if session is expired
-      if (session.expires_at && new Date(session.expires_at) < new Date()) {
+      if (session.expires_at && new Date(session.expires_at as string | Date) < new Date()) {
         return new Response(JSON.stringify({
           error: 'unauthorized',
           error_description: 'Access token has expired'
@@ -274,7 +274,7 @@ export function extractBearerToken(request: Request): string | null {
  * Create WWW-Authenticate header for OAuth errors
  */
 export function createWWWAuthenticateHeader(
-  realm: string = 'api',
+  realm: string = 'mcp',
   error?: string,
   errorDescription?: string,
   scope?: string

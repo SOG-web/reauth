@@ -10,6 +10,17 @@ import { auditMcpAccessStep } from './steps/audit-mcp-access.step';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
 import { cleanupExpiredSessions } from './utils';
 
+// Export OAuth Discovery functionality
+export {
+  createOAuthDiscoveryMetadata,
+  createOAuthProtectedResourceMetadata,
+  createMcpAuthMiddleware,
+  extractBearerToken,
+  createWWWAuthenticateHeader,
+  type OAuthDiscoveryMetadata,
+  type OAuthProtectedResourceMetadata,
+} from './oauth-discovery';
+
 export const baseMcpPluginV2: AuthPluginV2<MCPConfigV2> = {
   name: 'mcp',
   initialize(engine) {

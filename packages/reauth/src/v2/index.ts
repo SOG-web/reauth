@@ -26,7 +26,19 @@ export { baseUsernamePasswordPluginV2, type UsernamePasswordConfigV2 } from './p
 
 // MCP plugin
 export { mcpSchemaV2 } from './plugins/mcp/schema.v2';
-export { default as mcpPluginV2, baseMcpPluginV2, type MCPConfigV2 } from './plugins/mcp/plugin.v2';
+export { 
+  default as mcpPluginV2, 
+  baseMcpPluginV2, 
+  type MCPConfigV2,
+  // OAuth Discovery functionality for MCP as preparation for advanced OIDC auth plugins
+  createOAuthDiscoveryMetadata,
+  createOAuthProtectedResourceMetadata,
+  createMcpAuthMiddleware,
+  extractBearerToken,
+  createWWWAuthenticateHeader,
+  type OAuthDiscoveryMetadata,
+  type OAuthProtectedResourceMetadata,
+} from './plugins/mcp/plugin.v2';
 
 export { createAuthPluginV2, createAuthPluginLegacyV2 } from './utils/create-plugin.v2';
 
