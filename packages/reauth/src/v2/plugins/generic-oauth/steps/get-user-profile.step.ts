@@ -16,7 +16,7 @@ const getUserProfileOutputSchema = type({
     'email?': 'string',
     'name?': 'string',
     'avatar?': 'string',
-    raw: 'record<unknown>',
+    raw: 'object',
   },
 });
 

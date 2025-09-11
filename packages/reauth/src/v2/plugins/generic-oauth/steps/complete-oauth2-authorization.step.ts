@@ -29,7 +29,7 @@ const completeOAuth2AuthorizationOutputSchema = type({
     'email?': 'string',
     'name?': 'string',
     'avatar?': 'string',
-    raw: 'record<unknown>',
+    raw: 'object',
   },
   'connectionId?': 'string',
 });
