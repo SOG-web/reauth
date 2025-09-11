@@ -1,4 +1,3 @@
-import type { Context, Hono, MiddlewareHandler } from 'hono';
 import type {
   HttpAdapterV2Config,
   FrameworkAdapterV2,
@@ -7,7 +6,7 @@ import type {
 } from '../types.js';
 import { ReAuthHttpAdapterV2 } from '../base-adapter.js';
 
-export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> {
+export class HonoAdapterV2 {
   public readonly name = 'hono';
   private adapter: ReAuthHttpAdapterV2;
 
@@ -18,8 +17,8 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
   /**
    * Create Hono middleware
    */
-  createMiddleware(): MiddlewareHandler {
-    return async (c: Context, next) => {
+  createMiddleware() {
+    return async (c: any, next: any) => {
       // Add adapter to context for access in route handlers
       c.set('reauth', this.adapter);
       await next();
@@ -29,7 +28,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
   /**
    * Extract HTTP request from Hono context
    */
-  extractRequest(c: Context): HttpRequest {
+  extractRequest(c: any): HttpRequest {
     const url = new URL(c.req.url);
     
     return {
@@ -38,11 +37,9 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
       path: url.pathname,
       query: Object.fromEntries(url.searchParams.entries()),
       params: c.req.param() as Record<string, string>,
-      body: c.req.valid?.('json') || {},
-      headers: Object.fromEntries(c.req.header()),
-      cookies: c.req.cookie ? Object.fromEntries(
-        Object.entries(c.req.cookie())
-      ) : {},
+      body: {},
+      headers: c.req.raw.headers ? Object.fromEntries(c.req.raw.headers.entries()) : {},
+      cookies: {},
       ip: c.env?.CF_CONNECTING_IP || c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
       userAgent: c.req.header('user-agent'),
     };
@@ -51,16 +48,16 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
   /**
    * Send response using Hono context
    */
-  sendResponse(c: Context, data: any, statusCode: number = 200): void {
-    c.status(statusCode);
+  sendResponse(c: any, data: any, statusCode: number = 200): void {
+    c.status(statusCode as any);
     c.json(data);
   }
 
   /**
    * Handle error using Hono context
    */
-  handleError(c: Context, error: Error, statusCode: number = 500): void {
-    c.status(statusCode);
+  handleError(c: any, error: Error, statusCode: number = 500): void {
+    c.status(statusCode as any);
     c.json({
       success: false,
       error: {
@@ -76,7 +73,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
   /**
    * Create Hono app with all ReAuth routes
    */
-  createApp(): Hono {
+  createApp(): any {
     const { Hono } = require('hono');
     const app = new Hono();
 
@@ -109,7 +106,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
   /**
    * Register routes on existing Hono app
    */
-  registerRoutes(app: Hono, basePath: string = ''): void {
+  registerRoutes(app: any, basePath: string = ''): void {
     // Add middleware
     app.use(`${basePath}/*`, this.createMiddleware());
 
@@ -138,7 +135,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create step execution handler
    */
   private createStepHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const httpReq = this.extractRequest(c);
         
@@ -163,7 +160,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create session check handler
    */
   private createSessionCheckHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const httpReq = this.extractRequest(c);
         const result = await this.adapter.checkSession(httpReq as any);
@@ -178,7 +175,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create session creation handler
    */
   private createSessionCreateHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const httpReq = this.extractRequest(c);
         try {
@@ -188,7 +185,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
         }
         
         const result = await this.adapter.createSession(httpReq as any);
-        c.status(201);
+        c.status(201 as any);
         return c.json(result);
       } catch (error) {
         return this.handleErrorResponse(c, error as Error);
@@ -200,7 +197,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create session destruction handler
    */
   private createSessionDestroyHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const httpReq = this.extractRequest(c);
         const result = await this.adapter.destroySession(httpReq as any);
@@ -215,7 +212,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create plugin list handler
    */
   private createPluginListHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const result = await this.adapter.listPlugins();
         return c.json(result);
@@ -229,7 +226,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create plugin details handler
    */
   private createPluginDetailsHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const plugin = c.req.param('plugin');
         const result = await this.adapter.getPlugin(plugin);
@@ -244,7 +241,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create introspection handler
    */
   private createIntrospectionHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const result = await this.adapter.getIntrospection();
         return c.json(result);
@@ -258,7 +255,7 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
    * Create health check handler
    */
   private createHealthHandler() {
-    return async (c: Context) => {
+    return async (c: any) => {
       try {
         const result = await this.adapter.healthCheck();
         return c.json(result);
@@ -271,8 +268,8 @@ export class HonoAdapterV2 implements FrameworkAdapterV2<Context, never, never> 
   /**
    * Handle error response
    */
-  private handleErrorResponse(c: Context, error: Error) {
-    c.status(500);
+  private handleErrorResponse(c: any, error: Error) {
+    c.status(500 as any);
     return c.json({
       success: false,
       error: {
@@ -303,7 +300,7 @@ export function createHonoAdapter(config: HttpAdapterV2Config): HonoAdapterV2 {
 /**
  * Hono middleware factory function
  */
-export function honoReAuth(config: HttpAdapterV2Config): MiddlewareHandler {
+export function honoReAuth(config: HttpAdapterV2Config): any {
   const adapter = new HonoAdapterV2(config);
   return adapter.createMiddleware();
 }

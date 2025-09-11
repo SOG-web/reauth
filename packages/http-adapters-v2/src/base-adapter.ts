@@ -1,6 +1,7 @@
-import type { AuthInput, AuthOutput } from '../../reauth/src/v2/types.v2';
-import type { ReAuthEngineV2 } from '../../reauth/src/v2/engine.v2';
 import type {
+  ReAuthEngineV2,
+  AuthInputV2,
+  AuthOutputV2,
   HttpAdapterV2Config,
   HttpRequest,
   HttpResponse,
@@ -344,8 +345,8 @@ export class ReAuthHttpAdapterV2 {
   /**
    * Extract step input from request
    */
-  private extractStepInput(req: HttpRequest, endpoint: PluginEndpoint): AuthInput {
-    const input: AuthInput = {
+  private extractStepInput(req: HttpRequest, endpoint: PluginEndpoint): AuthInputV2 {
+    const input: AuthInputV2 = {
       ...req.body,
       ...req.query,
     };

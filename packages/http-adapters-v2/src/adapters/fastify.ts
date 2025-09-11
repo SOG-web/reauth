@@ -29,7 +29,7 @@ export class FastifyAdapterV2 implements FrameworkAdapterV2<FastifyRequest, Fast
     return {
       method: req.method,
       url: req.url,
-      path: req.url.split('?')[0],
+      path: req.url.split('?')[0] || '',
       query: req.query as Record<string, any>,
       params: req.params as Record<string, string>,
       body: req.body,

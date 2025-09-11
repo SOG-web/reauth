@@ -1,5 +1,79 @@
-import type { AuthInput, AuthOutput } from '../../reauth/src/v2/types.v2';
-import type { ReAuthEngineV2 } from '../../reauth/src/v2/engine.v2';
+// Local V2 types to avoid cross-package import issues during development
+export interface AuthInputV2 {
+  token?: string | null;
+  [key: string]: any;
+}
+
+export interface AuthOutputV2 {
+  token?: string | null;
+  redirect?: string;
+  success: boolean;
+  message: string;
+  status: string;
+  subject?: any;
+  others?: Record<string, any>;
+  [key: string]: any;
+}
+
+export interface AuthStepV2 {
+  name: string;
+  description?: string;
+  validationSchema?: any;
+  outputs?: any;
+  run: (input: any, ctx: any) => Promise<any> | any;
+  hooks?: any;
+  inputs?: string[];
+  protocol?: {
+    http?: {
+      method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+      codes?: Record<string, number>;
+      auth?: boolean;
+    };
+    [key: string]: any;
+  };
+}
+
+export interface AuthPluginV2 {
+  name: string;
+  initialize?: (engine: any) => Promise<void> | void;
+  steps?: AuthStepV2[];
+  getSensitiveFields?: () => string[];
+  config?: any;
+  rootHooks?: any;
+}
+
+export interface ReAuthEngineV2 {
+  getAllPlugins(): AuthPluginV2[];
+  getPlugin(name: string): AuthPluginV2 | undefined;
+  executeStep(pluginName: string, stepName: string, input: AuthInputV2): Promise<AuthOutputV2>;
+  createSessionFor(subjectType: string, subjectId: string, ttlSeconds?: number): Promise<string>;
+  checkSession(token: string): Promise<{
+    subject: any | null;
+    token: string | null;
+    valid: boolean;
+  }>;
+  getSessionService(): {
+    destroySession(token: string): Promise<void>;
+  };
+  getIntrospectionData(): {
+    entity: any;
+    plugins: Array<{
+      name: string;
+      description: string;
+      steps: Array<{
+        name: string;
+        description?: string;
+        inputs: unknown;
+        outputs: unknown;
+        protocol: unknown;
+        requiresAuth: boolean;
+      }>;
+    }>;
+    generatedAt: string;
+    version: string;
+  };
+}
+
 import type { Request, Response, NextFunction } from 'express';
 
 // Base HTTP adapter configuration
@@ -158,8 +232,8 @@ export interface ApiResponse<T = any> {
   };
 }
 
-export interface AuthStepResponse extends ApiResponse<AuthOutput> {
-  data?: AuthOutput & {
+export interface AuthStepResponse extends ApiResponse<AuthOutputV2> {
+  data?: AuthOutputV2 & {
     nextStep?: string;
     requiresRedirect?: boolean;
     sessionToken?: string;

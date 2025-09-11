@@ -1,4 +1,4 @@
-import type { ReAuthEngineV2 } from '@re-auth/reauth/src/v2';
+import type { ReAuthEngineV2 } from '../types.js';
 import type { HttpAdapterV2Config, PluginEndpoint } from '../types.js';
 import { ReAuthHttpAdapterV2 } from '../base-adapter.js';
 

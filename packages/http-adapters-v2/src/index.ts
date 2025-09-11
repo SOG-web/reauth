@@ -1,8 +1,26 @@
 // Core exports
 export { ReAuthHttpAdapterV2 } from './base-adapter.js';
 
+// Import types for use in this file
+import type {
+  ReAuthEngineV2,
+  CorsConfig,
+  RateLimitConfig,
+  SecurityConfig,
+  ValidationConfig,
+} from './types.js';
+
+import { createExpressAdapter } from './adapters/express.js';
+import { createFastifyAdapter } from './adapters/fastify.js';
+import { createHonoAdapter } from './adapters/hono.js';
+
 // Types
 export type {
+  ReAuthEngineV2,
+  AuthPluginV2,
+  AuthStepV2,
+  AuthInputV2,
+  AuthOutputV2,
   HttpAdapterV2Config,
   CorsConfig,
   RateLimitConfig,
@@ -72,7 +90,7 @@ export {
 
 // Main factory function for easy setup
 export function createHttpAdapterV2(config: {
-  engine: import('@re-auth/reauth').ReAuthEngineV2;
+  engine: ReAuthEngineV2;
   framework: 'express' | 'fastify' | 'hono';
   basePath?: string;
   cors?: CorsConfig;
@@ -94,11 +112,8 @@ export function createHttpAdapterV2(config: {
   }
 }
 
-// Re-export types from @re-auth/reauth for convenience
+// Re-export types for convenience as aliases
 export type {
-  ReAuthEngineV2,
-  AuthPluginV2,
-  AuthStepV2,
-  AuthInput,
-  AuthOutput,
-} from '@re-auth/reauth';
+  AuthInputV2 as AuthInput,
+  AuthOutputV2 as AuthOutput,
+} from './types.js';
