@@ -71,6 +71,15 @@ export { baseEmailOrUsernamePluginV2, type EmailOrUsernameConfigV2 } from './plu
 export { organizationSchemaV2 } from './plugins/organization/schema.v2';
 export { default as organizationPluginV2, baseOrganizationPluginV2, type OrganizationConfigV2 } from './plugins/organization/plugin.v2';
 
+// OIDC Provider plugin (OpenID Connect Identity Provider)
+export { oidcProviderSchemaV2 } from './plugins/oidc-provider/schema.v2';
+export {
+  default as oidcProviderPluginV2,
+  baseOIDCProviderPluginV2,
+  createOIDCProviderPlugin,
+  type OIDCProviderConfigV2
+} from './plugins/oidc-provider/plugin.v2';
+
 export { createAuthPluginV2, createAuthPluginLegacyV2 } from './utils/create-plugin.v2';
 
 export type {
