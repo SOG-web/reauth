@@ -2,16 +2,44 @@ import type { AuthPluginV2, OrmLike } from '../../types.v2';
 import type { SessionConfigV2 } from './types';
 export type { SessionConfigV2 } from './types';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
-import { cleanupExpiredSessionData, createSessionStorage, validateSessionConfig } from './utils';
+import { cleanupExpiredSessionData, createSessionManager } from './utils';
 import {
   listSessionsStep,
-  revokeSessionStep,
-  revokeAllSessionsStep,
-  getSessionInfoStep,
-  rotateSessionStep,
-  trustDeviceStep,
   cleanupExpiredStep,
 } from './steps';
+
+/**
+ * Validate session configuration
+ */
+function validateSessionConfig(config: Partial<SessionConfigV2>): string[] {
+  const errors: string[] = [];
+
+  if (config.maxConcurrentSessions !== undefined && config.maxConcurrentSessions < 0) {
+    errors.push('maxConcurrentSessions cannot be negative');
+  }
+
+  if (config.cleanupIntervalMinutes !== undefined && config.cleanupIntervalMinutes < 1) {
+    errors.push('cleanupIntervalMinutes must be at least 1 minute');
+  }
+
+  if (config.cleanupIntervalMinutes !== undefined && config.cleanupIntervalMinutes > 1440) {
+    errors.push('cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)');
+  }
+
+  if (config.sessionRetentionDays !== undefined && config.sessionRetentionDays < 1) {
+    errors.push('sessionRetentionDays must be at least 1 day');
+  }
+
+  if (config.cleanupBatchSize !== undefined && config.cleanupBatchSize < 1) {
+    errors.push('cleanupBatchSize must be at least 1');
+  }
+
+  if (config.cleanupBatchSize !== undefined && config.cleanupBatchSize > 1000) {
+    errors.push('cleanupBatchSize cannot exceed 1000 for performance reasons');
+  }
+
+  return errors;
+}
 
 export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
   name: 'session',
@@ -19,34 +47,15 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
     // Register session resolver for enhanced session management
     engine.registerSessionResolver('enhanced_subject', {
       async getById(id: string, orm: OrmLike) {
-        // First get the base subject
+        // Simplified implementation - just get base subject for now
         const subject = await orm.findFirst('subjects', {
           where: (b: any) => b('id', '=', id),
         });
 
-        if (!subject) return null;
-
-        // Get enhanced session data if available
-        const enhancedSession = await orm.findFirst('enhanced_sessions', {
-          where: (b: any) => b('session_id', '=', id), // Note: id here is session_id
-        });
-
-        return {
-          ...subject,
-          enhanced: enhancedSession ? {
-            rotationCount: enhancedSession.rotation_count,
-            lastRotatedAt: enhancedSession.last_rotated_at,
-            maxConcurrentReached: enhancedSession.max_concurrent_reached,
-            securityFlags: enhancedSession.security_flags,
-          } : null,
-        } as unknown as import('../../types.v2').Subject;
+        return subject as unknown as import('../../types.v2').Subject;
       },
       sanitize(subject: any) {
-        // Remove sensitive enhanced data from client responses
-        if (subject.enhanced) {
-          const { securityFlags, ...safeEnhanced } = subject.enhanced;
-          return { ...subject, enhanced: safeEnhanced };
-        }
+        // Remove sensitive data from client responses
         return subject;
       },
     });
@@ -63,8 +72,8 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
         enabled: true,
         runner: async (orm, pluginConfig) => {
           try {
-            const storage = createSessionStorage(pluginConfig, orm);
-            const result = await cleanupExpiredSessionData(storage, pluginConfig);
+            const manager = createSessionManager(pluginConfig, orm);
+            const result = await cleanupExpiredSessionData(manager, pluginConfig);
             return {
               cleaned: result.sessionsDeleted + result.devicesDeleted + result.metadataDeleted,
               sessionsDeleted: result.sessionsDeleted,
@@ -85,9 +94,6 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
     }
   },
   config: {
-    // Storage configuration
-    storageBackend: 'database' as const,
-    
     // Session management defaults
     maxConcurrentSessions: 0, // Unlimited
     sessionRotationInterval: 0, // Disabled by default
@@ -110,11 +116,6 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
   },
   steps: [
     listSessionsStep,
-    revokeSessionStep,
-    revokeAllSessionsStep,
-    getSessionInfoStep,
-    rotateSessionStep,
-    trustDeviceStep,
     cleanupExpiredStep,
   ],
   // Background cleanup now handles expired session removal via SimpleCleanupScheduler

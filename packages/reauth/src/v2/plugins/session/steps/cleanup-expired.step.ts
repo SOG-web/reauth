@@ -1,13 +1,11 @@
 import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { SessionConfigV2 } from '../types';
-import { createSessionStorage, cleanupExpiredSessionData } from '../utils';
+import { cleanupExpiredSessionData, createSessionManager } from '../utils';
 
 export type CleanupExpiredInput = {
-  // This step can be called manually or by scheduled cleanup
-  // No authentication required for manual cleanup (admin operation)
-  retentionDays?: number; // Override config retention
-  batchSize?: number; // Override config batch size
+  retentionDays?: number;
+  batchSize?: number;
   others?: Record<string, any>;
 };
 
@@ -73,7 +71,7 @@ export const cleanupExpiredStep: AuthStepV2<
         };
       }
 
-      const storage = createSessionStorage(config, orm);
+      const manager = createSessionManager(config, orm);
 
       // Use provided values or fall back to config defaults
       const effectiveRetentionDays = retentionDays ?? config.sessionRetentionDays ?? 7;
@@ -101,7 +99,7 @@ export const cleanupExpiredStep: AuthStepV2<
       }
 
       // Perform cleanup
-      const result = await cleanupExpiredSessionData(storage, {
+      const result = await cleanupExpiredSessionData(manager, {
         ...config,
         sessionRetentionDays: effectiveRetentionDays,
         cleanupBatchSize: effectiveBatchSize,

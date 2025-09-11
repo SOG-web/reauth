@@ -1,14 +1,4 @@
 export type SessionConfigV2 = {
-  // Storage configuration
-  storageBackend?: 'database' | 'redis' | 'memory'; // default: 'database'
-  redisConfig?: {
-    host?: string;
-    port?: number;
-    password?: string;
-    db?: number;
-    keyPrefix?: string;
-  };
-
   // Session management
   maxConcurrentSessions?: number; // default: unlimited (0)
   sessionRotationInterval?: number; // auto-rotate sessions (ms), default: disabled (0)
