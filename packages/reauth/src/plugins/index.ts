@@ -20,6 +20,17 @@ export * from './passwordless/passwordless.plugin';
 export * from './admin';
 export * from './oauth';
 
+// OAuth Discovery Metadata utilities
+export {
+  oAuthDiscoveryMetadata,
+  oAuthProtectedResourceMetadata,
+  withMcpAuth,
+  extractBearerToken,
+  createWWWAuthenticateHeader,
+  type OAuthDiscoveryMetadata,
+  type OAuthProtectedResourceMetadata,
+} from './oauth-discovery';
+
 export {
   emailPasswordAuth,
   phonePasswordAuth,
