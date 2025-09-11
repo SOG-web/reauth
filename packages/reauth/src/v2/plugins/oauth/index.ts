@@ -41,6 +41,10 @@ export { getProfileStep } from './steps/get-profile.step';
 // Provider-specific plugins
 export { createGoogleOAuthPlugin, type GoogleOAuthConfig } from './providers/google';
 export { createGitHubOAuthPlugin, type GitHubOAuthConfig } from './providers/github';
+export { createFacebookOAuthPlugin, type FacebookOAuthConfig } from './providers/facebook';
+export { createDiscordOAuthPlugin, type DiscordOAuthConfig } from './providers/discord';
+export { createMicrosoftOAuthPlugin, type MicrosoftOAuthConfig } from './providers/microsoft';
+export { createAppleOAuthPlugin, type AppleOAuthConfig } from './providers/apple';
 
 // Default export
 export { baseOAuthPluginV2 as default } from './plugin.v2';

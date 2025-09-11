@@ -3,6 +3,10 @@ import { ReAuthEngineV2 } from '../../engine.v2';
 import { createOAuthPlugin } from './plugin.v2';
 import { createGoogleOAuthPlugin } from './providers/google';
 import { createGitHubOAuthPlugin } from './providers/github';
+import { createFacebookOAuthPlugin } from './providers/facebook';
+import { createDiscordOAuthPlugin } from './providers/discord';
+import { createMicrosoftOAuthPlugin } from './providers/microsoft';
+import { createAppleOAuthPlugin } from './providers/apple';
 
 describe('OAuth Plugin V2 Integration', () => {
   const mockDbClient = {
@@ -168,6 +172,91 @@ describe('OAuth Plugin V2 Integration', () => {
     expect(result.success).toBe(true);
     expect(result.authorizationUrl).toContain('github.com/login/oauth/authorize');
     expect(result.authorizationUrl).toContain('scope=user%3Aemail+read%3Auser');
+  });
+
+  it('should integrate Facebook OAuth plugin with engine', async () => {
+    const facebookPlugin = createFacebookOAuthPlugin({
+      clientId: 'facebook-test-client',
+      clientSecret: 'facebook-test-secret',
+      redirectUri: 'http://localhost:3000/auth/facebook/callback',
+      scopes: ['email', 'public_profile'],
+    });
+
+    const engine = new ReAuthEngineV2({
+      dbClient: mockDbClient as any,
+      plugins: [facebookPlugin],
+      enableCleanupScheduler: false,
+    });
+
+    const plugin = engine.getPlugin('oauth');
+    expect(plugin).toBeDefined();
+
+    const result = await engine.executeStep('oauth', 'initiate-oauth', {
+      provider: 'facebook',
+      redirectUri: 'http://localhost:3000/auth/facebook/callback',
+      state: 'facebook-state-789',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.authorizationUrl).toContain('facebook.com/v18.0/dialog/oauth');
+    expect(result.authorizationUrl).toContain('scope=email+public_profile');
+  });
+
+  it('should integrate Discord OAuth plugin with engine', async () => {
+    const discordPlugin = createDiscordOAuthPlugin({
+      clientId: 'discord-test-client',
+      clientSecret: 'discord-test-secret',
+      redirectUri: 'http://localhost:3000/auth/discord/callback',
+      scopes: ['identify', 'email'],
+    });
+
+    const engine = new ReAuthEngineV2({
+      dbClient: mockDbClient as any,
+      plugins: [discordPlugin],
+      enableCleanupScheduler: false,
+    });
+
+    const plugin = engine.getPlugin('oauth');
+    expect(plugin).toBeDefined();
+
+    const result = await engine.executeStep('oauth', 'initiate-oauth', {
+      provider: 'discord',
+      redirectUri: 'http://localhost:3000/auth/discord/callback',
+      state: 'discord-state-abc',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.authorizationUrl).toContain('discord.com/api/oauth2/authorize');
+    expect(result.authorizationUrl).toContain('scope=identify+email');
+  });
+
+  it('should integrate Microsoft OAuth plugin with engine', async () => {
+    const microsoftPlugin = createMicrosoftOAuthPlugin({
+      clientId: 'microsoft-test-client',
+      clientSecret: 'microsoft-test-secret',
+      redirectUri: 'http://localhost:3000/auth/microsoft/callback',
+      tenantId: 'common',
+      scopes: ['openid', 'profile', 'email'],
+    });
+
+    const engine = new ReAuthEngineV2({
+      dbClient: mockDbClient as any,
+      plugins: [microsoftPlugin],
+      enableCleanupScheduler: false,
+    });
+
+    const plugin = engine.getPlugin('oauth');
+    expect(plugin).toBeDefined();
+
+    const result = await engine.executeStep('oauth', 'initiate-oauth', {
+      provider: 'microsoft',
+      redirectUri: 'http://localhost:3000/auth/microsoft/callback',
+      state: 'microsoft-state-def',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.authorizationUrl).toContain('login.microsoftonline.com/common/oauth2/v2.0/authorize');
+    expect(result.authorizationUrl).toContain('scope=openid+profile+email');
   });
 
   it('should validate OAuth plugin configuration', () => {
