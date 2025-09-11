@@ -344,6 +344,115 @@ export const defaultUserInfoFetchers: Record<
       karma: user.total_karma,
     };
   },
+
+  gitlab: async (accessToken: string, idToken?: string, baseUrl = 'https://gitlab.com') => {
+    const response = await fetch(`${baseUrl}/api/v4/user`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.status}`);
+    }
+    const user = await response.json();
+    return {
+      id: user.id.toString(),
+      email: user.email,
+      name: user.name,
+      picture: user.avatar_url,
+      username: user.username,
+      verified_email: user.confirmed_at !== null,
+    };
+  },
+
+  slack: async (accessToken: string) => {
+    const response = await fetch('https://slack.com/api/users.identity', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Slack API error: ${response.status}`);
+    }
+    const result = await response.json();
+    if (!result.ok) {
+      throw new Error(`Slack API error: ${result.error}`);
+    }
+    return {
+      id: result.user.id,
+      email: result.user.email,
+      name: result.user.name,
+      picture: result.user.image_512,
+      team_id: result.team.id,
+      team_name: result.team.name,
+    };
+  },
+
+  bitbucket: async (accessToken: string) => {
+    const response = await fetch('https://api.bitbucket.org/2.0/user', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Bitbucket API error: ${response.status}`);
+    }
+    const user = await response.json();
+    return {
+      id: user.account_id,
+      email: user.email,
+      name: user.display_name,
+      picture: user.links?.avatar?.href,
+      username: user.username,
+      nickname: user.nickname,
+    };
+  },
+
+  dropbox: async (accessToken: string) => {
+    const response = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+      method: 'POST',
+      headers: { 
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+    if (!response.ok) {
+      throw new Error(`Dropbox API error: ${response.status}`);
+    }
+    const user = await response.json();
+    return {
+      id: user.account_id,
+      email: user.email,
+      name: user.name?.display_name,
+      picture: user.profile_photo_url,
+      country: user.country,
+      locale: user.locale,
+    };
+  },
+
+  salesforce: async (accessToken: string, idToken?: string) => {
+    if (idToken) {
+      const claims = arctic.decodeIdToken(idToken) as OAuthIDTokenClaims;
+      return {
+        id: claims.sub,
+        email: claims.email,
+        name: claims.name,
+        picture: claims.picture,
+        verified_email: claims.email_verified,
+      };
+    }
+    // Use the userinfo endpoint
+    const response = await fetch('https://login.salesforce.com/services/oauth2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Salesforce API error: ${response.status}`);
+    }
+    const user = await response.json();
+    return {
+      id: user.user_id,
+      email: user.email,
+      name: user.name,
+      picture: user.picture,
+      preferred_username: user.preferred_username,
+      organization_id: user.organization_id,
+    };
+  },
 };
 
 /**

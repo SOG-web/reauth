@@ -37,3 +37,12 @@ export const workosOAuthPlugin = createOAuthPlugin<WorkOSOAuthConfig>(
 );
 
 export default workosOAuthPlugin;
+
+// Export schema for validation
+export const workosOAuthSchema = {
+  clientId: 'string',
+  clientSecret: 'string',
+  redirectUri: 'string',
+  scopes: 'string[]?',
+  usePKCE: 'boolean?',
+} as const;

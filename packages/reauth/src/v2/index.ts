@@ -41,8 +41,27 @@ export {
   type OAuthDiscoveryMetadata,
   type OAuthProtectedResourceMetadata 
 } from './plugins/oauth-discovery/plugin.v2';
+
+// OAuth plugin (third-party authentication)
+export { oauthSchemaV2 } from './plugins/oauth/schema.v2';
+export { 
+  default as oauthPluginV2,
+  baseOAuthPluginV2,
+  createOAuthPlugin,
+  type OAuthConfigV2,
+  type OAuthProviderConfig,
+  type OAuthUserProfile,
+  type OAuthTokenResponse,
+  type OAuthState
+} from './plugins/oauth';
+export { createGoogleOAuthPlugin, type GoogleOAuthConfig } from './plugins/oauth/providers/google';
+export { createGitHubOAuthPlugin, type GitHubOAuthConfig } from './plugins/oauth/providers/github';
 // Email-or-username plugin
 export { baseEmailOrUsernamePluginV2, type EmailOrUsernameConfigV2 } from './plugins/email-or-username/plugin.v2';
+
+// Organization plugin
+export { organizationSchemaV2 } from './plugins/organization/schema.v2';
+export { default as organizationPluginV2, baseOrganizationPluginV2, type OrganizationConfigV2 } from './plugins/organization/plugin.v2';
 
 export { createAuthPluginV2, createAuthPluginLegacyV2 } from './utils/create-plugin.v2';
 

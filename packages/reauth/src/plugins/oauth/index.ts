@@ -56,6 +56,7 @@ export {
   type RedditOAuthConfig,
 } from './reddit-oauth.plugin';
 
+
 // Import for re-export object
 import {
   createOAuthPlugin,
@@ -78,7 +79,7 @@ import microsoftOAuthPlugin, {
 import twitterOAuthPlugin, { twitterOAuthSchema } from './twitter-oauth.plugin';
 import twitchOAuthPlugin, { twitchOAuthSchema } from './twitch-oauth.plugin';
 import appleOAuthPlugin, { appleOAuthSchema } from './apple-oauth.plugin';
-import workosOAuthPlugin from './workos-oauth.plugin';
+import workosOAuthPlugin, { workosOAuthSchema } from './workos-oauth.plugin';
 import redditOAuthPlugin, { redditOAuthSchema } from './reddit-oauth.plugin';
 
 // Re-export everything as a default object for convenience
@@ -116,5 +117,6 @@ export const oauthSchemaPlugins = {
   twitterOAuthSchema,
   twitchOAuthSchema,
   appleOAuthSchema,
+  workosOAuthSchema,
   redditOAuthSchema,
 };
