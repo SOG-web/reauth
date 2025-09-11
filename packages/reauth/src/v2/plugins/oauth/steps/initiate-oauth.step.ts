@@ -1,7 +1,21 @@
 import { type } from 'arktype';
-import type { AuthStepV2, OrmLike } from '../../../../types.v2';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OAuthConfigV2 } from '../types';
 import { generateOAuthState, generateAuthorizationUrl, getOAuthProvider } from '../utils';
+
+const initiateOAuthInputSchema = type({
+  provider: 'string',
+  'redirectUri?': 'string',
+  'state?': 'string',
+});
+
+const initiateOAuthOutputSchema = type({
+  success: 'boolean',
+  message: 'string',
+  status: 'string',
+  authorizationUrl: 'string',
+  state: 'string',
+});
 
 export const initiateOAuthStep: AuthStepV2<
   typeof initiateOAuthInputSchema.infer,
@@ -10,17 +24,9 @@ export const initiateOAuthStep: AuthStepV2<
   OrmLike
 > = {
   name: 'initiate-oauth',
-  inputs: type({
-    provider: 'string',
-    'redirectUrl?': 'string',
-  }),
-  outputs: type({
-    success: 'boolean',
-    message: 'string',
-    status: 'string',
-    authorizationUrl: 'string',
-    state: 'string',
-  }),
+  validationSchema: initiateOAuthInputSchema,
+  inputs: ['provider', 'redirectUri', 'state'],
+  outputs: initiateOAuthOutputSchema,
   protocol: {
     type: 'oauth-initiate',
     description: 'Initiate OAuth authentication flow',
@@ -28,16 +34,16 @@ export const initiateOAuthStep: AuthStepV2<
     path: '/oauth/initiate',
   },
   
-  async handler(input, { orm, config, container }) {
-    const { provider, redirectUrl } = input;
+  async run(input, ctx) {
+    const { provider, redirectUri, state: inputState } = input;
     
     try {
-      // Get provider configuration from database
-      const oauthProvider = await getOAuthProvider(orm, provider);
-      if (!oauthProvider) {
+      // Get provider configuration from plugin config
+      const providerConfig = ctx.config?.providers?.find(p => p.name === provider);
+      if (!providerConfig) {
         return {
           success: false,
-          message: `OAuth provider '${provider}' not found or inactive`,
+          message: `Provider ${provider} not found`,
           status: 'provider_not_found',
           authorizationUrl: '',
           state: '',
@@ -45,16 +51,16 @@ export const initiateOAuthStep: AuthStepV2<
       }
 
       // Generate state parameter for CSRF protection
-      const state = generateOAuthState(provider, redirectUrl);
+      const state = inputState || generateOAuthState(provider, redirectUri);
 
       // Get scopes for this provider
-      const scopes = oauthProvider.scopes || config?.defaultScopes || [];
+      const scopes = providerConfig.scopes || ctx.config?.defaultScopes || [];
 
       // Generate authorization URL
       const authorizationUrl = generateAuthorizationUrl(
-        oauthProvider.authorization_url,
-        oauthProvider.client_id,
-        oauthProvider.redirect_uri,
+        providerConfig.authorizationUrl,
+        providerConfig.clientId,
+        providerConfig.redirectUri,
         scopes,
         state
       );
@@ -78,6 +84,3 @@ export const initiateOAuthStep: AuthStepV2<
     }
   },
 };
-
-const initiateOAuthInputSchema = initiateOAuthStep.inputs;
-const initiateOAuthOutputSchema = initiateOAuthStep.outputs;
