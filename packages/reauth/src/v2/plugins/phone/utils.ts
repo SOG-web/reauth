@@ -1,4 +1,5 @@
 import type { PhonePasswordConfigV2 } from './types';
+import type { OrmLike } from '../../types.v2';
 
 export const isTestEnvironmentAllowed = (
   config: PhonePasswordConfigV2,
@@ -51,4 +52,64 @@ export const genCode = (config?: PhonePasswordConfigV2) => {
 export const generateCode = async (phone: string, subject?: any): Promise<string> => {
   // Default code generation for phone verification
   return genCode();
+};
+
+/**
+ * Clean up expired verification and reset codes from phone_identities table
+ */
+export const cleanupExpiredCodes = async (
+  orm: OrmLike,
+  config?: PhonePasswordConfigV2
+): Promise<{ verificationCodesDeleted: number; resetCodesDeleted: number }> => {
+  const now = new Date();
+  const retentionDays = config?.retentionDays ?? 1;
+  const batchSize = config?.cleanupBatchSize ?? 100;
+  
+  // Calculate cutoff date for retention (expired codes older than this get deleted)
+  const retentionCutoffDate = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+
+  let verificationCodesDeleted = 0;
+  let resetCodesDeleted = 0;
+
+  try {
+    // Clean up expired verification codes
+    // Delete codes that are both expired AND past retention period
+    const verificationResult = await orm.updateMany('phone_identities', {
+      where: (b: any) =>
+        b.and(
+          b('verification_code_expires_at', '!=', null),
+          b('verification_code_expires_at', '<', now),
+          b('verification_code_expires_at', '<', retentionCutoffDate)
+        ),
+      set: {
+        verification_code: null,
+        verification_code_expires_at: null,
+      },
+    });
+    
+    verificationCodesDeleted = typeof verificationResult === 'number' ? verificationResult : 0;
+
+    // Clean up expired reset codes
+    // Delete codes that are both expired AND past retention period
+    const resetResult = await orm.updateMany('phone_identities', {
+      where: (b: any) =>
+        b.and(
+          b('reset_code_expires_at', '!=', null),
+          b('reset_code_expires_at', '<', now),
+          b('reset_code_expires_at', '<', retentionCutoffDate)
+        ),
+      set: {
+        reset_code: null,
+        reset_code_expires_at: null,
+      },
+    });
+
+    resetCodesDeleted = typeof resetResult === 'number' ? resetResult : 0;
+
+  } catch (error) {
+    // Return partial results if available, otherwise zero
+    // Don't throw to prevent cleanup scheduler from stopping
+  }
+
+  return { verificationCodesDeleted, resetCodesDeleted };
 };

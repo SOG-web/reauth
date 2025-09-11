@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from 'crypto';
 import type { OrmLike } from '../../types.v2';
+import type { PasswordlessConfigV2 } from './types';
 
 /**
  * Generate a secure random token for magic links
@@ -50,6 +51,42 @@ export async function cleanupExpiredMagicLinks(orm: OrmLike): Promise<void> {
   } catch (_) {
     // Best effort cleanup; never block auth flows
   }
+}
+
+/**
+ * Clean up expired magic links for SimpleCleanupScheduler
+ */
+export async function cleanupExpiredMagicLinksScheduled(
+  orm: OrmLike,
+  config?: PasswordlessConfigV2
+): Promise<{ magicLinksDeleted: number }> {
+  const now = new Date();
+  const retentionDays = config?.retentionDays ?? 1;
+  const batchSize = config?.cleanupBatchSize ?? 100;
+  
+  // Calculate cutoff date for retention (expired links older than this get deleted)
+  const retentionCutoffDate = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+
+  let magicLinksDeleted = 0;
+
+  try {
+    // Delete magic links that are both expired AND past retention period
+    const result = await orm.deleteMany('magic_links', {
+      where: (b: any) =>
+        b.and(
+          b('expires_at', '<', now),
+          b('created_at', '<', retentionCutoffDate)
+        ),
+    });
+    
+    magicLinksDeleted = typeof result === 'number' ? result : 0;
+
+  } catch (error) {
+    // Return partial results if available, otherwise zero
+    // Don't throw to prevent cleanup scheduler from stopping
+  }
+
+  return { magicLinksDeleted };
 }
 
 /**

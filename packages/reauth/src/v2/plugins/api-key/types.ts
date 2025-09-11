@@ -13,6 +13,9 @@ export type ApiKeyConfigV2 = {
   // Cleanup options
   cleanupExpiredKeys?: boolean; // Auto-remove expired keys (default: true)
   cleanupUsageOlderThanDays?: number; // Remove usage logs older than N days (default: 90)
+  cleanupEnabled?: boolean; // Enable background cleanup (default: true)
+  cleanupIntervalMinutes?: number; // Cleanup frequency in minutes (default: 60)
+  cleanupBatchSize?: number; // Process in batches (default: 100)
 };
 
 // Supported scopes for API key permissions
