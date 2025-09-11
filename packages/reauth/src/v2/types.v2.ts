@@ -120,6 +120,7 @@ export interface EngineInitApiV2<OrmT extends OrmLike = OrmLike>
     subjectType: string,
     resolver: SubjectResolver<OrmT>,
   ): this;
+  registerCleanupTask(task: CleanupTask): this;
 }
 
 export interface AuthPluginV2<Cfg = unknown, OrmT extends OrmLike = OrmLike> {
@@ -177,3 +178,21 @@ export type ReAuthCradleV2<OrmT extends OrmLike = OrmLike> = AwilixContainer<
 
 // Use the precise FumaDB abstract query type for our ORM alias.
 export type OrmLike = InferAbstractQuery<any, any>;
+
+// ---------------- Background Cleanup Scheduler Types ----------------
+export interface CleanupTask {
+  name: string;
+  pluginName: string;
+  intervalMs: number; // How often to run the cleanup (in milliseconds)
+  enabled: boolean;
+  runner: (orm: OrmLike, config?: any) => Promise<{ cleaned: number; errors?: string[] }>;
+}
+
+export interface CleanupScheduler {
+  registerTask(task: CleanupTask): void;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  isRunning(): boolean;
+  getRegisteredTasks(): CleanupTask[];
+  setPluginConfig(pluginName: string, config: any): void;
+}

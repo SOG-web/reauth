@@ -1,6 +1,11 @@
 export type PasswordlessConfigV2 = {
   sessionTtlSeconds?: number; // default 3600
   magicLinkTtlMinutes?: number; // default 30
+  // Cleanup configuration
+  cleanupEnabled?: boolean; // default true
+  cleanupIntervalMinutes?: number; // default 60 (1 hour)
+  retentionDays?: number; // how long to keep expired magic links (default 1 day)
+  cleanupBatchSize?: number; // process in batches (default 100)
 } & (
   | {
       // Magic links enabled

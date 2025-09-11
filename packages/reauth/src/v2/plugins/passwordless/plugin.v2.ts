@@ -8,7 +8,7 @@ import { authenticateWebAuthnStep } from './steps/authenticate-webauthn.step';
 import { listCredentialsStep } from './steps/list-credentials.step';
 import { revokeCredentialStep } from './steps/revoke-credential.step';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
-import { cleanupExpiredMagicLinks } from './utils';
+import { cleanupExpiredMagicLinks, cleanupExpiredMagicLinksScheduled } from './utils';
 
 export const basePasswordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = {
   name: 'passwordless',
@@ -26,12 +26,44 @@ export const basePasswordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = {
         return subject; // subjects table has no sensitive fields
       },
     });
+
+    // Register background cleanup task for expired magic links
+    const config = this.config || {};
+    if (config.cleanupEnabled !== false && config.magicLinks) {
+      const cleanupIntervalMs = (config.cleanupIntervalMinutes || 60) * 60 * 1000; // Default 1 hour
+
+      engine.registerCleanupTask({
+        name: 'expired-magic-links',
+        pluginName: 'passwordless',
+        intervalMs: cleanupIntervalMs,
+        enabled: true,
+        runner: async (orm, pluginConfig) => {
+          try {
+            const result = await cleanupExpiredMagicLinksScheduled(orm, pluginConfig);
+            return {
+              cleaned: result.magicLinksDeleted,
+              magicLinksDeleted: result.magicLinksDeleted,
+            };
+          } catch (error) {
+            return {
+              cleaned: 0,
+              magicLinksDeleted: 0,
+              errors: [`Magic link cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
+            };
+          }
+        },
+      });
+    }
   },
   config: {
     sessionTtlSeconds: 3600,
     magicLinkTtlMinutes: 30,
     magicLinks: false,
     webauthn: false,
+    cleanupEnabled: true,
+    cleanupIntervalMinutes: 60, // 1 hour
+    retentionDays: 1,
+    cleanupBatchSize: 100,
   } as any, // Default config may not be fully valid, validation happens at creation time
   steps: [
     sendMagicLinkStep,
@@ -41,17 +73,7 @@ export const basePasswordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = {
     listCredentialsStep,
     revokeCredentialStep,
   ],
-  rootHooks: {
-    // Opportunistic cleanup for expired magic links (acts as a soft TTL)
-    async before(_input, ctx) {
-      try {
-        const orm = await ctx.engine.getOrm();
-        await cleanupExpiredMagicLinks(orm);
-      } catch (_) {
-        // Best effort cleanup; never block auth flows
-      }
-    },
-  },
+  // Background cleanup now handles expired magic links via SimpleCleanupScheduler
 };
 
 // Export a configured plugin creator that validates config at construction time
@@ -101,6 +123,27 @@ export function createPasswordlessPluginV2(config: PasswordlessConfigV2): AuthPl
         
         if (config.magicLinkTtlMinutes && (config.magicLinkTtlMinutes <= 0 || config.magicLinkTtlMinutes > 1440)) {
           errs.push('magicLinkTtlMinutes must be between 1 and 1440 (24 hours)');
+        }
+        
+        // Validate cleanup configuration
+        if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
+          errs.push('cleanupIntervalMinutes must be at least 1 minute');
+        }
+        
+        if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes > 1440) {
+          errs.push('cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)');
+        }
+        
+        if (config.retentionDays && config.retentionDays < 1) {
+          errs.push('retentionDays must be at least 1 day');
+        }
+        
+        if (config.cleanupBatchSize && config.cleanupBatchSize < 1) {
+          errs.push('cleanupBatchSize must be at least 1');
+        }
+        
+        if (config.cleanupBatchSize && config.cleanupBatchSize > 1000) {
+          errs.push('cleanupBatchSize cannot exceed 1000 for performance reasons');
         }
         
         return errs.length ? errs : null;

@@ -26,6 +26,62 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
         return subject; // subjects table has no sensitive fields
       },
     });
+
+    // Register background cleanup tasks
+    const config = this.config || {};
+    if (config.cleanupEnabled !== false) {
+      const cleanupIntervalMs = (config.cleanupIntervalMinutes || 60) * 60 * 1000; // Default 1 hour
+
+      // Cleanup task for expired API keys
+      if (config.cleanupExpiredKeys !== false) {
+        engine.registerCleanupTask({
+          name: 'expired-keys',
+          pluginName: 'api-key',
+          intervalMs: cleanupIntervalMs,
+          enabled: true,
+          runner: async (orm, pluginConfig) => {
+            try {
+              const result = await cleanupExpiredApiKeys(orm);
+              return {
+                cleaned: result,
+                expiredKeysDisabled: result,
+              };
+            } catch (error) {
+              return {
+                cleaned: 0,
+                expiredKeysDisabled: 0,
+                errors: [`Key cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
+              };
+            }
+          },
+        });
+      }
+
+      // Cleanup task for old usage logs (if usage tracking is enabled)
+      if (config.enableUsageTracking && config.cleanupUsageOlderThanDays) {
+        engine.registerCleanupTask({
+          name: 'old-usage-logs',
+          pluginName: 'api-key',
+          intervalMs: cleanupIntervalMs * 6, // Run less frequently (every 6 hours by default)
+          enabled: true,
+          runner: async (orm, pluginConfig) => {
+            try {
+              const result = await cleanupOldUsageLogs(orm, pluginConfig.cleanupUsageOlderThanDays);
+              return {
+                cleaned: result,
+                usageLogsDeleted: result,
+              };
+            } catch (error) {
+              return {
+                cleaned: 0,
+                usageLogsDeleted: 0,
+                errors: [`Usage cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
+              };
+            }
+          },
+        });
+      }
+    }
   },
   config: {
     keyLength: 32,
@@ -37,6 +93,9 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
     rateLimitPerMinute: undefined,
     cleanupExpiredKeys: true,
     cleanupUsageOlderThanDays: 90,
+    cleanupEnabled: true,
+    cleanupIntervalMinutes: 60, // 1 hour
+    cleanupBatchSize: 100,
     allowedScopes: ['read', 'write', 'delete', 'admin'], // Default scopes
   },
   steps: [
@@ -49,28 +108,7 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
   getSensitiveFields() {
     return ['key_hash']; // Never expose hashed keys
   },
-  rootHooks: {
-    // Opportunistic cleanup for expired keys and old usage logs
-    async before(_input, ctx) {
-      const config = ctx.config || {};
-      
-      try {
-        const orm = await ctx.engine.getOrm();
-        
-        // Clean up expired API keys if enabled
-        if (config.cleanupExpiredKeys) {
-          await cleanupExpiredApiKeys(orm);
-        }
-        
-        // Clean up old usage logs if tracking is enabled
-        if (config.enableUsageTracking && config.cleanupUsageOlderThanDays) {
-          await cleanupOldUsageLogs(orm, config.cleanupUsageOlderThanDays);
-        }
-      } catch (_) {
-        // Best effort cleanup; never block auth flows
-      }
-    },
-  },
+  // Background cleanup now handles expired keys and usage logs via SimpleCleanupScheduler
 };
 
 // Export a configured plugin creator that validates config at construction time
@@ -98,6 +136,23 @@ const apiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = createAuthPluginV2<ApiKeyCo
       
       if (config.cleanupUsageOlderThanDays && config.cleanupUsageOlderThanDays < 1) {
         errs.push('cleanupUsageOlderThanDays must be at least 1 day');
+      }
+      
+      // Validate cleanup configuration
+      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
+        errs.push('cleanupIntervalMinutes must be at least 1 minute');
+      }
+      
+      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes > 1440) {
+        errs.push('cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)');
+      }
+      
+      if (config.cleanupBatchSize && config.cleanupBatchSize < 1) {
+        errs.push('cleanupBatchSize must be at least 1');
+      }
+      
+      if (config.cleanupBatchSize && config.cleanupBatchSize > 1000) {
+        errs.push('cleanupBatchSize cannot exceed 1000 for performance reasons');
       }
       
       return errs.length ? errs : null;
