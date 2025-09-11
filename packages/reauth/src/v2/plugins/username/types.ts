@@ -23,4 +23,9 @@ export type UsernamePasswordConfigV2 = {
     username: string,
     type: 'reset',
   ) => Promise<void>;
+  // Cleanup configuration
+  cleanupEnabled?: boolean; // default true
+  cleanupIntervalMinutes?: number; // default 60 (1 hour)
+  retentionDays?: number; // how long to keep expired codes (default 1 day)
+  cleanupBatchSize?: number; // process in batches (default 100)
 };

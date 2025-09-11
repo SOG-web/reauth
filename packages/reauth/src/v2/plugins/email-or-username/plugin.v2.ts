@@ -65,9 +65,9 @@ export const baseEmailOrUsernamePluginV2: AuthPluginV2<EmailOrUsernameConfigV2> 
     // to the underlying email-password plugin when needed
   ],
   rootHooks: {
-    // Delegate cleanup to underlying plugins by running their hooks
+    // Delegate cleanup to underlying plugins via their SimpleCleanupScheduler integration
     async before(input, ctx, step) {
-      // The underlying plugins handle their own cleanup via their rootHooks
+      // The underlying plugins handle their own cleanup via SimpleCleanupScheduler
       // This plugin doesn't need additional cleanup logic
     },
   },
