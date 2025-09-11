@@ -98,6 +98,15 @@ export class ReAuthEngineV2 {
     return this;
   }
 
+  enableEnhancedSessions() {
+    (this.sessionService as any).enableEnhancedFeatures?.();
+    return this;
+  }
+
+  getSessionService(): SessionServiceV2 {
+    return this.sessionService;
+  }
+
   async startCleanupScheduler(): Promise<void> {
     await this.cleanupScheduler.start();
   }
