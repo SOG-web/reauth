@@ -74,14 +74,14 @@ export const registerStep: AuthStepV2<
         username,
         provider: 'username',
         verified: true,
-        ...tu.profile,
+        profile: tu.profile,
       };
 
       return {
         success: true,
         message: 'Registration successful (test user)',
         status: 'su',
-        token,
+        ...(token ? { token } : {}),
         subject,
         others,
       };

@@ -61,7 +61,14 @@ export const changePasswordStep: AuthStepV2<
     }
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await haveIbeenPawned(newPassword);
+    let isSafe = true;
+    try {
+      isSafe = await haveIbeenPawned(newPassword);
+    } catch (err) {
+      console.log('haveIbeenPawned check failed', { err });
+      // Decide: fail-open (as below) or fail-closed per policy.
+      isSafe = true;
+    }
     if (!isSafe) {
       return {
         success: false,

@@ -72,7 +72,7 @@ export const loginStep: AuthStepV2<
         username,
         provider: 'username',
         verified: true, // Username doesn't require verification
-        ...tu.profile,
+        profile: tu.profile,
       };
 
       return {

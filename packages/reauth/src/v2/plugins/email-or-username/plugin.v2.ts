@@ -98,6 +98,42 @@ const emailOrUsernamePluginV2: AuthPluginV2<EmailOrUsernameConfigV2> =
         errs.push("detectionStrategy must be 'auto' or 'explicit'");
       }
 
+      // Validate precedence/consistency for session TTL
+      const topTTL = config.sessionTtlSeconds;
+      const emailTTL = config.emailConfig?.sessionTtlSeconds;
+      const userTTL = config.usernameConfig?.sessionTtlSeconds;
+      for (const [label, ttl] of [
+        ['sessionTtlSeconds', topTTL],
+        ['emailConfig.sessionTtlSeconds', emailTTL],
+        ['usernameConfig.sessionTtlSeconds', userTTL],
+      ] as const) {
+        if (ttl !== undefined && (!Number.isFinite(ttl) || ttl <= 0)) {
+          errs.push(`${label} must be a positive finite number`);
+        }
+      }
+      if (
+        typeof topTTL === 'number' &&
+        ((typeof emailTTL === 'number' && emailTTL !== topTTL) ||
+          (typeof userTTL === 'number' && userTTL !== topTTL))
+      ) {
+        errs.push(
+          'sessionTtlSeconds differs between top-level and nested configs; set it in one place or make them equal.',
+        );
+      }
+
+      // Validate precedence/consistency for loginOnRegister
+      const topLogin = config.loginOnRegister;
+      const emailLogin = config.emailConfig?.loginOnRegister;
+      const userLogin = config.usernameConfig?.loginOnRegister;
+      if (
+        typeof topLogin === 'boolean' &&
+        ((typeof emailLogin === 'boolean' && emailLogin !== topLogin) ||
+          (typeof userLogin === 'boolean' && userLogin !== topLogin))
+      ) {
+        errs.push(
+          'loginOnRegister differs between top-level and nested configs; set it in one place or make them equal.',
+        );
+      }
       // Validate test users format
       if (config.testUsers?.enabled && config.testUsers.users) {
         for (const user of config.testUsers.users) {

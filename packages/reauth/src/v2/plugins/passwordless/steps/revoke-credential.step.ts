@@ -41,7 +41,17 @@ export const revokeCredentialStep: AuthStepV2<
     const { token, credential_id, others } = input;
     const orm = await ctx.engine.getOrm();
 
-    const t = await ctx.engine.checkSession(token);
+    // Validate session first; return explicit 403/401 on failure.
+    let t: any;
+    try {
+      t = await ctx.engine.checkSession(token);
+    } catch {
+      return {
+        success: false,
+        message: 'Invalid or expired session token',
+        status: 'fo',
+      };
+    }
 
     try {
       // Check if subject exists

@@ -174,9 +174,11 @@ export const convertGuestStep: AuthStepV2<
       }
 
       // Ensure the configured step exists on the target plugin
-      const stepExists = Array.isArray(plugin.steps)
-        ? plugin.steps.some((s) => s && s.name === targetDef.step)
-        : false;
+      const stepExists =
+        Array.isArray(plugin.steps) &&
+        plugin.steps.some(
+          (s) => s && typeof s === 'object' && s.name === targetDef.step,
+        );
       if (!stepExists) {
         return {
           success: false,
@@ -187,20 +189,43 @@ export const convertGuestStep: AuthStepV2<
       }
 
       // Map input for the target step
-      const mappedInput = targetDef.mapInput
-        ? await targetDef.mapInput({
-            conversionData: conversionData || {},
-            guest: { id: subjectId, metadata },
-            ctx: ctx,
-          })
-        : { ...(conversionData || {}), others };
+      let mappedInput;
+      try {
+        mappedInput = targetDef.mapInput
+          ? await targetDef.mapInput({
+              conversionData: conversionData || {},
+              guest: { id: subjectId, metadata },
+              ctx: ctx,
+            })
+          : { ...(conversionData || {}), others };
+      } catch (error) {
+        return {
+          success: false,
+          message: `Failed to map input for conversion: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          status: 'ic',
+          others,
+        };
+      }
 
-      const regOut = (await ctx.engine.executeStep(
-        targetPlugin,
-        targetDef.step,
-        mappedInput,
-      )) as any;
-
+      let regOut;
+      try {
+        regOut = await ctx.engine.executeStep(
+          targetPlugin,
+          targetDef.step,
+          mappedInput,
+        );
+      } catch (error) {
+        return {
+          success: false,
+          message: `Target step execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          status: 'ic',
+          error:
+            error instanceof Error
+              ? { message: error.message, stack: error.stack }
+              : error,
+          others,
+        };
+      }
       // Expect conventional shape; fallback to generic failure
       if (!regOut || regOut.success !== true) {
         return {

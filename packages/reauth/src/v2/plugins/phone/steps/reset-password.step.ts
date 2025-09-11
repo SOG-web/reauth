@@ -52,7 +52,14 @@ export const resetPasswordStep: AuthStepV2<
     const orm = await ctx.engine.getOrm();
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await haveIbeenPawned(newPassword);
+    let isSafe = true;
+    try {
+      isSafe = await haveIbeenPawned(newPassword);
+    } catch (err) {
+      // Consider a config flag to choose fail-open vs fail-closed.
+      console.warn({ err }, 'HIBP check failed; defaulting to allow reset');
+      isSafe = true; // flip to false if you prefer fail-closed
+    }
     if (!isSafe) {
       return {
         success: false,

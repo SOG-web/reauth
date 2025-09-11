@@ -40,8 +40,8 @@ export const verifyMagicLinkStep: AuthStepV2<
     'token?': 'string',
     'subject?': type({
       id: 'string',
-      email: 'string',
-      name: 'string',
+      'email?': 'string',
+      'name?': 'string',
     }),
     'others?': 'object',
   }),

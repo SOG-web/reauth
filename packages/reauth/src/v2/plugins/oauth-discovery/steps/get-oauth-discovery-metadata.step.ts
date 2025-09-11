@@ -78,7 +78,14 @@ export const getOAuthDiscoveryMetadataStep: AuthStepV2<
     // Merge input with plugin config, with input taking precedence
     const config = { ...(ctx.config || {}), ...(input || {}) };
 
-    const baseUrl = config.baseUrl || config.issuer;
+    const issuer = config.issuer || config.baseUrl;
+    const rawBase = config.baseUrl || config.issuer;
+    if (!rawBase) {
+      throw new Error(
+        'get-oauth-discovery-metadata: either `baseUrl` or `issuer` is required',
+      );
+    }
+    const baseUrl = rawBase.replace(/\/+$/, '');
 
     const metadata: OAuthDiscoveryMetadata = {
       issuer: config.issuer,

@@ -66,7 +66,7 @@ export const registerStep: AuthStepV2<
         email,
         provider: 'email',
         verified: true,
-        ...tu.profile,
+        profile: tu?.profile,
       };
       return {
         success: true,

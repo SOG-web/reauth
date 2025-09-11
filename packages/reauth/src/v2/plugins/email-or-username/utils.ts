@@ -59,7 +59,7 @@ export function findTestUser(
  */
 export function createEmailConfig(config: EmailOrUsernameConfigV2) {
   return {
-    ...config.emailConfig,
+    ...(config.emailConfig ?? {}),
     sessionTtlSeconds:
       config.sessionTtlSeconds ?? config.emailConfig?.sessionTtlSeconds,
     loginOnRegister:
@@ -67,7 +67,7 @@ export function createEmailConfig(config: EmailOrUsernameConfigV2) {
     testUsers: config.testUsers?.enabled
       ? {
           enabled: true,
-          users: config.testUsers.users
+          users: (config.testUsers.users ?? [])
             .filter((user) => user.email)
             .map((user) => ({
               email: user.email!,
@@ -85,7 +85,7 @@ export function createEmailConfig(config: EmailOrUsernameConfigV2) {
  */
 export function createUsernameConfig(config: EmailOrUsernameConfigV2) {
   return {
-    ...config.usernameConfig,
+    ...(config.usernameConfig ?? {}),
     sessionTtlSeconds:
       config.sessionTtlSeconds ?? config.usernameConfig?.sessionTtlSeconds,
     loginOnRegister:
@@ -93,7 +93,7 @@ export function createUsernameConfig(config: EmailOrUsernameConfigV2) {
     testUsers: config.testUsers?.enabled
       ? {
           enabled: true,
-          users: config.testUsers.users
+          users: (config.testUsers.users ?? [])
             .filter((user) => user.username)
             .map((user) => ({
               username: user.username!,

@@ -46,12 +46,12 @@ export const listApiKeysStep: AuthStepV2<
         name: 'string',
         permissions: 'string[]',
         scopes: 'string[]',
-        expires_at: 'Date',
+        expires_at: 'Date | string',
         is_active: 'boolean',
-        created_at: 'Date',
-        updated_at: 'Date',
-        last_used_at: 'Date',
-      }), // Contains array of ApiKeyMetadata
+        created_at: 'Date | string',
+        updated_at: 'Date | string',
+        last_used_at: 'Date | string',
+      }).array(), // Contains array of ApiKeyMetadata
     }),
     'others?': 'object',
   }),

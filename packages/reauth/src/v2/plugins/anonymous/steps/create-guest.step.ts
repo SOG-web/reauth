@@ -1,11 +1,11 @@
 import { type } from 'arktype';
+import { createHash } from 'crypto';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { AnonymousConfigV2 } from '../types';
 import {
   generateFingerprint,
   calculateExpiresAt,
   canCreateGuestSession,
-  generateGuestSubjectId,
   cleanupExpiredSessions,
 } from '../utils';
 
@@ -81,9 +81,17 @@ export const createGuestStep: AuthStepV2<
       };
     }
 
+    // Hash fingerprint before any use/storage to ensure it is one-way & non-reversible
+    // NOTE: We intentionally do not expose the raw fingerprint. The SHA-256 hash prevents
+    // reversing to the original components (UA/IP/metadata). This value is used consistently
+    // for rate limits and response payloads.
+    const safeFingerprint = deviceFingerprint
+      ? createHash('sha256').update(String(deviceFingerprint)).digest('hex')
+      : undefined;
+
     // Check if this fingerprint can create more guest sessions
     const canCreate = await canCreateGuestSession(
-      deviceFingerprint,
+      safeFingerprint as string,
       orm,
       ctx.config,
     );
@@ -108,10 +116,10 @@ export const createGuestStep: AuthStepV2<
         subject_id: subject.id,
       });
 
-      // Create anonymous session record
+      // Create anonymous session record (store only hashed fingerprint)
       await orm.create('anonymous_sessions', {
         subject_id: subject.id,
-        fingerprint: deviceFingerprint,
+        fingerprint: safeFingerprint,
         metadata: metadata || null,
         extension_count: 0,
         expires_at: expiresAt,
@@ -119,16 +127,14 @@ export const createGuestStep: AuthStepV2<
 
       // Create session token
       const ttl = ctx.config?.sessionTtlSeconds ?? 1800;
-      const token = await ctx.engine.createSessionFor(
-        'guest',
-        subject.id as string,
-        ttl,
-      );
+      const subjectId = String(subject.id);
+      const token = await ctx.engine.createSessionFor('guest', subjectId, ttl);
 
       const guestSubject = {
-        id: subject.id,
+        id: subjectId,
         type: 'guest',
-        fingerprint: deviceFingerprint,
+        // Exposing hashed fingerprint only (non-reversible)
+        fingerprint: safeFingerprint as string,
         temporary: true,
         expiresAt: expiresAt.toISOString(),
         metadata: metadata || {},
@@ -140,7 +146,7 @@ export const createGuestStep: AuthStepV2<
         status: 'su',
         token,
         subject: guestSubject,
-        guestId: subject.id as string,
+        guestId: subjectId,
         expiresAt: expiresAt.toISOString(),
         others,
       };

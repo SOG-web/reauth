@@ -71,7 +71,8 @@ export const sendMagicLinkStep: AuthStepV2<
       if (!identity) {
         return {
           success: false,
-          message: 'Account not found with this email address',
+          message:
+            'If an account exists for this email, a magic link has been sent.',
           status: 'nf',
         };
       }

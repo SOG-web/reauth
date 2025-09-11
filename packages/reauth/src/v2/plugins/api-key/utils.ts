@@ -115,7 +115,7 @@ export async function checkApiKeyLimit(
   subjectId: string,
   maxKeys: number | undefined,
 ): Promise<boolean> {
-  if (!maxKeys) return false; // No limit
+  if (maxKeys == null) return false; // No limit when undefined/null, but 0 is a valid limit
 
   const count = await orm.count('api_keys', {
     where: (b: any) =>

@@ -73,8 +73,17 @@ export const registerWebAuthnStep: AuthStepV2<
     } = input;
     const orm = await ctx.engine.getOrm();
 
-    const t = await ctx.engine.checkSession(token);
-
+    let t;
+    try {
+      t = await ctx.engine.checkSession(token);
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Invalid or expired session token',
+        status: 'ic',
+        error: 'Authentication required',
+      };
+    }
     // Validate config requires WebAuthn
     if (!ctx.config?.webauthn) {
       return {

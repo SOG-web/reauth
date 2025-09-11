@@ -48,8 +48,12 @@ export const listSessionsStep: AuthStepV2<
     'sessions?': [
       type({
         sessionId: 'string',
+        token: 'string',
         createdAt: 'string',
+        expiresAt: 'string',
         isCurrent: 'boolean',
+        'deviceInfo?': 'object',
+        'metadata?': 'object',
       }),
     ],
     'totalSessions?': 'number',
@@ -75,6 +79,10 @@ export const listSessionsStep: AuthStepV2<
       // Get the enhanced session service via DI container (type-safe)
       const sessionService =
         ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
+
+      if (!sessionService) {
+        throw new Error('SessionServiceV2 not registered in container');
+      }
 
       // Use the enhanced session listing if available
       let sessions: any[] = [];
@@ -110,7 +118,10 @@ export const listSessionsStep: AuthStepV2<
             sessionId: 'current-session',
             token: '*current*',
             createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour default
             isCurrent: true,
+            deviceInfo: undefined,
+            metadata: undefined,
           },
         ];
         totalSessions = 1;

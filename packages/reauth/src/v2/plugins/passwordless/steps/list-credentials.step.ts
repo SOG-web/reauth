@@ -40,7 +40,7 @@ export const listCredentialsStep: AuthStepV2<
         id: 'string',
         name: 'string',
         created_at: 'string',
-        last_used_at: 'string',
+        last_used_at: 'string?',
         is_active: 'boolean',
         transports: 'string[]',
       }),
@@ -99,14 +99,30 @@ export const listCredentialsStep: AuthStepV2<
           orderBy: [['created_at', 'desc']],
         });
 
-        result.credentials = credentials.map((cred: any) => ({
-          id: cred.id,
-          name: cred.name,
-          created_at: cred.created_at,
-          last_used_at: cred.last_used_at,
-          is_active: cred.is_active,
-          transports: cred.transports,
-        }));
+        result.credentials = credentials.map((cred: any) => {
+          const createdAt = cred?.created_at
+            ? (cred.created_at instanceof Date
+                ? cred.created_at.toISOString()
+                : new Date(cred.created_at).toISOString())
+            : undefined;
+          const lastUsedAt = cred?.last_used_at
+            ? (cred.last_used_at instanceof Date
+                ? cred.last_used_at.toISOString()
+                : new Date(cred.last_used_at).toISOString())
+            : undefined;
+          const transports: string[] = Array.isArray(cred?.transports)
+            ? cred.transports.map((t: any) => String(t))
+            : [];
+          return {
+            id: cred.id,
+            name: cred.name,
+            created_at: createdAt || new Date(0).toISOString(),
+            // last_used_at is optional; omit when null/undefined
+            ...(typeof lastUsedAt !== 'undefined' ? { last_used_at: lastUsedAt } : {}),
+            is_active: Boolean(cred.is_active),
+            transports,
+          };
+        });
       }
 
       // Get active magic links if enabled
@@ -122,12 +138,24 @@ export const listCredentialsStep: AuthStepV2<
           orderBy: [['created_at', 'desc']],
         });
 
-        result.magic_links = magicLinks.map((link: any) => ({
-          id: link.id,
-          email: link.email,
-          created_at: link.created_at,
-          expires_at: link.expires_at,
-        }));
+        result.magic_links = magicLinks.map((link: any) => {
+          const createdAt = link?.created_at
+            ? (link.created_at instanceof Date
+                ? link.created_at.toISOString()
+                : new Date(link.created_at).toISOString())
+            : undefined;
+          const expiresAt = link?.expires_at
+            ? (link.expires_at instanceof Date
+                ? link.expires_at.toISOString()
+                : new Date(link.expires_at).toISOString())
+            : undefined;
+          return {
+            id: link.id,
+            email: link.email,
+            created_at: createdAt || new Date(0).toISOString(),
+            expires_at: expiresAt || new Date(0).toISOString(),
+          };
+        });
       }
 
       return result;

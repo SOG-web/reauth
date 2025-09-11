@@ -75,12 +75,15 @@ export class ReAuthEngineV2 {
   private registerPlugin(plugin: AuthPluginV2) {
     this.plugins.push(plugin);
     this.pluginMap.set(plugin.name, plugin);
-    
+
     // Set plugin config in cleanup scheduler for task access
     if (plugin.config) {
-      (this.cleanupScheduler as SimpleCleanupScheduler).setPluginConfig(plugin.name, plugin.config);
+      (this.cleanupScheduler as SimpleCleanupScheduler).setPluginConfig(
+        plugin.name,
+        plugin.config,
+      );
     }
-    
+
     plugin.initialize?.(this);
   }
 
@@ -195,9 +198,7 @@ export class ReAuthEngineV2 {
   ): Promise<unknown> {
     const plugin = this.pluginMap.get(pluginName);
     if (!plugin) throw new Error(`Plugin not found: ${pluginName}`);
-    const step = (plugin.steps || []).find(
-      (s) => s.name === stepName,
-    ) as AuthStepV2<unknown, unknown, unknown> | undefined;
+    const step = (plugin.steps || []).find((s) => s.name === stepName);
     if (!step) throw new Error(`Step not found: ${pluginName}.${stepName}`);
 
     // Validate input if arktype schema provided (Type.assert)
@@ -221,11 +222,8 @@ export class ReAuthEngineV2 {
           ttlSeconds?: number,
         ) => this.createSessionFor(subjectType, subjectId, ttlSeconds),
         checkSession: (token: string) => this.checkSession(token),
-        executeStep: (
-          pluginName: string,
-          stepName: string,
-          input: unknown,
-        ) => this.executeStep(pluginName, stepName, input as any),
+        executeStep: (pluginName: string, stepName: string, input: unknown) =>
+          this.executeStep(pluginName, stepName, input),
         getPlugin: (name: string) => this.getPlugin(name),
       },
       config: plugin.config as unknown,
@@ -245,23 +243,20 @@ export class ReAuthEngineV2 {
         const maybeNewInput = await plugin.rootHooks.before(
           input as unknown as AuthInput,
           ctx,
-          step as any,
+          step,
         );
-        if (typeof maybeNewInput !== 'undefined') input = maybeNewInput as unknown;
+        if (typeof maybeNewInput !== 'undefined')
+          input = maybeNewInput as unknown;
       }
 
-      await step.hooks?.before?.(input as any, ctx as any);
-      const output = await (step.run as any)(input as any, ctx as any);
+      await step.hooks?.before?.(input, ctx);
+      const output = await step.run(input, ctx);
 
-      await step.hooks?.after?.(output as any, ctx as any);
+      await step.hooks?.after?.(output, ctx);
       // Plugin root-level after hook
-      let postRootOutput: unknown = output as unknown;
+      let postRootOutput: unknown = output;
       if (plugin.rootHooks?.after) {
-        const maybeNewOutput = await plugin.rootHooks.after(
-          output,
-          ctx,
-          step as any,
-        );
+        const maybeNewOutput = await plugin.rootHooks.after(output, ctx, step);
         if (typeof maybeNewOutput !== 'undefined')
           postRootOutput = maybeNewOutput as unknown;
       }
@@ -288,7 +283,7 @@ export class ReAuthEngineV2 {
     } catch (err) {
       await step.hooks?.onError?.(err, ctx);
       if (plugin.rootHooks?.onError) {
-        await plugin.rootHooks.onError(err, input, ctx as any, step as any);
+        await plugin.rootHooks.onError(err, input, ctx, step);
       }
       await this.executeAuthHooks(
         'onError',

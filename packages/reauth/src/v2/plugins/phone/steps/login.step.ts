@@ -72,7 +72,7 @@ export const loginStep: AuthStepV2<
         phone,
         provider: 'phone',
         verified: true,
-        ...tu.profile,
+        profile: tu?.profile,
       };
 
       return {

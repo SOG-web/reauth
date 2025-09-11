@@ -70,7 +70,7 @@ export const loginStep: AuthStepV2<
         email,
         provider: 'email',
         verified: true,
-        ...tu.profile,
+        profile: tu.profile,
       };
 
       return {
