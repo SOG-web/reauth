@@ -2,10 +2,7 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailOrUsernameConfigV2 } from '../types';
 import { passwordSchema } from '../../../../plugins/shared/validation';
-import { 
-  detectInputType,
-  findTestUser
-} from '../utils';
+import { detectInputType, findTestUser } from '../utils';
 
 export type RegisterInput = {
   emailOrUsername: string;
@@ -30,11 +27,11 @@ export const registerStep: AuthStepV2<
   protocol: {
     http: {
       method: 'POST',
-      codes: { 
-        su: 201,  // Created successfully
-        eq: 200,  // Created but needs email verification
-        ic: 400,  // Invalid input
-        du: 409   // Duplicate user
+      codes: {
+        su: 201, // Created successfully
+        eq: 200, // Created but needs email verification
+        ic: 400, // Invalid input
+        du: 409, // Duplicate user
       },
     },
   },
@@ -45,25 +42,35 @@ export const registerStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      emailOrUsername: 'string',
+      provider: 'string',
+      verified: 'boolean',
+      profile: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
     const { emailOrUsername, password, others } = input;
     const orm = await ctx.engine.getOrm();
-    
+
     // Check if test user
     const testUser = findTestUser(emailOrUsername, password, ctx.config || {});
     if (testUser) {
       // For test users, just return success without creating DB records
       const subjectRow = { id: emailOrUsername };
       let token: string | null = null;
-      
+
       if (ctx.config?.loginOnRegister) {
         const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
-        token = await ctx.engine.createSessionFor('subject', subjectRow.id, ttl);
+        token = await ctx.engine.createSessionFor(
+          'subject',
+          subjectRow.id,
+          ttl,
+        );
       }
-      
+
       const subject = {
         id: subjectRow.id,
         emailOrUsername,
@@ -71,7 +78,7 @@ export const registerStep: AuthStepV2<
         verified: true,
         ...testUser.profile,
       };
-      
+
       return {
         success: true,
         message: 'Registration successful (test user)',
@@ -81,15 +88,18 @@ export const registerStep: AuthStepV2<
         others,
       };
     }
-    
+
     // Detect input type (email vs username)
     const inputType = detectInputType(emailOrUsername);
     const providerType = inputType; // 'email' or 'username'
-    
+
     // Check if user already exists
     const existingIdentity = await orm.findFirst('identities', {
       where: (b) =>
-        b.and(b('provider', '=', providerType), b('identifier', '=', emailOrUsername)),
+        b.and(
+          b('provider', '=', providerType),
+          b('identifier', '=', emailOrUsername),
+        ),
     });
 
     if (existingIdentity) {
@@ -150,15 +160,16 @@ export const registerStep: AuthStepV2<
         const code = ctx.config.emailConfig.generateCode
           ? await ctx.config.emailConfig.generateCode(emailOrUsername)
           : genCode(ctx.config.emailConfig as any);
-        
+
         // Hash the code for storage
         const { hashPassword } = await import('../../../../lib/password');
         const hashedCode = await hashPassword(String(code));
-        const ms = ctx.config.emailConfig.verificationCodeExpiresIn ?? 30 * 60 * 1000;
+        const ms =
+          ctx.config.emailConfig.verificationCodeExpiresIn ?? 30 * 60 * 1000;
         const expiresAt = new Date(Date.now() + ms);
 
         // Update email_identities with verification code
-        await orm.update('email_identities', {
+        await orm.updateMany('email_identities', {
           where: (b) => b('identity_id', '=', identity.id),
           set: {
             verification_code: hashedCode,
@@ -176,7 +187,8 @@ export const registerStep: AuthStepV2<
 
         return {
           success: false,
-          message: 'Registration successful. Verification code sent to your email.',
+          message:
+            'Registration successful. Verification code sent to your email.',
           status: 'eq',
           token,
           subject: {
@@ -195,7 +207,7 @@ export const registerStep: AuthStepV2<
           token,
           subject: {
             id: subjectId,
-            [inputType]: emailOrUsername,
+            emailOrUsername,
             provider: inputType,
             verified: false,
           },
@@ -211,7 +223,7 @@ export const registerStep: AuthStepV2<
       token,
       subject: {
         id: subjectId,
-        [inputType]: emailOrUsername,
+        emailOrUsername,
         provider: inputType,
         verified: true,
       },

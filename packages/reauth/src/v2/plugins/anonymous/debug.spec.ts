@@ -16,7 +16,8 @@ describe('Anonymous Plugin V2 Step Debug', () => {
   it('should create basic guest session with minimal mock', async () => {
     const mockOrm = {
       count: vi.fn().mockResolvedValue(0),
-      create: vi.fn()
+      create: vi
+        .fn()
         .mockResolvedValueOnce({ id: 'subject_123' })
         .mockResolvedValueOnce({ id: 'tracking_789' })
         .mockResolvedValueOnce({ id: 'session_456' }),
@@ -25,7 +26,9 @@ describe('Anonymous Plugin V2 Step Debug', () => {
     const mockEngine = {
       getOrm: vi.fn().mockResolvedValue(mockOrm),
       createSessionFor: vi.fn().mockResolvedValue('token_123'),
-      checkSession: vi.fn().mockResolvedValue({ valid: true, subject: { id: 'subject_123' } }),
+      checkSession: vi
+        .fn()
+        .mockResolvedValue({ valid: true, subject: { id: 'subject_123' } }),
     };
 
     const mockContext = {

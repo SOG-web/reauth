@@ -1,5 +1,9 @@
 import { type } from 'arktype';
-import type { AuthStepV2, AuthOutput } from '../../../types.v2';
+import type {
+  AuthStepV2,
+  AuthOutput,
+  SessionServiceV2,
+} from '../../../types.v2';
 import type { SessionConfigV2 } from '../types';
 
 export type ListSessionsInput = {
@@ -41,7 +45,13 @@ export const listSessionsStep: AuthStepV2<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'sessions?': 'object[]',
+    'sessions?': [
+      type({
+        sessionId: 'string',
+        createdAt: 'string',
+        isCurrent: 'boolean',
+      }),
+    ],
     'totalSessions?': 'number',
     'others?': 'object',
   }),
@@ -51,7 +61,7 @@ export const listSessionsStep: AuthStepV2<
     try {
       // Verify the session to get user info
       const { subject } = await ctx.engine.checkSession(token);
-      
+
       if (!subject) {
         return {
           success: false,
@@ -62,9 +72,10 @@ export const listSessionsStep: AuthStepV2<
         };
       }
 
-      // Get the enhanced session service from the engine
-      const sessionService = (ctx.engine as any).getSessionService();
-      
+      // Get the enhanced session service via DI container (type-safe)
+      const sessionService =
+        ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
+
       // Use the enhanced session listing if available
       let sessions: any[] = [];
       let totalSessions = 0;
@@ -74,11 +85,17 @@ export const listSessionsStep: AuthStepV2<
         const subjectType = subject.type || 'subject';
         const subjectId = subject.id;
 
-        const enhancedSessions = await sessionService.listSessionsForSubject(subjectType, subjectId);
-        
+        const enhancedSessions = await sessionService.listSessionsForSubject(
+          subjectType,
+          subjectId,
+        );
+
         sessions = enhancedSessions.map((session: any) => ({
           sessionId: session.sessionId,
-          token: session.token === token ? '*current*' : session.token.substring(0, 8) + '...',
+          token:
+            session.token === token
+              ? '*current*'
+              : session.token.substring(0, 8) + '...',
           createdAt: session.createdAt,
           expiresAt: session.expiresAt,
           isCurrent: session.token === token,
@@ -88,12 +105,14 @@ export const listSessionsStep: AuthStepV2<
         totalSessions = sessions.length;
       } else {
         // Fallback to simple session data
-        sessions = [{
-          sessionId: 'current-session',
-          token: '*current*',
-          createdAt: new Date().toISOString(),
-          isCurrent: true,
-        }];
+        sessions = [
+          {
+            sessionId: 'current-session',
+            token: '*current*',
+            createdAt: new Date().toISOString(),
+            isCurrent: true,
+          },
+        ];
         totalSessions = 1;
       }
 

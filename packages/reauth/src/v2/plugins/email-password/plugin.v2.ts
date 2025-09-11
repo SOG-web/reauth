@@ -36,7 +36,8 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
     // Register background cleanup task for expired codes
     const config = this.config || {};
     if (config.cleanupEnabled !== false) {
-      const cleanupIntervalMs = (config.cleanupIntervalMinutes || 60) * 60 * 1000; // Default 1 hour
+      const cleanupIntervalMs =
+        (config.cleanupIntervalMinutes || 60) * 60 * 1000; // Default 1 hour
 
       engine.registerCleanupTask({
         name: 'expired-codes',
@@ -47,7 +48,8 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
           try {
             const result = await cleanupExpiredCodes(orm, pluginConfig);
             return {
-              cleaned: result.verificationCodesDeleted + result.resetCodesDeleted,
+              cleaned:
+                result.verificationCodesDeleted + result.resetCodesDeleted,
               verificationCodesDeleted: result.verificationCodesDeleted,
               resetCodesDeleted: result.resetCodesDeleted,
             };
@@ -56,7 +58,9 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
               cleaned: 0,
               verificationCodesDeleted: 0,
               resetCodesDeleted: 0,
-              errors: [`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
+              errors: [
+                `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+              ],
             };
           }
         },
@@ -90,41 +94,49 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
 };
 
 // Export a configured plugin creator that validates config at construction time.
-const emailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = createAuthPluginV2<EmailPasswordConfigV2>(
-  baseEmailPasswordPluginV2,
-  {
+const emailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> =
+  createAuthPluginV2<EmailPasswordConfigV2>(baseEmailPasswordPluginV2, {
     validateConfig: (config) => {
       const errs: string[] = [];
-      if (config.verifyEmail && typeof (config as any).sendCode !== 'function') {
+      if (
+        config.verifyEmail &&
+        typeof (config as any).sendCode !== 'function'
+      ) {
         errs.push(
           "verifyEmail is true but 'sendCode' is not provided. Supply sendCode(subject, code, email, type) in plugin config.",
         );
       }
-      
+
       // Validate cleanup configuration
       if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
         errs.push('cleanupIntervalMinutes must be at least 1 minute');
       }
-      
-      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes > 1440) {
-        errs.push('cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)');
+
+      if (
+        config.cleanupIntervalMinutes &&
+        config.cleanupIntervalMinutes > 1440
+      ) {
+        errs.push(
+          'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
+        );
       }
-      
+
       if (config.retentionDays && config.retentionDays < 1) {
         errs.push('retentionDays must be at least 1 day');
       }
-      
+
       if (config.cleanupBatchSize && config.cleanupBatchSize < 1) {
         errs.push('cleanupBatchSize must be at least 1');
       }
-      
+
       if (config.cleanupBatchSize && config.cleanupBatchSize > 1000) {
-        errs.push('cleanupBatchSize cannot exceed 1000 for performance reasons');
+        errs.push(
+          'cleanupBatchSize cannot exceed 1000 for performance reasons',
+        );
       }
-      
+
       return errs.length ? errs : null;
     },
-  },
-);
+  });
 
 export default emailPasswordPluginV2;

@@ -14,10 +14,7 @@ export const apiKeys = table('api_keys', {
   is_active: column('is_active', 'bool').defaultTo(true), // For revocation
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
-})
-  .unique('api_keys_subject_name_uk', ['subject_id', 'name']) // Unique name per subject
-  .index('api_keys_key_hash_idx', ['key_hash']) // Fast lookups by hash
-  .index('api_keys_subject_idx', ['subject_id']); // Fast lookups by subject
+}).unique('api_keys_subject_name_uk', ['subject_id', 'name']); // Fast lookups by subject
 
 // Optional usage tracking table for audit logging
 export const apiKeyUsage = table('api_key_usage', {
@@ -29,8 +26,7 @@ export const apiKeyUsage = table('api_key_usage', {
   success: column('success', 'bool').defaultTo(true),
   error_message: column('error_message', 'varchar(500)').nullable(),
   used_at: column('used_at', 'timestamp').defaultTo$('now'),
-}).index('api_key_usage_key_idx', ['api_key_id'])
-  .index('api_key_usage_time_idx', ['used_at']);
+});
 
 export const apiKeySchemaV2: ReauthSchemaPlugin = {
   tables: {

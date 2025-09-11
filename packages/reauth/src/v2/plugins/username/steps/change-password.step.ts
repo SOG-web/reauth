@@ -2,18 +2,24 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { UsernamePasswordConfigV2 } from '../types';
 import { passwordSchema } from '../../../../plugins/shared/validation';
-import { verifyPasswordHash, hashPassword, checkPasswordSafety } from '../../../../lib/password';
+import {
+  verifyPasswordHash,
+  hashPassword,
+  haveIbeenPawned,
+} from '../../../../lib/password';
 
 export type ChangePasswordInput = {
   currentPassword: string;
   newPassword: string;
   others?: Record<string, any>;
+  token: string;
 };
 
 export const changePasswordValidation = type({
   currentPassword: passwordSchema,
   newPassword: passwordSchema,
   others: 'object?',
+  token: 'string',
 });
 
 export const changePasswordStep: AuthStepV2<
@@ -31,7 +37,7 @@ export const changePasswordStep: AuthStepV2<
       auth: true, // Requires authentication
     },
   },
-  inputs: ['currentPassword', 'newPassword', 'others'],
+  inputs: ['currentPassword', 'newPassword', 'others', 'token'],
   outputs: type({
     success: 'boolean',
     message: 'string',
@@ -40,11 +46,11 @@ export const changePasswordStep: AuthStepV2<
     'others?': 'object',
   }),
   async run(input, ctx) {
-    const { currentPassword, newPassword, others } = input;
+    const { currentPassword, newPassword, others, token } = input;
     const orm = await ctx.engine.getOrm();
 
     // This step requires authentication - get subject from session
-    const session = await ctx.engine.verifySession(input.token || '');
+    const session = await ctx.engine.checkSession(token || '');
     if (!session.subject) {
       return {
         success: false,
@@ -55,11 +61,12 @@ export const changePasswordStep: AuthStepV2<
     }
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await checkPasswordSafety(newPassword);
+    const isSafe = await haveIbeenPawned(newPassword);
     if (!isSafe) {
       return {
         success: false,
-        message: 'Password has been found in data breaches. Please choose a stronger password.',
+        message:
+          'Password has been found in data breaches. Please choose a stronger password.',
         status: 'pwr',
         others,
       };
@@ -81,7 +88,7 @@ export const changePasswordStep: AuthStepV2<
 
     // Verify current password
     const isCurrentPasswordValid = await verifyPasswordHash(
-      creds.password_hash,
+      creds.password_hash as string,
       currentPassword,
     );
 
@@ -98,7 +105,7 @@ export const changePasswordStep: AuthStepV2<
     const newPasswordHash = await hashPassword(newPassword);
     await orm.updateMany('credentials', {
       where: (b) => b('subject_id', '=', session.subject.id),
-      data: {
+      set: {
         password_hash: newPasswordHash,
         password_updated_at: new Date(),
       },

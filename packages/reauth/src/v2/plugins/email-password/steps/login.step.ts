@@ -38,7 +38,14 @@ export const loginStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      email: 'string',
+      name: 'string',
+      provider: 'string',
+      verified: 'boolean',
+      profile: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {

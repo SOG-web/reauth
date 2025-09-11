@@ -7,12 +7,12 @@ describe('API Key Plugin V2 Integration', () => {
     it('should generate unique, secure API keys', () => {
       const keys = Array.from({ length: 100 }, () => generateApiKey());
       const uniqueKeys = new Set(keys);
-      
+
       // All keys should be unique
       expect(uniqueKeys.size).toBe(100);
-      
+
       // All keys should match the expected format
-      keys.forEach(key => {
+      keys.forEach((key) => {
         expect(key).toMatch(/^ak_[A-Za-z0-9_-]{32}$/);
       });
     });
@@ -22,7 +22,7 @@ describe('API Key Plugin V2 Integration', () => {
         keyLength: 48,
         keyPrefix: 'myapp_',
       };
-      
+
       const key = generateApiKey(config);
       expect(key).toMatch(/^myapp_[A-Za-z0-9_-]{48}$/);
     });
@@ -31,14 +31,14 @@ describe('API Key Plugin V2 Integration', () => {
       const apiKey = generateApiKey();
       const hash1 = await hashApiKey(apiKey);
       const hash2 = await hashApiKey(apiKey);
-      
+
       // Same key should produce different hashes (salt)
       expect(hash1).not.toBe(hash2);
-      
+
       // Both hashes should verify correctly
       expect(await verifyApiKey(apiKey, hash1)).toBe(true);
       expect(await verifyApiKey(apiKey, hash2)).toBe(true);
-      
+
       // Wrong key should not verify
       const wrongKey = generateApiKey();
       expect(await verifyApiKey(wrongKey, hash1)).toBe(false);
@@ -51,7 +51,7 @@ describe('API Key Plugin V2 Integration', () => {
         'ak_abcdef1234567890abcdef1234567890',
         'myapp_xyz789abc123def456ghi789jkl012',
       ];
-      
+
       const invalidKeys = [
         'short',
         'invalidprefix1234567890abcdef1234567890',
@@ -59,14 +59,18 @@ describe('API Key Plugin V2 Integration', () => {
         'ak_invalid@characters!',
         '',
       ];
-      
-      validKeys.forEach(key => {
+
+      validKeys.forEach((key) => {
         expect(key.length).toBeGreaterThanOrEqual(25); // Reasonable minimum
         expect(key.includes('_')).toBe(true); // Must have prefix separator
       });
-      
-      invalidKeys.forEach(key => {
-        const isInvalid = key.length < 20 || !key.includes('_') || key.includes('@') || key.includes('!');
+
+      invalidKeys.forEach((key) => {
+        const isInvalid =
+          key.length < 20 ||
+          !key.includes('_') ||
+          key.includes('@') ||
+          key.includes('!');
         expect(isInvalid).toBe(true);
       });
     });
@@ -104,7 +108,7 @@ describe('API Key Plugin V2 Integration', () => {
           expected: [],
         },
       ];
-      
+
       testCases.forEach(({ scopes, allowed, expected }) => {
         const result = validateScopes(scopes, allowed);
         expect(result).toEqual(expected);
@@ -124,7 +128,7 @@ describe('API Key Plugin V2 Integration', () => {
         cleanupExpiredKeys: true,
         cleanupUsageOlderThanDays: 90,
       };
-      
+
       // Verify defaults are reasonable
       expect(defaultConfig.keyLength).toBeGreaterThanOrEqual(32);
       expect(defaultConfig.defaultTtlDays).toBeGreaterThan(0);
@@ -140,8 +144,8 @@ describe('API Key Plugin V2 Integration', () => {
         { defaultTtlDays: 1 }, // Short TTL
         { defaultTtlDays: 3650 }, // 10 year TTL
       ];
-      
-      edgeCases.forEach(config => {
+
+      edgeCases.forEach((config) => {
         expect(() => generateApiKey(config)).not.toThrow();
       });
     });
@@ -152,7 +156,7 @@ describe('API Key Plugin V2 Integration', () => {
       const start = Date.now();
       const keys = Array.from({ length: 1000 }, () => generateApiKey());
       const duration = Date.now() - start;
-      
+
       // Should generate 1000 keys in reasonable time (< 1 second)
       expect(duration).toBeLessThan(1000);
       expect(keys).toHaveLength(1000);
@@ -161,11 +165,11 @@ describe('API Key Plugin V2 Integration', () => {
 
     it('should handle concurrent hashing operations', async () => {
       const keys = Array.from({ length: 10 }, () => generateApiKey());
-      
+
       const start = Date.now();
-      const hashes = await Promise.all(keys.map(key => hashApiKey(key)));
+      const hashes = await Promise.all(keys.map((key) => hashApiKey(key)));
       const duration = Date.now() - start;
-      
+
       // Should hash 10 keys concurrently in reasonable time
       expect(duration).toBeLessThan(5000); // 5 seconds max
       expect(hashes).toHaveLength(10);
@@ -177,18 +181,20 @@ describe('API Key Plugin V2 Integration', () => {
 // Helper function used in tests
 function validateScopes(
   scopes: string[] | undefined,
-  allowedScopes: string[] | undefined
+  allowedScopes: string[] | undefined,
 ): string[] {
   const errors: string[] = [];
-  
+
   if (!scopes) return errors;
   if (!allowedScopes) return errors; // No restrictions
-  
+
   for (const scope of scopes) {
     if (!allowedScopes.includes(scope)) {
-      errors.push(`Invalid scope: ${scope}. Allowed scopes: ${allowedScopes.join(', ')}`);
+      errors.push(
+        `Invalid scope: ${scope}. Allowed scopes: ${allowedScopes.join(', ')}`,
+      );
     }
   }
-  
+
   return errors;
 }

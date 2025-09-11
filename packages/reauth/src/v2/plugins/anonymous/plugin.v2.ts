@@ -53,7 +53,7 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
     const config = this.config || {};
     if (config.enableBackgroundCleanup !== false) {
       const cleanupIntervalMs = config.cleanupIntervalMs || 300000; // Default 5 minutes
-      
+
       engine.registerCleanupTask({
         name: 'expired-sessions',
         pluginName: 'anonymous',
@@ -62,17 +62,19 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
         runner: async (orm, pluginConfig) => {
           try {
             const result = await cleanupExpiredSessions(orm, pluginConfig);
-            return { 
+            return {
               cleaned: result.sessionsDeleted + result.subjectsDeleted,
               sessionsDeleted: result.sessionsDeleted,
-              subjectsDeleted: result.subjectsDeleted
+              subjectsDeleted: result.subjectsDeleted,
             };
           } catch (error) {
-            return { 
-              cleaned: 0, 
+            return {
+              cleaned: 0,
               sessionsDeleted: 0,
               subjectsDeleted: 0,
-              errors: [`Cleanup failed: ${error instanceof Error ? error.message : String(error)}`] 
+              errors: [
+                `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+              ],
             };
           }
         },
@@ -101,55 +103,70 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
 };
 
 // Export a configured plugin creator that validates config at construction time.
-const anonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = createAuthPluginV2<AnonymousConfigV2>(
-  baseAnonymousPluginV2,
-  {
+const anonymousPluginV2: AuthPluginV2<AnonymousConfigV2> =
+  createAuthPluginV2<AnonymousConfigV2>(baseAnonymousPluginV2, {
     validateConfig: (config) => {
       const errs: string[] = [];
-      
+
       if (config.sessionTtlSeconds && config.sessionTtlSeconds < 300) {
         errs.push('sessionTtlSeconds must be at least 300 seconds (5 minutes)');
       }
-      
+
       if (config.sessionTtlSeconds && config.sessionTtlSeconds > 86400) {
-        errs.push('sessionTtlSeconds cannot exceed 86400 seconds (24 hours) for security');
+        errs.push(
+          'sessionTtlSeconds cannot exceed 86400 seconds (24 hours) for security',
+        );
       }
-      
-      if (config.maxGuestsPerFingerprint && config.maxGuestsPerFingerprint < 1) {
+
+      if (
+        config.maxGuestsPerFingerprint &&
+        config.maxGuestsPerFingerprint < 1
+      ) {
         errs.push('maxGuestsPerFingerprint must be at least 1');
       }
-      
-      if (config.maxGuestsPerFingerprint && config.maxGuestsPerFingerprint > 10) {
-        errs.push('maxGuestsPerFingerprint cannot exceed 10 for performance reasons');
+
+      if (
+        config.maxGuestsPerFingerprint &&
+        config.maxGuestsPerFingerprint > 10
+      ) {
+        errs.push(
+          'maxGuestsPerFingerprint cannot exceed 10 for performance reasons',
+        );
       }
-      
+
       if (config.guestDataRetentionDays && config.guestDataRetentionDays < 1) {
         errs.push('guestDataRetentionDays must be at least 1 day');
       }
-      
-      if (config.guestSubjectRetentionDays && config.guestSubjectRetentionDays < 1) {
+
+      if (
+        config.guestSubjectRetentionDays &&
+        config.guestSubjectRetentionDays < 1
+      ) {
         errs.push('guestSubjectRetentionDays must be at least 1 day');
       }
-      
+
       if (config.maxSessionExtensions && config.maxSessionExtensions < 0) {
         errs.push('maxSessionExtensions cannot be negative');
       }
-      
+
       if (config.maxSessionExtensions && config.maxSessionExtensions > 10) {
         errs.push('maxSessionExtensions cannot exceed 10 for security reasons');
       }
-      
+
       if (config.cleanupIntervalMs && config.cleanupIntervalMs < 60000) {
-        errs.push('cleanupIntervalMs must be at least 60000ms (1 minute) to avoid excessive cleanup frequency');
+        errs.push(
+          'cleanupIntervalMs must be at least 60000ms (1 minute) to avoid excessive cleanup frequency',
+        );
       }
-      
+
       if (config.cleanupIntervalMs && config.cleanupIntervalMs > 86400000) {
-        errs.push('cleanupIntervalMs cannot exceed 86400000ms (24 hours) for effective cleanup');
+        errs.push(
+          'cleanupIntervalMs cannot exceed 86400000ms (24 hours) for effective cleanup',
+        );
       }
-      
+
       return errs.length ? errs : null;
     },
-  },
-);
+  });
 
 export default anonymousPluginV2;

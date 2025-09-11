@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import sessionPluginV2, { type SessionConfigV2, sessionSchemaV2 } from './plugin.v2';
+import sessionPluginV2, {
+  type SessionConfigV2,
+  sessionSchemaV2,
+} from './plugin.v2';
 
 describe('Session Plugin V2 Integration', () => {
   it('should have the correct plugin name', () => {
@@ -10,8 +13,8 @@ describe('Session Plugin V2 Integration', () => {
     const plugin = sessionPluginV2;
     expect(plugin.steps).toBeDefined();
     expect(plugin.steps?.length).toBe(5);
-    
-    const stepNames = plugin.steps?.map(s => s.name) || [];
+
+    const stepNames = plugin.steps?.map((s) => s.name) || [];
     expect(stepNames).toContain('list-sessions');
     expect(stepNames).toContain('cleanup-expired');
     expect(stepNames).toContain('logout');
@@ -48,18 +51,24 @@ describe('Session Plugin V2 Integration', () => {
     // The plugin is already created with default config, we just test the structure
     expect(sessionPluginV2.config).toBeDefined();
     expect(typeof sessionPluginV2.config?.maxConcurrentSessions).toBe('number');
-    expect(typeof sessionPluginV2.config?.deviceTrackingEnabled).toBe('boolean');
-    expect(typeof sessionPluginV2.config?.cleanupIntervalMinutes).toBe('number');
+    expect(typeof sessionPluginV2.config?.deviceTrackingEnabled).toBe(
+      'boolean',
+    );
+    expect(typeof sessionPluginV2.config?.cleanupIntervalMinutes).toBe(
+      'number',
+    );
     expect(typeof sessionPluginV2.config?.sessionRetentionDays).toBe('number');
   });
 
   it('should have steps with correct validation schemas', () => {
     const plugin = sessionPluginV2;
-    const listSessionsStep = plugin.steps?.find(s => s.name === 'list-sessions');
-    const cleanupStep = plugin.steps?.find(s => s.name === 'cleanup-expired');
-    const logoutStep = plugin.steps?.find(s => s.name === 'logout');
-    const logoutAllStep = plugin.steps?.find(s => s.name === 'logout-all');
-    const getSessionStep = plugin.steps?.find(s => s.name === 'get-session');
+    const listSessionsStep = plugin.steps?.find(
+      (s) => s.name === 'list-sessions',
+    );
+    const cleanupStep = plugin.steps?.find((s) => s.name === 'cleanup-expired');
+    const logoutStep = plugin.steps?.find((s) => s.name === 'logout');
+    const logoutAllStep = plugin.steps?.find((s) => s.name === 'logout-all');
+    const getSessionStep = plugin.steps?.find((s) => s.name === 'get-session');
 
     expect(listSessionsStep).toBeDefined();
     expect(listSessionsStep?.validationSchema).toBeDefined();

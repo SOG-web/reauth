@@ -3,6 +3,7 @@ import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import { genCode } from '../utils';
 import type { PhonePasswordConfigV2 } from '../types';
 import { hashPassword } from '../../../../lib/password';
+import { phoneSchema } from '../../../../plugins/shared/validation';
 
 export type SendResetPasswordInput = {
   phone: string;
@@ -10,7 +11,7 @@ export type SendResetPasswordInput = {
 };
 
 export const sendResetPasswordValidation = type({
-  phone: 'string.phone',
+  phone: phoneSchema,
   others: 'object?',
 });
 
@@ -56,7 +57,8 @@ export const sendResetPasswordStep: AuthStepV2<
     if (!identity) {
       return {
         success: true,
-        message: 'If the phone number is registered, a reset code has been sent',
+        message:
+          'If the phone number is registered, a reset code has been sent',
         status: 'su',
         others,
       };
@@ -66,7 +68,7 @@ export const sendResetPasswordStep: AuthStepV2<
     const code = ctx.config.generateCode
       ? await ctx.config.generateCode(phone, { id: identity.subject_id })
       : genCode(ctx.config);
-    
+
     // Store HASHED reset code and set expiry (security-first approach)
     const hashedCode = await hashPassword(String(code));
     const ms = ctx.config?.resetPasswordCodeExpiresIn ?? 30 * 60 * 1000;
@@ -87,7 +89,12 @@ export const sendResetPasswordStep: AuthStepV2<
     });
 
     // Send reset code (plaintext sent via SMS, hashed stored in DB)
-    await ctx.config.sendCode({ id: identity.subject_id }, code, phone, 'reset');
+    await ctx.config.sendCode(
+      { id: identity.subject_id },
+      code,
+      phone,
+      'reset',
+    );
 
     return {
       success: true,

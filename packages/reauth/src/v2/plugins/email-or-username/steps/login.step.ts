@@ -2,15 +2,17 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailOrUsernameConfigV2 } from '../types';
 import { passwordSchema } from '../../../../plugins/shared/validation';
-import { 
-  detectInputType, 
-  transformToEmailInput, 
+import {
+  detectInputType,
+  transformToEmailInput,
   transformToUsernameInput,
   transformPluginOutput,
-  createEmailConfig, 
+  createEmailConfig,
   createUsernameConfig,
-  findTestUser
+  findTestUser,
 } from '../utils';
+import { hashPassword, verifyPasswordHash } from '../../../../lib/password';
+import { genCode } from '../../email-password/utils';
 
 export type LoginInput = {
   emailOrUsername: string;
@@ -45,25 +47,31 @@ export const loginStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      emailOrUsername: 'string',
+      provider: 'string',
+      verified: 'boolean',
+      profile: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
     const { emailOrUsername, password, others } = input;
     const orm = await ctx.engine.getOrm();
-    
+
     // Check test users first
     const testUser = findTestUser(emailOrUsername, password, ctx.config || {});
     if (testUser) {
       const subjectRow = { id: emailOrUsername };
       const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
-      
+
       const token = await ctx.engine.createSessionFor(
         'subject',
         subjectRow.id,
         ttl,
       );
-      
+
       const subject = {
         id: subjectRow.id,
         emailOrUsername,
@@ -71,7 +79,7 @@ export const loginStep: AuthStepV2<
         verified: true,
         ...testUser.profile,
       };
-      
+
       return {
         success: true,
         message: 'Login successful (test user)',
@@ -81,15 +89,18 @@ export const loginStep: AuthStepV2<
         others,
       };
     }
-    
+
     // Detect input type (email vs username)
     const inputType = detectInputType(emailOrUsername);
     const providerType = inputType; // 'email' or 'username'
-    
+
     // Find identity by provider and identifier
     const identity = await orm.findFirst('identities', {
       where: (b) =>
-        b.and(b('provider', '=', providerType), b('identifier', '=', emailOrUsername)),
+        b.and(
+          b('provider', '=', providerType),
+          b('identifier', '=', emailOrUsername),
+        ),
     });
 
     if (!identity) {
@@ -116,12 +127,12 @@ export const loginStep: AuthStepV2<
     }
 
     // Verify password using the shared password verification
-    const { verifyPasswordHash } = await import('../../../../lib/password');
+
     const ok = await verifyPasswordHash(
       creds.password_hash as string,
       password,
     );
-    
+
     if (!ok) {
       return {
         success: false,
@@ -132,19 +143,23 @@ export const loginStep: AuthStepV2<
     }
 
     // For email users, check verification if required
-    if (inputType === 'email' && ctx.config?.emailConfig?.verifyEmail && !identity.verified) {
+    if (
+      inputType === 'email' &&
+      ctx.config?.emailConfig?.verifyEmail &&
+      !identity.verified
+    ) {
       // If sendCode is available, send verification code
       if (ctx.config.emailConfig.sendCode) {
         // Generate verification code using email plugin utils
-        const { genCode } = await import('../../email-password/utils');
         const code = ctx.config.emailConfig.generateCode
           ? await ctx.config.emailConfig.generateCode(emailOrUsername)
           : genCode(ctx.config.emailConfig as any);
-        
+
         // Hash the code for storage
-        const { hashPassword } = await import('../../../../lib/password');
+
         const hashedCode = await hashPassword(String(code));
-        const ms = ctx.config.emailConfig.verificationCodeExpiresIn ?? 30 * 60 * 1000;
+        const ms =
+          ctx.config.emailConfig.verificationCodeExpiresIn ?? 30 * 60 * 1000;
         const expiresAt = new Date(Date.now() + ms);
 
         // Store verification code in email_identities table
@@ -195,11 +210,11 @@ export const loginStep: AuthStepV2<
 
     const subject = {
       id: identity.subject_id,
-      [inputType]: emailOrUsername,
+      emailOrUsername: emailOrUsername,
       provider: inputType,
       verified: identity.verified,
     };
-    
+
     return {
       success: true,
       message: 'Login successful',

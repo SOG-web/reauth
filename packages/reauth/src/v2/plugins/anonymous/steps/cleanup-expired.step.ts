@@ -50,22 +50,26 @@ export const cleanupExpiredStep: AuthStepV2<
     try {
       const now = new Date();
       const retentionDays = ctx.config?.guestDataRetentionDays ?? 7;
-      const subjectRetentionDays = ctx.config?.guestSubjectRetentionDays ?? retentionDays;
+      const subjectRetentionDays =
+        ctx.config?.guestSubjectRetentionDays ?? retentionDays;
 
       // Count expired sessions first
       const expiredCountResult = await orm.count('anonymous_sessions', {
         where: (b: any) => b('expires_at', '<', now),
       });
-      const expiredCount = typeof expiredCountResult === 'number' ? expiredCountResult : 0;
+      const expiredCount =
+        typeof expiredCountResult === 'number' ? expiredCountResult : 0;
 
       if (dryRun) {
         // For dry run, calculate what would be deleted
-        const sessionCutoffDate = force 
-          ? now 
+        const sessionCutoffDate = force
+          ? now
           : new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
-        const subjectCutoffDate = force 
-          ? now 
-          : new Date(now.getTime() - subjectRetentionDays * 24 * 60 * 60 * 1000);
+        const subjectCutoffDate = force
+          ? now
+          : new Date(
+              now.getTime() - subjectRetentionDays * 24 * 60 * 60 * 1000,
+            );
 
         const wouldCleanSessionsResult = await orm.count('anonymous_sessions', {
           where: (b: any) =>
@@ -73,16 +77,22 @@ export const cleanupExpiredStep: AuthStepV2<
               ? b('expires_at', '<', now)
               : b.and(
                   b('expires_at', '<', now),
-                  b('created_at', '<', sessionCutoffDate)
+                  b('created_at', '<', sessionCutoffDate),
                 ),
         });
-        const wouldCleanSessions = typeof wouldCleanSessionsResult === 'number' ? wouldCleanSessionsResult : 0;
+        const wouldCleanSessions =
+          typeof wouldCleanSessionsResult === 'number'
+            ? wouldCleanSessionsResult
+            : 0;
 
         // Estimate orphaned subjects that are tracked by anonymous plugin
         const trackedSubjectsResult = await orm.count('anonymous_subjects', {
           where: (b: any) => b('created_at', '<', subjectCutoffDate),
         });
-        const wouldCleanSubjects = typeof trackedSubjectsResult === 'number' ? Math.min(trackedSubjectsResult, wouldCleanSessions) : 0;
+        const wouldCleanSubjects =
+          typeof trackedSubjectsResult === 'number'
+            ? Math.min(trackedSubjectsResult, wouldCleanSessions)
+            : 0;
 
         const totalWouldClean = wouldCleanSessions + wouldCleanSubjects;
 
@@ -108,7 +118,8 @@ export const cleanupExpiredStep: AuthStepV2<
         const sessionResult = await orm.deleteMany('anonymous_sessions', {
           where: (b: any) => b('expires_at', '<', now),
         });
-        result.sessionsDeleted = typeof sessionResult === 'number' ? sessionResult : 0;
+        result.sessionsDeleted =
+          typeof sessionResult === 'number' ? sessionResult : 0;
 
         // For force cleanup, also clean up any orphaned subjects that are tracked by anonymous plugin
         const trackedSubjects = await orm.findMany('anonymous_subjects', {
@@ -117,22 +128,27 @@ export const cleanupExpiredStep: AuthStepV2<
 
         if (trackedSubjects && Array.isArray(trackedSubjects)) {
           for (const trackedSubject of trackedSubjects) {
-            const hasActiveSessions = await orm.findFirst('anonymous_sessions', {
-              where: (b: any) => b('subject_id', '=', trackedSubject.subject_id),
-            });
-            
+            const hasActiveSessions = await orm.findFirst(
+              'anonymous_sessions',
+              {
+                where: (b: any) =>
+                  b('subject_id', '=', trackedSubject.subject_id),
+              },
+            );
+
             if (!hasActiveSessions) {
               try {
                 // Delete the actual subject
                 await orm.deleteMany('subjects', {
                   where: (b: any) => b('id', '=', trackedSubject.subject_id),
                 });
-                
+
                 // Remove from our tracking table
                 await orm.deleteMany('anonymous_subjects', {
-                  where: (b: any) => b('subject_id', '=', trackedSubject.subject_id),
+                  where: (b: any) =>
+                    b('subject_id', '=', trackedSubject.subject_id),
                 });
-                
+
                 result.subjectsDeleted++;
               } catch (error) {
                 continue;

@@ -27,12 +27,12 @@ export const revokeApiKeyStep: AuthStepV2<
   protocol: {
     http: {
       method: 'DELETE',
-      codes: { 
+      codes: {
         unauth: 401, // Not authenticated
         notfound: 404, // API key not found
         invalid: 400, // Missing required parameters
-        su: 200,     // Success
-        ic: 400      // Invalid input
+        su: 200, // Success
+        ic: 400, // Invalid input
       },
       auth: true, // Requires authentication
     },
@@ -46,7 +46,7 @@ export const revokeApiKeyStep: AuthStepV2<
     'revoked_key_id?': 'string',
     'others?': 'object',
   }),
-  
+
   async run(input, ctx) {
     const { token, api_key_id, name, others } = input;
     const orm = await ctx.engine.getOrm();
@@ -81,13 +81,13 @@ export const revokeApiKeyStep: AuthStepV2<
           b('subject_id', '=', subjectId),
           b('is_active', '=', true), // Only revoke active keys
         ];
-        
+
         if (api_key_id) {
           conditions.push(b('id', '=', api_key_id));
         } else if (name) {
           conditions.push(b('name', '=', name));
         }
-        
+
         return b.and(...conditions);
       };
 
@@ -99,7 +99,7 @@ export const revokeApiKeyStep: AuthStepV2<
       if (!apiKey) {
         return {
           success: false,
-          message: api_key_id 
+          message: api_key_id
             ? `API key with ID '${api_key_id}' not found or already inactive`
             : `API key with name '${name}' not found or already inactive`,
           status: 'notfound',
@@ -108,9 +108,9 @@ export const revokeApiKeyStep: AuthStepV2<
       }
 
       // Revoke the API key (mark as inactive)
-      await orm.update('api_keys', {
+      await orm.updateMany('api_keys', {
         where: (b: any) => b('id', '=', apiKey.id),
-        data: {
+        set: {
           is_active: false,
           updated_at: new Date(),
         },

@@ -31,34 +31,65 @@ export const updateApiKeyStep: AuthStepV2<
   ApiKeyConfigV2
 > = {
   name: 'update-api-key',
-  description: 'Update API key permissions, scopes, or metadata for authenticated user',
+  description:
+    'Update API key permissions, scopes, or metadata for authenticated user',
   validationSchema: updateApiKeyValidation,
   protocol: {
     http: {
       method: 'PATCH',
-      codes: { 
+      codes: {
         unauth: 401, // Not authenticated
         notfound: 404, // API key not found
         invalid: 400, // Invalid parameters or scopes
         conflict: 409, // New name already exists
-        su: 200,     // Success
-        ic: 400      // Invalid input
+        su: 200, // Success
+        ic: 400, // Invalid input
       },
       auth: true, // Requires authentication
     },
   },
-  inputs: ['token', 'api_key_id', 'name', 'new_name', 'permissions', 'scopes', 'expires_at', 'others'],
+  inputs: [
+    'token',
+    'api_key_id',
+    'name',
+    'new_name',
+    'permissions',
+    'scopes',
+    'expires_at',
+    'others',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'data?': 'object', // Contains updated ApiKeyMetadata
+    'data?': type({
+      api_key: type({
+        id: 'string',
+        name: 'string',
+        permissions: 'string[]',
+        scopes: 'string[]',
+        expires_at: 'Date',
+        is_active: 'boolean',
+        created_at: 'Date',
+        updated_at: 'Date',
+        last_used_at: 'Date',
+      }),
+    }), // Contains updated ApiKeyMetadata
     'others?': 'object',
   }),
-  
+
   async run(input, ctx) {
-    const { token, api_key_id, name, new_name, permissions, scopes, expires_at, others } = input;
+    const {
+      token,
+      api_key_id,
+      name,
+      new_name,
+      permissions,
+      scopes,
+      expires_at,
+      others,
+    } = input;
     const orm = await ctx.engine.getOrm();
     const config = ctx.config || {};
 
@@ -115,13 +146,13 @@ export const updateApiKeyStep: AuthStepV2<
           b('subject_id', '=', subjectId),
           b('is_active', '=', true), // Only update active keys
         ];
-        
+
         if (api_key_id) {
           conditions.push(b('id', '=', api_key_id));
         } else if (name) {
           conditions.push(b('name', '=', name));
         }
-        
+
         return b.and(...conditions);
       };
 
@@ -133,7 +164,7 @@ export const updateApiKeyStep: AuthStepV2<
       if (!apiKey) {
         return {
           success: false,
-          message: api_key_id 
+          message: api_key_id
             ? `API key with ID '${api_key_id}' not found or inactive`
             : `API key with name '${name}' not found or inactive`,
           status: 'notfound',
@@ -144,12 +175,13 @@ export const updateApiKeyStep: AuthStepV2<
       // Check for name conflicts if new_name is provided
       if (new_name && new_name !== apiKey.name) {
         const existingKey = await orm.findFirst('api_keys', {
-          where: (b: any) => b.and(
-            b('subject_id', '=', subjectId),
-            b('name', '=', new_name),
-            b('is_active', '=', true),
-            b('id', '!=', apiKey.id) // Exclude the current key
-          ),
+          where: (b: any) =>
+            b.and(
+              b('subject_id', '=', subjectId),
+              b('name', '=', new_name),
+              b('is_active', '=', true),
+              b('id', '!=', apiKey.id), // Exclude the current key
+            ),
         });
 
         if (existingKey) {
@@ -172,7 +204,8 @@ export const updateApiKeyStep: AuthStepV2<
       }
 
       if (permissions !== undefined) {
-        updateData.permissions = permissions.length > 0 ? JSON.stringify(permissions) : null;
+        updateData.permissions =
+          permissions.length > 0 ? JSON.stringify(permissions) : null;
       }
 
       if (scopes !== undefined) {
@@ -184,9 +217,9 @@ export const updateApiKeyStep: AuthStepV2<
       }
 
       // Update the API key
-      const updatedKey = await orm.update('api_keys', {
+      await orm.updateMany('api_keys', {
         where: (b: any) => b('id', '=', apiKey.id),
-        data: updateData,
+        set: updateData,
       });
 
       // Return the updated key (fetch fresh to ensure we have the latest data)

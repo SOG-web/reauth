@@ -159,6 +159,9 @@ export interface EngineInitApiV2<OrmT extends OrmLike = OrmLike>
   ): this;
   registerCleanupTask(task: CleanupTask): this;
   enableEnhancedSessions(): this;
+  // Plugin introspection APIs available during initialization (backed by ReAuthEngineV2)
+  getPlugin(name: string): AuthPluginV2 | undefined;
+  getAllPlugins(): AuthPluginV2[];
 }
 
 export interface AuthPluginV2<Cfg = unknown, OrmT extends OrmLike = OrmLike> {
@@ -201,6 +204,14 @@ export interface EngineApiV2<OrmT extends OrmLike = OrmLike> {
     valid: boolean;
   }>;
   getSessionService?(): SessionServiceV2<OrmT>;
+  // Allow steps to orchestrate other plugin steps when appropriate (e.g., conversions)
+  executeStep(
+    pluginName: string,
+    stepName: string,
+    input: unknown,
+  ): Promise<unknown>;
+  // Optional convenience to check plugin presence
+  getPlugin?(name: string): AuthPluginV2 | undefined;
 }
 
 export interface ReAuthCradleV2Extension<OrmT extends OrmLike = OrmLike> {

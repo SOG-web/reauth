@@ -28,10 +28,7 @@ export const sessionMetadata = table('session_metadata', {
 });
 
 // Export all tables for use in schema migrations
-export const sessionPluginTables = [
-  sessionDevices,
-  sessionMetadata,
-];
+export const sessionPluginTables = [sessionDevices, sessionMetadata];
 
 export const sessionSchemaV2: ReauthSchemaPlugin = {
   tables: {

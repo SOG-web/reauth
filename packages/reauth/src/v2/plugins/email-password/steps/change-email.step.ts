@@ -2,7 +2,10 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailPasswordConfigV2 } from '../types';
 import { verifyPasswordHash, hashPassword } from '../../../../lib/password';
-import { emailSchema } from '../../../../plugins/shared/validation';
+import {
+  emailSchema,
+  passwordSchema,
+} from '../../../../plugins/shared/validation';
 import { generateCode as defaultGenerateCode } from '../utils';
 
 export type ChangeEmailInput = {
@@ -14,8 +17,8 @@ export type ChangeEmailInput = {
 
 export const changeEmailValidation = type({
   token: 'string',
-  currentPassword: 'string',
-  newEmail: 'string',
+  currentPassword: passwordSchema,
+  newEmail: emailSchema,
   others: 'object?',
 });
 
@@ -110,10 +113,7 @@ export const changeEmailStep: AuthStepV2<
     // Find current email identity
     const currentIdentity = await orm.findFirst('identities', {
       where: (b) =>
-        b.and(
-          b('provider', '=', 'email'),
-          b('subject_id', '=', subjectId),
-        ),
+        b.and(b('provider', '=', 'email'), b('subject_id', '=', subjectId)),
     });
 
     if (!currentIdentity) {
@@ -140,10 +140,10 @@ export const changeEmailStep: AuthStepV2<
       const generateCode = ctx.config.generateCode || defaultGenerateCode;
       const code = await generateCode(newEmail, check.subject);
       const codeStr = String(code);
-      
+
       // Hash the verification code for storage
       const hashedCode = await hashPassword(codeStr);
-      
+
       const expiresAt = new Date(
         Date.now() + (ctx.config.verificationCodeExpiresIn || 30 * 60 * 1000),
       );
@@ -177,7 +177,8 @@ export const changeEmailStep: AuthStepV2<
         await ctx.config.sendCode(check.subject, code, newEmail, 'verify');
         return {
           success: true,
-          message: 'Email address changed successfully. Verification code sent for next login.',
+          message:
+            'Email address changed successfully. Verification code sent for next login.',
           status: 'su',
           others,
         };
@@ -185,7 +186,8 @@ export const changeEmailStep: AuthStepV2<
         // Even if sending fails, the email was already updated successfully
         return {
           success: true,
-          message: 'Email address changed successfully. Verification code could not be sent.',
+          message:
+            'Email address changed successfully. Verification code could not be sent.',
           status: 'su',
           others: {
             ...others,

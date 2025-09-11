@@ -11,16 +11,14 @@ export const anonymousSessions = table('anonymous_sessions', {
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   expires_at: column('expires_at', 'timestamp'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
-})
-  .unique('anonymous_session_uk', ['subject_id']);
+}).unique('anonymous_session_uk', ['subject_id']);
 
 // Track subjects created by anonymous plugin for safe cleanup
 export const anonymousSubjects = table('anonymous_subjects', {
   id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
   subject_id: column('subject_id', 'varchar(255)'),
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
-})
-  .unique('anonymous_subject_uk', ['subject_id']);
+}).unique('anonymous_subject_uk', ['subject_id']);
 
 export const anonymousSchemaV2: ReauthSchemaPlugin = {
   tables: {

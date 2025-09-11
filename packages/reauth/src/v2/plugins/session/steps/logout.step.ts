@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import type { AuthStepV2, AuthOutput } from '../../../types.v2';
+import type { AuthStepV2, AuthOutput, SessionServiceV2 } from '../../../types.v2';
 import type { SessionConfigV2 } from '../types';
 
 export type LogoutInput = {
@@ -56,8 +56,8 @@ export const logoutStep: AuthStepV2<
         };
       }
 
-      // Get the session service and destroy the session
-      const sessionService = (ctx.engine as any).getSessionService();
+      // Get the session service and destroy the session via DI container (type-safe)
+      const sessionService = ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
       
       if (!sessionService) {
         return {

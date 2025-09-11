@@ -4,7 +4,7 @@ import type { PasswordlessConfigV2 } from '../types';
 import { isValidCredentialId, generateCredentialName } from '../utils';
 
 export type RegisterWebAuthnInput = {
-  subject_id: string;
+  token: string;
   credential_id: string;
   public_key: string;
   counter?: number;
@@ -14,7 +14,7 @@ export type RegisterWebAuthnInput = {
 };
 
 export const registerWebAuthnValidation = type({
-  subject_id: 'string',
+  token: 'string',
   credential_id: 'string',
   public_key: 'string',
   counter: 'number?',
@@ -29,26 +29,51 @@ export const registerWebAuthnStep: AuthStepV2<
   PasswordlessConfigV2
 > = {
   name: 'register-webauthn',
-  description: 'Register a new WebAuthn credential for passwordless authentication',
+  description:
+    'Register a new WebAuthn credential for passwordless authentication',
   validationSchema: registerWebAuthnValidation,
   protocol: {
     http: {
       method: 'POST',
       codes: { su: 201, ic: 400, nf: 404, cf: 409 },
+      auth: true,
     },
   },
-  inputs: ['subject_id', 'credential_id', 'public_key', 'counter', 'transports', 'name', 'others'],
+  inputs: [
+    'token',
+    'credential_id',
+    'public_key',
+    'counter',
+    'transports',
+    'name',
+    'others',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'credential?': 'object',
+    'credential?': type({
+      id: 'string',
+      name: 'string',
+      created_at: 'string',
+      transports: 'string[]',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
-    const { subject_id, credential_id, public_key, counter = 0, transports, name, others } = input;
+    const {
+      token,
+      credential_id,
+      public_key,
+      counter = 0,
+      transports,
+      name,
+      others,
+    } = input;
     const orm = await ctx.engine.getOrm();
+
+    const t = await ctx.engine.checkSession(token);
 
     // Validate config requires WebAuthn
     if (!ctx.config?.webauthn) {
@@ -72,7 +97,7 @@ export const registerWebAuthnStep: AuthStepV2<
 
       // Check if subject exists
       const subject = await orm.findFirst('subjects', {
-        where: (b: any) => b('id', '=', subject_id),
+        where: (b: any) => b('id', '=', t.subject.id),
       });
 
       if (!subject) {
@@ -101,7 +126,7 @@ export const registerWebAuthnStep: AuthStepV2<
 
       // Register the credential
       const credential = await orm.create('webauthn_credentials', {
-        subject_id,
+        subject_id: t.subject.id,
         credential_id,
         public_key,
         counter: BigInt(counter),
@@ -122,7 +147,7 @@ export const registerWebAuthnStep: AuthStepV2<
           transports: credential.transports,
         },
         others: {
-          subject_id,
+          subject_id: t.subject.id,
           credential_id,
           authentication_method: 'webauthn_registration',
           ...others,

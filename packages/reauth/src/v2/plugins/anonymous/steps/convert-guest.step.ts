@@ -24,7 +24,8 @@ export const convertGuestStep: AuthStepV2<
   AnonymousConfigV2
 > = {
   name: 'convert-guest',
-  description: 'Convert an anonymous guest session to a registered user account',
+  description:
+    'Convert an anonymous guest session to a registered user account',
   validationSchema: convertGuestValidation,
   protocol: {
     http: {
@@ -33,19 +34,46 @@ export const convertGuestStep: AuthStepV2<
       auth: true,
     },
   },
-  inputs: ['token', 'conversionData', 'targetPlugin', 'preserveMetadata', 'others'],
+  inputs: [
+    'token',
+    'conversionData',
+    'targetPlugin',
+    'preserveMetadata',
+    'others',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
     status: 'string',
+    'error?': 'string | object',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      type: 'string',
+      convertedFrom: 'string',
+      targetPlugin: 'string',
+      temporary: 'boolean',
+      metadata: 'object?',
+    }),
     'convertedTo?': 'string',
-    'preservedMetadata?': 'object',
+    'preservedMetadata?': type({
+      id: 'string',
+      type: 'string',
+      convertedFrom: 'string',
+      targetPlugin: 'string',
+      temporary: 'boolean',
+      metadata: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
-    const { token, conversionData, targetPlugin, preserveMetadata = false, others } = input;
+    const {
+      token,
+      conversionData,
+      targetPlugin,
+      preserveMetadata = false,
+      others,
+    } = input;
     const orm = await ctx.engine.getOrm();
 
     // Verify the current session
@@ -86,47 +114,141 @@ export const convertGuestStep: AuthStepV2<
     }
 
     try {
-      // Prepare metadata for preservation
-      let metadata = null;
-      if (preserveMetadata && anonymousSession.metadata) {
-        metadata = typeof anonymousSession.metadata === 'string' 
-          ? JSON.parse(anonymousSession.metadata)
-          : anonymousSession.metadata;
+      // Validate target plugin against allowed list (if configured)
+      const allowed = ctx.config?.allowedConversionPlugins;
+      if (Array.isArray(allowed) && !allowed.includes(targetPlugin)) {
+        return {
+          success: false,
+          message: `Target plugin '${targetPlugin}' is not allowed for conversion`,
+          status: 'ic',
+          others,
+        };
       }
 
-      // Note: In a real implementation, you would call the target plugin's registration step
-      // This is a simplified conversion that just marks the subject as converted
-      // The actual conversion logic would depend on the target plugin's API
+      // Ensure target plugin is registered
+      const plugin = ctx.engine.getPlugin
+        ? ctx.engine.getPlugin(targetPlugin)
+        : undefined;
+      if (!plugin) {
+        return {
+          success: false,
+          message: `Target plugin '${targetPlugin}' is not available`,
+          status: 'unf',
+          others,
+        };
+      }
 
-      // Update subject to mark as converted (this is plugin-specific logic)
-      await (orm as any).updateMany('subjects', {
-        where: (b: any) => b('id', '=', subjectId),
-        set: {
-          // Add any conversion-specific fields here
-          converted_from_guest: true,
-          conversion_target: targetPlugin,
-          conversion_data: conversionData,
-          guest_metadata: metadata,
-          updated_at: new Date(),
-        },
-      });
+      // Prepare metadata for preservation
+      let metadata = null as any;
+      if (preserveMetadata && anonymousSession.metadata) {
+        metadata =
+          typeof anonymousSession.metadata === 'string'
+            ? JSON.parse(anonymousSession.metadata)
+            : anonymousSession.metadata;
+      }
 
-      // Clean up the anonymous session
+      // Use developer-provided conversion target configuration
+      const configTargets = ctx.config?.conversionTargets;
+      const targetDef = configTargets ? configTargets[targetPlugin] : undefined;
+      if (!targetDef || !targetDef.step) {
+        return {
+          success: false,
+          message: `No conversion target config provided for plugin '${targetPlugin}'`,
+          status: 'ic',
+          others,
+        };
+      }
+
+      // Validate incoming conversionData if a schema is provided
+      if (targetDef.inputValidation) {
+        try {
+          targetDef.inputValidation.assert(conversionData as unknown);
+        } catch (e) {
+          return {
+            success: false,
+            message: `Invalid conversion data: ${String(e)}`,
+            status: 'ic',
+            others,
+          };
+        }
+      }
+
+      // Ensure the configured step exists on the target plugin
+      const stepExists = Array.isArray(plugin.steps)
+        ? plugin.steps.some((s) => s && s.name === targetDef.step)
+        : false;
+      if (!stepExists) {
+        return {
+          success: false,
+          message: `Configured step '${targetDef.step}' not found on plugin '${targetPlugin}'`,
+          status: 'unf',
+          others,
+        };
+      }
+
+      // Map input for the target step
+      const mappedInput = targetDef.mapInput
+        ? await targetDef.mapInput({
+            conversionData: conversionData || {},
+            guest: { id: subjectId, metadata },
+            ctx: ctx,
+          })
+        : { ...(conversionData || {}), others };
+
+      const regOut = (await ctx.engine.executeStep(
+        targetPlugin,
+        targetDef.step,
+        mappedInput,
+      )) as any;
+
+      // Expect conventional shape; fallback to generic failure
+      if (!regOut || regOut.success !== true) {
+        return {
+          success: false,
+          message:
+            regOut?.message ||
+            `Conversion failed in target plugin '${targetPlugin}' via '${targetDef.step}'`,
+          status: regOut?.status || 'ic',
+          error: regOut?.error,
+          others,
+        };
+      }
+
+      const newSubjectId: string | undefined = targetDef.extract?.subjectId
+        ? targetDef.extract.subjectId(regOut)
+        : (regOut.subject?.id ?? regOut.subjectId);
+      if (!newSubjectId) {
+        return {
+          success: false,
+          message: 'Conversion failed: target step did not return a subject id',
+          status: 'ic',
+          others,
+        };
+      }
+
+      // Clean up the anonymous session for the old guest subject
       await orm.deleteMany('anonymous_sessions', {
         where: (b: any) => b('subject_id', '=', subjectId),
       });
-
-      // Remove from anonymous subjects tracking since it's now a regular user
       await orm.deleteMany('anonymous_subjects', {
         where: (b: any) => b('subject_id', '=', subjectId),
       });
 
-      // Create a new session with appropriate TTL for registered users
-      const registeredTtl = 3600; // 1 hour for registered users (vs 30 min for guests)
-      const newToken = await ctx.engine.createSessionFor('subject', subjectId, registeredTtl);
+      // Determine session token: prefer target plugin's token, otherwise create one
+      const registeredTtl = 3600; // default 1 hour
+      const extractedToken = targetDef.extract?.token
+        ? targetDef.extract.token(regOut)
+        : (regOut.token as string | null | undefined);
+      const newToken =
+        extractedToken ??
+        (await ctx.engine.createSessionFor(
+          'subject',
+          newSubjectId,
+          registeredTtl,
+        ));
 
       const convertedSubject = {
-        id: subjectId,
+        id: newSubjectId,
         type: 'registered',
         convertedFrom: 'guest',
         targetPlugin,
@@ -136,13 +258,15 @@ export const convertGuestStep: AuthStepV2<
 
       return {
         success: true,
-        message: `Guest successfully converted to ${targetPlugin} user`,
-        status: 'su',
+        message:
+          regOut.message ||
+          `Guest successfully converted to ${targetPlugin} user via '${targetDef.step}'`,
+        status: regOut.status || 'su',
         token: newToken,
         subject: convertedSubject,
         convertedTo: targetPlugin,
         preservedMetadata: preserveMetadata ? metadata : undefined,
-        others,
+        others: { ...others, from: 'anonymous-convert', target: targetPlugin },
       };
     } catch (error) {
       return {

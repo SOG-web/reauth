@@ -2,7 +2,7 @@ export type SessionConfigV2 = {
   // Session management
   maxConcurrentSessions?: number; // default: unlimited (0)
   sessionRotationInterval?: number; // auto-rotate sessions (ms), default: disabled (0)
-  
+
   // Device tracking
   deviceTrackingEnabled?: boolean; // default: true
   trustDeviceByDefault?: boolean; // default: false
@@ -13,7 +13,7 @@ export type SessionConfigV2 = {
   cleanupIntervalMinutes?: number; // default: 30 (every 30 minutes)
   sessionRetentionDays?: number; // how long to keep expired session data (default: 7)
   cleanupBatchSize?: number; // process in batches (default: 100)
-  
+
   // Security features
   requireDeviceFingerprint?: boolean; // default: false
   enableGeoLocation?: boolean; // default: false (privacy-conscious)

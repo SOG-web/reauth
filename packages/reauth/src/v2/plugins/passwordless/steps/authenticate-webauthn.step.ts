@@ -37,7 +37,14 @@ export const authenticateWebAuthnStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      name: 'string',
+      email: 'string',
+      provider: 'string',
+      verified: 'boolean',
+      profile: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
@@ -57,10 +64,11 @@ export const authenticateWebAuthnStep: AuthStepV2<
     try {
       // Find credential
       const credential = await orm.findFirst('webauthn_credentials', {
-        where: (b: any) => b.and(
-          b('credential_id', '=', credential_id),
-          b('is_active', '=', true)
-        ),
+        where: (b: any) =>
+          b.and(
+            b('credential_id', '=', credential_id),
+            b('is_active', '=', true),
+          ),
       });
 
       if (!credential) {
@@ -87,7 +95,7 @@ export const authenticateWebAuthnStep: AuthStepV2<
       // 2. Validate the authenticator data
       // 3. Check the client data JSON
       // 4. Verify the challenge matches
-      
+
       // For this implementation, we'll assume signature verification is done
       // by the client/frontend before calling this step
 

@@ -74,7 +74,8 @@ export const cleanupExpiredStep: AuthStepV2<
       const manager = createSessionManager(config, orm);
 
       // Use provided values or fall back to config defaults
-      const effectiveRetentionDays = retentionDays ?? config.sessionRetentionDays ?? 7;
+      const effectiveRetentionDays =
+        retentionDays ?? config.sessionRetentionDays ?? 7;
       const effectiveBatchSize = batchSize ?? config.cleanupBatchSize ?? 100;
 
       // Validate parameters
@@ -105,7 +106,8 @@ export const cleanupExpiredStep: AuthStepV2<
         cleanupBatchSize: effectiveBatchSize,
       });
 
-      const totalCleaned = result.sessionsDeleted + result.devicesDeleted + result.metadataDeleted;
+      const totalCleaned =
+        result.sessionsDeleted + result.devicesDeleted + result.metadataDeleted;
       const endTime = new Date();
       const cleanupDuration = endTime.getTime() - startTime.getTime();
 

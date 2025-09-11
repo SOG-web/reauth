@@ -7,7 +7,7 @@ export type AuthenticateApiKeyInput = {
   api_key: string;
   track_usage?: boolean; // Whether to log this authentication attempt
   endpoint?: string; // Optional endpoint for usage tracking
-  ip_address?: string; // Optional IP for usage tracking  
+  ip_address?: string; // Optional IP for usage tracking
   user_agent?: string; // Optional user agent for usage tracking
   others?: Record<string, any>;
 };
@@ -32,36 +32,60 @@ export const authenticateApiKeyStep: AuthStepV2<
   protocol: {
     http: {
       method: 'POST',
-      codes: { 
+      codes: {
         unf: 401, // API key not found
-        ip: 401,  // Invalid API key
+        ip: 401, // Invalid API key
         exp: 401, // API key expired
         ina: 403, // API key inactive/revoked
-        su: 200,  // Success
-        ic: 400   // Invalid input
+        su: 200, // Success
+        ic: 400, // Invalid input
       },
     },
   },
-  inputs: ['api_key', 'track_usage', 'endpoint', 'ip_address', 'user_agent', 'others'],
+  inputs: [
+    'api_key',
+    'track_usage',
+    'endpoint',
+    'ip_address',
+    'user_agent',
+    'others',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      provider: 'string',
+      api_key_id: 'string',
+      api_key_name: 'string',
+      permissions: 'string[]',
+      scopes: 'string[]',
+    }),
     'api_key_id?': 'string',
     'others?': 'object',
   }),
-  
+
   async run(input, ctx) {
-    const { api_key, track_usage, endpoint, ip_address, user_agent, others } = input;
+    const { api_key, track_usage, endpoint, ip_address, user_agent, others } =
+      input;
     const orm = await ctx.engine.getOrm();
     const config = ctx.config || {};
 
     // Validate API key format
     if (!isValidApiKeyFormat(api_key, config.keyPrefix)) {
-      await logUsageIfEnabled(orm, null, endpoint, ip_address, user_agent, false, 'Invalid API key format', config);
+      await logUsageIfEnabled(
+        orm,
+        null,
+        endpoint,
+        ip_address,
+        user_agent,
+        false,
+        'Invalid API key format',
+        config,
+      );
       return {
         success: false,
         message: 'Invalid API key format',
@@ -71,7 +95,7 @@ export const authenticateApiKeyStep: AuthStepV2<
     }
 
     // Find API key by hash lookup
-    let apiKeyRecord = null;
+    let apiKeyRecord;
     try {
       // We need to find all API keys and verify the hash since we can't query by hash directly
       const allActiveKeys = await orm.findMany('api_keys', {
@@ -80,13 +104,22 @@ export const authenticateApiKeyStep: AuthStepV2<
 
       // Verify hash for each active key
       for (const key of allActiveKeys) {
-        if (await verifyApiKey(api_key, key.key_hash)) {
+        if (await verifyApiKey(api_key, key.key_hash as string)) {
           apiKeyRecord = key;
           break;
         }
       }
     } catch (error) {
-      await logUsageIfEnabled(orm, null, endpoint, ip_address, user_agent, false, 'Database error', config);
+      await logUsageIfEnabled(
+        orm,
+        null,
+        endpoint,
+        ip_address,
+        user_agent,
+        false,
+        'Database error',
+        config,
+      );
       return {
         success: false,
         message: 'Authentication failed',
@@ -96,7 +129,16 @@ export const authenticateApiKeyStep: AuthStepV2<
     }
 
     if (!apiKeyRecord) {
-      await logUsageIfEnabled(orm, null, endpoint, ip_address, user_agent, false, 'API key not found', config);
+      await logUsageIfEnabled(
+        orm,
+        null,
+        endpoint,
+        ip_address,
+        user_agent,
+        false,
+        'API key not found',
+        config,
+      );
       return {
         success: false,
         message: 'Invalid API key',
@@ -107,7 +149,16 @@ export const authenticateApiKeyStep: AuthStepV2<
 
     // Check if API key is active
     if (!apiKeyRecord.is_active) {
-      await logUsageIfEnabled(orm, apiKeyRecord.id, endpoint, ip_address, user_agent, false, 'API key revoked', config);
+      await logUsageIfEnabled(
+        orm,
+        apiKeyRecord.id,
+        endpoint,
+        ip_address,
+        user_agent,
+        false,
+        'API key revoked',
+        config,
+      );
       return {
         success: false,
         message: 'API key has been revoked',
@@ -118,7 +169,16 @@ export const authenticateApiKeyStep: AuthStepV2<
 
     // Check if API key is expired
     if (isApiKeyExpired(apiKeyRecord.expires_at)) {
-      await logUsageIfEnabled(orm, apiKeyRecord.id, endpoint, ip_address, user_agent, false, 'API key expired', config);
+      await logUsageIfEnabled(
+        orm,
+        apiKeyRecord.id,
+        endpoint,
+        ip_address,
+        user_agent,
+        false,
+        'API key expired',
+        config,
+      );
       return {
         success: false,
         message: 'API key has expired',
@@ -129,9 +189,9 @@ export const authenticateApiKeyStep: AuthStepV2<
 
     // Update last used timestamp
     try {
-      await orm.update('api_keys', {
+      await orm.updateMany('api_keys', {
         where: (b: any) => b('id', '=', apiKeyRecord.id),
-        data: {
+        set: {
           last_used_at: new Date(),
           updated_at: new Date(),
         },
@@ -142,10 +202,21 @@ export const authenticateApiKeyStep: AuthStepV2<
     }
 
     // Log successful usage
-    await logUsageIfEnabled(orm, apiKeyRecord.id, endpoint, ip_address, user_agent, true, null, config);
+    await logUsageIfEnabled(
+      orm,
+      apiKeyRecord.id,
+      endpoint,
+      ip_address,
+      user_agent,
+      true,
+      null,
+      config,
+    );
 
     // Create session for the subject
-    const ttl = config.defaultTtlDays ? config.defaultTtlDays * 24 * 60 * 60 : 3600;
+    const ttl = config.defaultTtlDays
+      ? config.defaultTtlDays * 24 * 60 * 60
+      : 3600;
     const token = await ctx.engine.createSessionFor(
       'subject',
       apiKeyRecord.subject_id,
@@ -182,7 +253,7 @@ async function logUsageIfEnabled(
   userAgent?: string,
   success = true,
   errorMessage?: string | null,
-  config: ApiKeyConfigV2 = {}
+  config: ApiKeyConfigV2 = {},
 ): Promise<void> {
   if (!config.enableUsageTracking || !apiKeyId) return;
 

@@ -1,6 +1,6 @@
 /**
  * OAuth Discovery Plugin Types V2
- * 
+ *
  * Provides OAuth 2.0 discovery metadata functionality as preparation for advanced OIDC auth plugins.
  * This plugin is protocol/framework/runtime agnostic and returns plain objects.
  */
@@ -10,52 +10,52 @@ export interface OAuthDiscoveryConfigV2 {
    * The issuer identifier for the OAuth 2.0 authorization server
    */
   issuer: string;
-  
+
   /**
    * Base URL for OAuth endpoints (defaults to issuer if not provided)
    */
   baseUrl?: string;
-  
+
   /**
    * Supported OAuth 2.0 scopes
    */
   scopes?: string[];
-  
+
   /**
    * Supported OAuth 2.0 response types
    */
   responseTypes?: string[];
-  
+
   /**
    * Supported OAuth 2.0 grant types
    */
   grantTypes?: string[];
-  
+
   /**
    * Supported token endpoint authentication methods
    */
   tokenEndpointAuthMethods?: string[];
-  
+
   /**
    * Supported UI locales
    */
   uiLocales?: string[];
-  
+
   /**
    * Service documentation URL
    */
   serviceDocumentation?: string;
-  
+
   /**
    * Whether to include JWKS URI in discovery metadata
    */
   includeJwksUri?: boolean;
-  
+
   /**
    * Whether to include userinfo endpoint in discovery metadata
    */
   includeUserinfoEndpoint?: boolean;
-  
+
   /**
    * Custom metadata to include in discovery response
    */
@@ -90,22 +90,22 @@ export interface OAuthProtectedResourceConfigV2 {
    * The protected resource identifier
    */
   resource: string;
-  
+
   /**
    * List of authorization servers that can issue tokens for this resource
    */
   authorizationServers?: string[];
-  
+
   /**
    * Scopes supported by this protected resource
    */
   scopes?: string[];
-  
+
   /**
    * Bearer token methods supported (header, body, query)
    */
   bearerMethods?: string[];
-  
+
   /**
    * Resource documentation URL
    */

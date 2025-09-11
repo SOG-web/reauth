@@ -3,13 +3,13 @@ import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { PasswordlessConfigV2 } from '../types';
 
 export type RevokeCredentialInput = {
-  subject_id: string;
+  token: string;
   credential_id: string;
   others?: Record<string, any>;
 };
 
 export const revokeCredentialValidation = type({
-  subject_id: 'string',
+  token: 'string',
   credential_id: 'string',
   others: 'object?',
 });
@@ -26,9 +26,10 @@ export const revokeCredentialStep: AuthStepV2<
     http: {
       method: 'DELETE',
       codes: { su: 200, ic: 400, nf: 404, fo: 403 },
+      auth: true,
     },
   },
-  inputs: ['subject_id', 'credential_id', 'others'],
+  inputs: ['token', 'credential_id', 'others'],
   outputs: type({
     success: 'boolean',
     message: 'string',
@@ -37,13 +38,15 @@ export const revokeCredentialStep: AuthStepV2<
     'others?': 'object',
   }),
   async run(input, ctx) {
-    const { subject_id, credential_id, others } = input;
+    const { token, credential_id, others } = input;
     const orm = await ctx.engine.getOrm();
+
+    const t = await ctx.engine.checkSession(token);
 
     try {
       // Check if subject exists
       const subject = await orm.findFirst('subjects', {
-        where: (b: any) => b('id', '=', subject_id),
+        where: (b: any) => b('id', '=', t.subject.id),
       });
 
       if (!subject) {
@@ -68,7 +71,7 @@ export const revokeCredentialStep: AuthStepV2<
       }
 
       // Verify ownership
-      if (credential.subject_id !== subject_id) {
+      if (credential.subject_id !== t.subject.id) {
         return {
           success: false,
           message: 'Credential does not belong to this subject',

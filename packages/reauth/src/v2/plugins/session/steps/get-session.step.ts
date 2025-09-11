@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import type { AuthStepV2, AuthOutput } from '../../../types.v2';
+import type { AuthStepV2, AuthOutput, SessionServiceV2 } from '../../../types.v2';
 import type { SessionConfigV2 } from '../types';
 
 export type GetSessionInput = {
@@ -12,22 +12,24 @@ export const getSessionValidation = type({
   others: 'object?',
 });
 
-export type GetSessionOutput = AuthOutput & {
-  session?: {
-    sessionId: string;
-    token: string;
-    subject: any;
-    createdAt: string;
-    expiresAt?: string;
-    deviceInfo?: {
-      fingerprint?: string;
-      userAgent?: string;
-      ipAddress?: string;
-      isTrusted: boolean;
-      deviceName?: string;
-    };
-    metadata?: Record<string, any>;
+type Session = {
+  sessionId: string;
+  token: string;
+  subject: any;
+  createdAt: string;
+  expiresAt?: string;
+  deviceInfo?: {
+    fingerprint?: string;
+    userAgent?: string;
+    ipAddress?: string;
+    isTrusted: boolean;
+    deviceName?: string;
   };
+  metadata?: Record<string, any>;
+};
+
+export type GetSessionOutput = AuthOutput & {
+  session?: Session;
 };
 
 export const getSessionStep: AuthStepV2<
@@ -50,7 +52,21 @@ export const getSessionStep: AuthStepV2<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'session?': 'object',
+    'session?': type({
+      sessionId: 'string',
+      token: 'string',
+      subject: 'object',
+      createdAt: 'string',
+      expiresAt: 'string?',
+      'deviceInfo?': type({
+        fingerprint: 'string?',
+        userAgent: 'string?',
+        ipAddress: 'string?',
+        isTrusted: 'boolean',
+        deviceName: 'string?',
+      }),
+      metadata: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
@@ -59,7 +75,7 @@ export const getSessionStep: AuthStepV2<
     try {
       // Verify the session and get subject
       const { subject } = await ctx.engine.checkSession(token);
-      
+
       if (!subject) {
         return {
           success: false,
@@ -70,9 +86,9 @@ export const getSessionStep: AuthStepV2<
         };
       }
 
-      // Get the session service
-      const sessionService = (ctx.engine as any).getSessionService();
-      
+      // Get the session service via DI container (type-safe)
+      const sessionService = ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
+
       if (!sessionService) {
         return {
           success: false,
@@ -94,12 +110,15 @@ export const getSessionStep: AuthStepV2<
       if (sessionService.listSessionsForSubject) {
         const subjectType = subject.type || 'subject';
         const subjectId = subject.id;
-        
-        const sessions = await sessionService.listSessionsForSubject(subjectType, subjectId);
-        
+
+        const sessions = await sessionService.listSessionsForSubject(
+          subjectType,
+          subjectId,
+        );
+
         // Find the current session by token
         const currentSession = sessions.find((s: any) => s.token === token);
-        
+
         if (currentSession) {
           sessionInfo = {
             sessionId: currentSession.sessionId,

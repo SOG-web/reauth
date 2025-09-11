@@ -1,11 +1,11 @@
 import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { PasswordlessConfigV2 } from '../types';
-import { 
-  generateMagicLinkToken, 
-  hashMagicLinkToken, 
+import {
+  generateMagicLinkToken,
+  hashMagicLinkToken,
   getMagicLinkExpiration,
-  cleanupExpiredMagicLinks 
+  cleanupExpiredMagicLinks,
 } from '../utils';
 
 export type SendMagicLinkInput = {
@@ -45,12 +45,16 @@ export const sendMagicLinkStep: AuthStepV2<
     const orm = await ctx.engine.getOrm();
 
     // Validate config requires magic links
-    if (!ctx.config?.magicLinks || typeof ctx.config.sendMagicLink !== 'function') {
+    if (
+      !ctx.config?.magicLinks ||
+      typeof ctx.config.sendMagicLink !== 'function'
+    ) {
       return {
         success: false,
         message: 'Magic link authentication is not configured',
         status: 'ic',
-        error: 'Magic link authentication is not enabled or sendMagicLink function is missing',
+        error:
+          'Magic link authentication is not enabled or sendMagicLink function is missing',
       };
     }
 
@@ -60,10 +64,8 @@ export const sendMagicLinkStep: AuthStepV2<
 
       // Find existing subject by email
       const identity = await orm.findFirst('identities', {
-        where: (b: any) => b.and(
-          b('identifier', '=', email),
-          b('type', '=', 'email')
-        ),
+        where: (b: any) =>
+          b.and(b('identifier', '=', email), b('type', '=', 'email')),
       });
 
       if (!identity) {

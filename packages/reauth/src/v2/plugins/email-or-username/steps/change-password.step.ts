@@ -2,6 +2,7 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { EmailOrUsernameConfigV2 } from '../types';
 import { passwordSchema } from '../../../../plugins/shared/validation';
+import { hashPassword, verifyPasswordHash } from '../../../../lib/password';
 
 export type ChangePasswordInput = {
   currentPassword: string;
@@ -28,11 +29,11 @@ export const changePasswordStep: AuthStepV2<
   protocol: {
     http: {
       method: 'POST',
-      codes: { 
-        su: 200,  // Success
-        ic: 400,  // Invalid input
+      codes: {
+        su: 200, // Success
+        ic: 400, // Invalid input
         unf: 401, // Unauthorized
-        ip: 401   // Invalid password
+        ip: 401, // Invalid password
       },
       auth: true, // Requires authentication
     },
@@ -44,13 +45,15 @@ export const changePasswordStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
     const { currentPassword, newPassword, token, others } = input;
     const orm = await ctx.engine.getOrm();
-    
+
     // Check session to get current user
     const session = await ctx.engine.checkSession(token || '');
     if (!session.valid || !session.subject) {
@@ -79,7 +82,7 @@ export const changePasswordStep: AuthStepV2<
     }
 
     // Verify current password
-    const { verifyPasswordHash, hashPassword } = await import('../../../../lib/password');
+
     const currentPasswordValid = await verifyPasswordHash(
       creds.password_hash as string,
       currentPassword,
@@ -96,7 +99,7 @@ export const changePasswordStep: AuthStepV2<
 
     // Hash new password and update
     const newPasswordHash = await hashPassword(newPassword);
-    
+
     await orm.updateMany('credentials', {
       where: (b: any) => b('subject_id', '=', subjectId),
       set: {
@@ -104,12 +107,16 @@ export const changePasswordStep: AuthStepV2<
       },
     });
 
+    const outSubject = {
+      id: session.subject.id,
+    };
+
     return {
       success: true,
       message: 'Password changed successfully',
       status: 'su',
       token,
-      subject: session.subject,
+      subject: outSubject,
       others,
     };
   },

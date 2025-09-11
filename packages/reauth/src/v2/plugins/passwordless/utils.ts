@@ -58,14 +58,16 @@ export async function cleanupExpiredMagicLinks(orm: OrmLike): Promise<void> {
  */
 export async function cleanupExpiredMagicLinksScheduled(
   orm: OrmLike,
-  config?: PasswordlessConfigV2
+  config?: PasswordlessConfigV2,
 ): Promise<{ magicLinksDeleted: number }> {
   const now = new Date();
   const retentionDays = config?.retentionDays ?? 1;
   const batchSize = config?.cleanupBatchSize ?? 100;
-  
+
   // Calculate cutoff date for retention (expired links older than this get deleted)
-  const retentionCutoffDate = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  const retentionCutoffDate = new Date(
+    now.getTime() - retentionDays * 24 * 60 * 60 * 1000,
+  );
 
   let magicLinksDeleted = 0;
 
@@ -75,12 +77,11 @@ export async function cleanupExpiredMagicLinksScheduled(
       where: (b: any) =>
         b.and(
           b('expires_at', '<', now),
-          b('created_at', '<', retentionCutoffDate)
+          b('created_at', '<', retentionCutoffDate),
         ),
     });
-    
-    magicLinksDeleted = typeof result === 'number' ? result : 0;
 
+    magicLinksDeleted = typeof result === 'number' ? result : 0;
   } catch (error) {
     // Return partial results if available, otherwise zero
     // Don't throw to prevent cleanup scheduler from stopping

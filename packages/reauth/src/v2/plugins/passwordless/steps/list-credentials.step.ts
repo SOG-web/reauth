@@ -3,13 +3,13 @@ import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { PasswordlessConfigV2 } from '../types';
 
 export type ListCredentialsInput = {
-  subject_id: string;
+  token: string;
   include_inactive?: boolean;
   others?: Record<string, any>;
 };
 
 export const listCredentialsValidation = type({
-  subject_id: 'string',
+  token: 'string',
   include_inactive: 'boolean?',
   others: 'object?',
 });
@@ -20,32 +20,51 @@ export const listCredentialsStep: AuthStepV2<
   PasswordlessConfigV2
 > = {
   name: 'list-credentials',
-  description: 'List user\'s passwordless credentials',
+  description: "List user's passwordless credentials",
   validationSchema: listCredentialsValidation,
   protocol: {
     http: {
       method: 'GET',
       codes: { su: 200, ic: 400, nf: 404 },
+      auth: true,
     },
   },
-  inputs: ['subject_id', 'include_inactive', 'others'],
+  inputs: ['token', 'include_inactive', 'others'],
   outputs: type({
     success: 'boolean',
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'credentials?': 'object[]',
-    'magic_links?': 'object[]',
+    'credentials?': [
+      type({
+        id: 'string',
+        name: 'string',
+        created_at: 'string',
+        last_used_at: 'string',
+        is_active: 'boolean',
+        transports: 'string[]',
+      }),
+    ],
+    'magic_links?': [
+      type({
+        id: 'string',
+        email: 'string',
+        created_at: 'string',
+        expires_at: 'string',
+      }),
+    ],
     'others?': 'object',
   }),
   async run(input, ctx) {
-    const { subject_id, include_inactive = false, others } = input;
+    const { token, include_inactive = false, others } = input;
     const orm = await ctx.engine.getOrm();
+
+    const t = await ctx.engine.checkSession(token);
 
     try {
       // Check if subject exists
       const subject = await orm.findFirst('subjects', {
-        where: (b: any) => b('id', '=', subject_id),
+        where: (b: any) => b('id', '=', t.subject.id),
       });
 
       if (!subject) {
@@ -55,6 +74,8 @@ export const listCredentialsStep: AuthStepV2<
           status: 'nf',
         };
       }
+
+      const subject_id = subject.id;
 
       const result: any = {
         success: true,
@@ -67,10 +88,11 @@ export const listCredentialsStep: AuthStepV2<
       if (ctx.config?.webauthn) {
         const whereClause = include_inactive
           ? (b: any) => b('subject_id', '=', subject_id)
-          : (b: any) => b.and(
-              b('subject_id', '=', subject_id),
-              b('is_active', '=', true)
-            );
+          : (b: any) =>
+              b.and(
+                b('subject_id', '=', subject_id),
+                b('is_active', '=', true),
+              );
 
         const credentials = await orm.findMany('webauthn_credentials', {
           where: whereClause,
@@ -91,11 +113,12 @@ export const listCredentialsStep: AuthStepV2<
       if (ctx.config?.magicLinks) {
         const now = new Date();
         const magicLinks = await orm.findMany('magic_links', {
-          where: (b: any) => b.and(
-            b('subject_id', '=', subject_id),
-            b('expires_at', '>', now),
-            b('used_at', '=', null)
-          ),
+          where: (b: any) =>
+            b.and(
+              b('subject_id', '=', subject_id),
+              b('expires_at', '>', now),
+              b('used_at', '=', null),
+            ),
           orderBy: [['created_at', 'desc']],
         });
 

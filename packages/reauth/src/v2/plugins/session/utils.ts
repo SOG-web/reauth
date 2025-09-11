@@ -29,7 +29,10 @@ export class SimpleSessionManager {
   private sessions: Map<string, SessionInfo> = new Map();
   private userSessions: Map<string, Set<string>> = new Map();
 
-  constructor(private orm: OrmLike, private config: SessionConfigV2) {}
+  constructor(
+    private orm: OrmLike,
+    private config: SessionConfigV2,
+  ) {}
 
   /**
    * Get user key for indexing
@@ -41,14 +44,17 @@ export class SimpleSessionManager {
   /**
    * Cleanup expired sessions
    */
-  async cleanupExpiredSessions(retentionDays: number, batchSize: number): Promise<{
+  async cleanupExpiredSessions(
+    retentionDays: number,
+    batchSize: number,
+  ): Promise<{
     sessionsDeleted: number;
     devicesDeleted: number;
     metadataDeleted: number;
   }> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-    
+
     let sessionsDeleted = 0;
     let devicesDeleted = 0;
     let metadataDeleted = 0;
@@ -57,14 +63,15 @@ export class SimpleSessionManager {
     for (const [sessionId, session] of this.sessions.entries()) {
       if (processed >= batchSize) break;
 
-      const isExpired = session.expiresAt ? 
-        session.expiresAt < cutoffDate :
-        session.updatedAt < cutoffDate;
+      const isExpired = session.expiresAt
+        ? session.expiresAt < cutoffDate
+        : session.updatedAt < cutoffDate;
 
       if (isExpired) {
         if (session.deviceInfo) devicesDeleted++;
-        if (session.metadata) metadataDeleted += Object.keys(session.metadata).length;
-        
+        if (session.metadata)
+          metadataDeleted += Object.keys(session.metadata).length;
+
         // Remove session
         const userKey = this.getUserKey(session.subjectType, session.subjectId);
         const userSet = this.userSessions.get(userKey);
@@ -77,7 +84,7 @@ export class SimpleSessionManager {
         this.sessions.delete(sessionId);
         sessionsDeleted++;
       }
-      
+
       processed++;
     }
 
@@ -88,7 +95,10 @@ export class SimpleSessionManager {
 /**
  * Create a session manager instance
  */
-export function createSessionManager(config: SessionConfigV2, orm: OrmLike): SimpleSessionManager {
+export function createSessionManager(
+  config: SessionConfigV2,
+  orm: OrmLike,
+): SimpleSessionManager {
   return new SimpleSessionManager(orm, config);
 }
 
@@ -97,7 +107,7 @@ export function createSessionManager(config: SessionConfigV2, orm: OrmLike): Sim
  */
 export async function cleanupExpiredSessionData(
   manager: SimpleSessionManager,
-  config: SessionConfigV2
+  config: SessionConfigV2,
 ): Promise<{
   sessionsDeleted: number;
   devicesDeleted: number;

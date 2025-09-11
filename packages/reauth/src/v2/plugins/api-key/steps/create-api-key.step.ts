@@ -1,13 +1,17 @@
 import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
-import type { ApiKeyConfigV2, CreateApiKeyInput, CreateApiKeyOutput } from '../types';
-import { 
-  generateApiKey, 
-  hashApiKey, 
-  calculateExpirationDate, 
+import type {
+  ApiKeyConfigV2,
+  CreateApiKeyInput,
+  CreateApiKeyOutput,
+} from '../types';
+import {
+  generateApiKey,
+  hashApiKey,
+  calculateExpirationDate,
   validateScopes,
   checkApiKeyLimit,
-  sanitizeApiKeyMetadata
+  sanitizeApiKeyMetadata,
 } from '../utils';
 
 export type CreateApiKeyStepInput = CreateApiKeyInput & {
@@ -36,29 +40,41 @@ export const createApiKeyStep: AuthStepV2<
   protocol: {
     http: {
       method: 'POST',
-      codes: { 
+      codes: {
         unauth: 401, // Not authenticated
-        limit: 429,  // Too many API keys
+        limit: 429, // Too many API keys
         conflict: 409, // Name already exists
         invalid: 400, // Invalid scopes or parameters
-        su: 201,     // Created successfully
-        ic: 400      // Invalid input
+        su: 201, // Created successfully
+        ic: 400, // Invalid input
       },
       auth: true, // Requires authentication
     },
   },
-  inputs: ['token', 'name', 'permissions', 'scopes', 'expires_at', 'ttl_days', 'others'],
+  inputs: [
+    'token',
+    'name',
+    'permissions',
+    'scopes',
+    'expires_at',
+    'ttl_days',
+    'others',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'data?': 'object', // Contains CreateApiKeyOutput
+    'data?': type({
+      api_key: 'string',
+      metadata: 'object',
+    }), // Contains CreateApiKeyOutput
     'others?': 'object',
   }),
-  
+
   async run(input, ctx) {
-    const { token, name, permissions, scopes, expires_at, ttl_days, others } = input;
+    const { token, name, permissions, scopes, expires_at, ttl_days, others } =
+      input;
     const orm = await ctx.engine.getOrm();
     const config = ctx.config || {};
 
@@ -111,11 +127,12 @@ export const createApiKeyStep: AuthStepV2<
     // Check for name conflicts
     try {
       const existingKey = await orm.findFirst('api_keys', {
-        where: (b: any) => b.and(
-          b('subject_id', '=', subjectId),
-          b('name', '=', name),
-          b('is_active', '=', true)
-        ),
+        where: (b: any) =>
+          b.and(
+            b('subject_id', '=', subjectId),
+            b('name', '=', name),
+            b('is_active', '=', true),
+          ),
       });
 
       if (existingKey) {

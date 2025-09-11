@@ -34,7 +34,14 @@ export const extendGuestStep: AuthStepV2<
     message: 'string',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      type: 'string',
+      fingerprint: 'string',
+      temporary: 'boolean',
+      expiresAt: 'string',
+      metadata: 'object?',
+    }),
     'newExpiresAt?': 'string',
     'extensionsRemaining?': 'number',
     'others?': 'object',
@@ -94,9 +101,10 @@ export const extendGuestStep: AuthStepV2<
     try {
       // Calculate new expiration time
       const newExpiresAt = calculateExpiresAt(ctx.config);
-      const currentExtensionCount = typeof anonymousSession.extension_count === 'number' 
-        ? anonymousSession.extension_count 
-        : 0;
+      const currentExtensionCount =
+        typeof anonymousSession.extension_count === 'number'
+          ? anonymousSession.extension_count
+          : 0;
       const newExtensionCount = currentExtensionCount + 1;
 
       // Update the anonymous session
@@ -111,7 +119,11 @@ export const extendGuestStep: AuthStepV2<
 
       // Create a new session token with extended TTL
       const ttl = ctx.config?.sessionTtlSeconds ?? 1800;
-      const newToken = await ctx.engine.createSessionFor('guest', subjectId, ttl);
+      const newToken = await ctx.engine.createSessionFor(
+        'guest',
+        subjectId,
+        ttl,
+      );
 
       const maxExtensions = ctx.config?.maxSessionExtensions ?? 3;
       const extensionsRemaining = maxExtensions - newExtensionCount;

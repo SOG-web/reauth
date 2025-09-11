@@ -45,7 +45,14 @@ export const createGuestStep: AuthStepV2<
     message: 'string',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      type: 'string',
+      fingerprint: 'string',
+      temporary: 'boolean',
+      expiresAt: 'string',
+      metadata: 'object?',
+    }),
     'guestId?': 'string',
     'expiresAt?': 'string',
     'others?': 'object',
@@ -62,8 +69,9 @@ export const createGuestStep: AuthStepV2<
     }
 
     // Generate or validate fingerprint
-    const deviceFingerprint = fingerprint || generateFingerprint(userAgent, ip, { userAgent, ip });
-    
+    const deviceFingerprint =
+      fingerprint || generateFingerprint(userAgent, ip, { userAgent, ip });
+
     if (ctx.config?.fingerprintRequired !== false && !deviceFingerprint) {
       return {
         success: false,
@@ -74,7 +82,11 @@ export const createGuestStep: AuthStepV2<
     }
 
     // Check if this fingerprint can create more guest sessions
-    const canCreate = await canCreateGuestSession(deviceFingerprint, orm, ctx.config);
+    const canCreate = await canCreateGuestSession(
+      deviceFingerprint,
+      orm,
+      ctx.config,
+    );
     if (!canCreate) {
       return {
         success: false,
@@ -85,7 +97,6 @@ export const createGuestStep: AuthStepV2<
     }
 
     // Generate unique guest subject ID
-    const guestSubjectId = generateGuestSubjectId();
     const expiresAt = calculateExpiresAt(ctx.config);
 
     try {
@@ -108,7 +119,11 @@ export const createGuestStep: AuthStepV2<
 
       // Create session token
       const ttl = ctx.config?.sessionTtlSeconds ?? 1800;
-      const token = await ctx.engine.createSessionFor('guest', subject.id as string, ttl);
+      const token = await ctx.engine.createSessionFor(
+        'guest',
+        subject.id as string,
+        ttl,
+      );
 
       const guestSubject = {
         id: subject.id,

@@ -1,8 +1,11 @@
 import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { PhonePasswordConfigV2 } from '../types';
-import { verifyPasswordHash } from '../../../../lib/password';
-import { phoneSchema } from '../../../../plugins/shared/validation';
+import { hashPassword, verifyPasswordHash } from '../../../../lib/password';
+import {
+  passwordSchema,
+  phoneSchema,
+} from '../../../../plugins/shared/validation';
 import { generateCode as defaultGenerateCode } from '../utils';
 
 export type ChangePhoneInput = {
@@ -14,8 +17,8 @@ export type ChangePhoneInput = {
 
 export const changePhoneValidation = type({
   token: 'string',
-  currentPassword: 'string',
-  newPhone: 'string',
+  currentPassword: passwordSchema,
+  newPhone: phoneSchema,
   others: 'object?',
 });
 
@@ -46,7 +49,7 @@ export const changePhoneStep: AuthStepV2<
     const { token, currentPassword, newPhone, others } = input;
     const orm = await ctx.engine.getOrm();
 
-    // This step requires authentication - get subject from session  
+    // This step requires authentication - get subject from session
     const check = await ctx.engine.checkSession(token);
     if (!check.valid || !check.subject?.id) {
       return {
@@ -110,10 +113,7 @@ export const changePhoneStep: AuthStepV2<
     // Find current phone identity
     const currentIdentity = await orm.findFirst('identities', {
       where: (b) =>
-        b.and(
-          b('provider', '=', 'phone'),
-          b('subject_id', '=', subjectId),
-        ),
+        b.and(b('provider', '=', 'phone'), b('subject_id', '=', subjectId)),
     });
 
     if (!currentIdentity) {
@@ -140,10 +140,10 @@ export const changePhoneStep: AuthStepV2<
       const generateCode = ctx.config.generateCode || defaultGenerateCode;
       const code = await generateCode(newPhone, check.subject);
       const codeStr = String(code);
-      
+
       // Hash the verification code for storage
-      const hashedCode = await require('../../../../lib/password').hashPassword(codeStr);
-      
+      const hashedCode = await hashPassword(codeStr);
+
       const expiresAt = new Date(
         Date.now() + (ctx.config.verificationCodeExpiresIn || 30 * 60 * 1000),
       );
@@ -177,7 +177,8 @@ export const changePhoneStep: AuthStepV2<
         await ctx.config.sendCode(check.subject, code, newPhone, 'verify');
         return {
           success: true,
-          message: 'Phone number changed successfully. Verification code sent for next login.',
+          message:
+            'Phone number changed successfully. Verification code sent for next login.',
           status: 'su',
           others,
         };
@@ -185,7 +186,8 @@ export const changePhoneStep: AuthStepV2<
         // Even if sending fails, the phone was already updated successfully
         return {
           success: true,
-          message: 'Phone number changed successfully. Verification code could not be sent.',
+          message:
+            'Phone number changed successfully. Verification code could not be sent.',
           status: 'su',
           others: {
             ...others,

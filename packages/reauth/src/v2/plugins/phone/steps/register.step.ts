@@ -2,7 +2,10 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import { findTestUser, genCode } from '../utils';
 import type { PhonePasswordConfigV2 } from '../types';
-import { passwordSchema, phoneSchema } from '../../../../plugins/shared/validation';
+import {
+  passwordSchema,
+  phoneSchema,
+} from '../../../../plugins/shared/validation';
 import { hashPassword, haveIbeenPawned } from '../../../../lib/password';
 
 export type RegisterInput = {
@@ -12,7 +15,7 @@ export type RegisterInput = {
 };
 
 export const registerValidation = type({
-  phone: 'string',
+  phone: phoneSchema,
   password: passwordSchema,
   others: 'object?',
 });
@@ -38,7 +41,13 @@ export const registerStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      phone: 'string',
+      provider: 'string',
+      verified: 'boolean',
+      profile: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
@@ -53,7 +62,11 @@ export const registerStep: AuthStepV2<
       let token: string | null = null;
       if (ctx.config?.loginOnRegister) {
         const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
-        token = await ctx.engine.createSessionFor('subject', subjectRow.id, ttl);
+        token = await ctx.engine.createSessionFor(
+          'subject',
+          subjectRow.id,
+          ttl,
+        );
       }
 
       const subject = {
@@ -94,7 +107,8 @@ export const registerStep: AuthStepV2<
     if (!isSafe) {
       return {
         success: false,
-        message: 'Password has been found in data breaches. Please choose a stronger password.',
+        message:
+          'Password has been found in data breaches. Please choose a stronger password.',
         status: 'pwr',
         others,
       };
@@ -132,7 +146,7 @@ export const registerStep: AuthStepV2<
       const code = ctx.config.generateCode
         ? await ctx.config.generateCode(phone, { id: subjectId })
         : genCode(ctx.config);
-      
+
       // Store hashed code and set expiry
       const hashedCode = await hashPassword(String(code));
       const ms = ctx.config?.verificationCodeExpiresIn ?? 30 * 60 * 1000;

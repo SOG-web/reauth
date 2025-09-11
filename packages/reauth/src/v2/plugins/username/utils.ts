@@ -18,7 +18,11 @@ export const findTestUser = (
   username: string,
   password: string,
   config: UsernamePasswordConfigV2,
-): { username: string; password: string; profile: Record<string, any> } | null => {
+): {
+  username: string;
+  password: string;
+  profile: Record<string, any>;
+} | null => {
   if (!isTestEnvironmentAllowed(config)) return null;
   return (
     config.testUsers?.users.find(
@@ -54,14 +58,16 @@ export const genCode = (config?: UsernamePasswordConfigV2) => {
  */
 export const cleanupExpiredCodes = async (
   orm: OrmLike,
-  config?: UsernamePasswordConfigV2
+  config?: UsernamePasswordConfigV2,
 ): Promise<{ resetCodesDeleted: number }> => {
   const now = new Date();
   const retentionDays = config?.retentionDays ?? 1;
   const batchSize = config?.cleanupBatchSize ?? 100;
-  
+
   // Calculate cutoff date for retention (expired codes older than this get deleted)
-  const retentionCutoffDate = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  const retentionCutoffDate = new Date(
+    now.getTime() - retentionDays * 24 * 60 * 60 * 1000,
+  );
 
   let resetCodesDeleted = 0;
 
@@ -73,7 +79,7 @@ export const cleanupExpiredCodes = async (
         b.and(
           b('reset_code_expires_at', '!=', null),
           b('reset_code_expires_at', '<', now),
-          b('reset_code_expires_at', '<', retentionCutoffDate)
+          b('reset_code_expires_at', '<', retentionCutoffDate),
         ),
       set: {
         reset_code: null,
@@ -82,7 +88,6 @@ export const cleanupExpiredCodes = async (
     });
 
     resetCodesDeleted = typeof resetResult === 'number' ? resetResult : 0;
-
   } catch (error) {
     // Return partial results if available, otherwise zero
     // Don't throw to prevent cleanup scheduler from stopping

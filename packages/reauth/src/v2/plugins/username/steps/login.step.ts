@@ -2,7 +2,10 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import { findTestUser } from '../utils';
 import type { UsernamePasswordConfigV2 } from '../types';
-import { passwordSchema } from '../../../../plugins/shared/validation';
+import {
+  passwordSchema,
+  usernameSchema,
+} from '../../../../plugins/shared/validation';
 import { verifyPasswordHash } from '../../../../lib/password';
 
 export type LoginInput = {
@@ -12,7 +15,7 @@ export type LoginInput = {
 };
 
 export const loginValidation = type({
-  username: 'string',
+  username: usernameSchema,
   password: passwordSchema,
   others: 'object?',
 });
@@ -38,7 +41,13 @@ export const loginStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      username: 'string',
+      provider: 'string',
+      verified: 'boolean',
+      profile: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {

@@ -1,10 +1,10 @@
 import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { PasswordlessConfigV2 } from '../types';
-import { 
-  hashMagicLinkToken, 
+import {
+  hashMagicLinkToken,
   isMagicLinkExpired,
-  cleanupExpiredMagicLinks 
+  cleanupExpiredMagicLinks,
 } from '../utils';
 
 export type VerifyMagicLinkInput = {
@@ -38,7 +38,11 @@ export const verifyMagicLinkStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      email: 'string',
+      name: 'string',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {

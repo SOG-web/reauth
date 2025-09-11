@@ -2,6 +2,7 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { PhonePasswordConfigV2 } from '../types';
 import { verifyPasswordHash } from '../../../../lib/password';
+import { phoneSchema } from '../../../../plugins/shared/validation';
 
 export type VerifyPhoneInput = {
   phone: string;
@@ -10,7 +11,7 @@ export type VerifyPhoneInput = {
 };
 
 export const verifyPhoneValidation = type({
-  phone: 'string.phone',
+  phone: phoneSchema,
   code: 'string | number',
   others: 'object?',
 });
@@ -71,8 +72,10 @@ export const verifyPhoneStep: AuthStepV2<
     }
 
     // Check if code has expired
-    if (phoneData.verification_code_expires_at && 
-        new Date() > new Date(phoneData.verification_code_expires_at)) {
+    if (
+      phoneData.verification_code_expires_at &&
+      new Date() > new Date(phoneData.verification_code_expires_at as string)
+    ) {
       return {
         success: false,
         message: 'Verification code has expired',
@@ -83,7 +86,7 @@ export const verifyPhoneStep: AuthStepV2<
 
     // Verify code using constant-time comparison
     const isValidCode = await verifyPasswordHash(
-      phoneData.verification_code,
+      phoneData.verification_code as string,
       String(code),
     );
 
@@ -99,13 +102,13 @@ export const verifyPhoneStep: AuthStepV2<
     // Mark identity as verified and clear verification data
     await orm.updateMany('identities', {
       where: (b) => b('id', '=', identity.id),
-      data: { verified: true },
+      set: { verified: true },
     });
 
     // Clear verification code
     await orm.updateMany('phone_identities', {
       where: (b) => b('identity_id', '=', identity.id),
-      data: {
+      set: {
         verification_code: null,
         verification_code_expires_at: null,
       },

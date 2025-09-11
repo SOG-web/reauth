@@ -6,10 +6,10 @@ export type ApiKeyConfigV2 = {
   allowedScopes?: string[]; // Available permission scopes
   requireScopes?: boolean; // Whether scopes are mandatory (default: false)
   enableUsageTracking?: boolean; // Enable usage logging (default: false)
-  
+
   // Rate limiting options
   rateLimitPerMinute?: number; // Requests per minute per key (default: no limit)
-  
+
   // Cleanup options
   cleanupExpiredKeys?: boolean; // Auto-remove expired keys (default: true)
   cleanupUsageOlderThanDays?: number; // Remove usage logs older than N days (default: 90)
@@ -19,12 +19,12 @@ export type ApiKeyConfigV2 = {
 };
 
 // Supported scopes for API key permissions
-export type ApiKeyScope = 
-  | 'read'           // Read-only access
-  | 'write'          // Write access
-  | 'delete'         // Delete access
-  | 'admin'          // Administrative access
-  | string;          // Custom scopes
+export type ApiKeyScope =
+  | 'read' // Read-only access
+  | 'write' // Write access
+  | 'delete' // Delete access
+  | 'admin' // Administrative access
+  | string; // Custom scopes
 
 // API key metadata (what gets returned to users, never includes raw key)
 export type ApiKeyMetadata = {

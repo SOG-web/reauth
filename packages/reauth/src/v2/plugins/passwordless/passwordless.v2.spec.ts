@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { default as passwordlessPluginV2, createPasswordlessPluginV2 } from './plugin.v2';
+import {
+  default as passwordlessPluginV2,
+  createPasswordlessPluginV2,
+} from './plugin.v2';
 import { createAuthPluginV2 } from '../../utils/create-plugin.v2';
 
 describe('Passwordless Plugin V2', () => {
@@ -8,7 +11,8 @@ describe('Passwordless Plugin V2', () => {
   });
 
   it('should have all required steps', () => {
-    const stepNames = passwordlessPluginV2.steps?.map(step => step.name) || [];
+    const stepNames =
+      passwordlessPluginV2.steps?.map((step) => step.name) || [];
     expect(stepNames).toContain('send-magic-link');
     expect(stepNames).toContain('verify-magic-link');
     expect(stepNames).toContain('register-webauthn');
@@ -42,7 +46,7 @@ describe('Passwordless Plugin V2', () => {
 
   it('should create valid magic links plugin', () => {
     const mockSendMagicLink = vi.fn();
-    
+
     expect(() => {
       createPasswordlessPluginV2({
         magicLinks: true,
@@ -66,7 +70,7 @@ describe('Passwordless Plugin V2', () => {
 
   it('should be able to create configured plugin instance', () => {
     const mockSendMagicLink = vi.fn();
-    
+
     expect(() => {
       createAuthPluginV2(passwordlessPluginV2, {
         config: {

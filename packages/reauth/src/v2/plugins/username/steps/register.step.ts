@@ -2,8 +2,11 @@ import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import { findTestUser } from '../utils';
 import type { UsernamePasswordConfigV2 } from '../types';
-import { passwordSchema } from '../../../../plugins/shared/validation';
-import { hashPassword, checkPasswordSafety } from '../../../../lib/password';
+import {
+  passwordSchema,
+  usernameSchema,
+} from '../../../../plugins/shared/validation';
+import { hashPassword, haveIbeenPawned } from '../../../../lib/password';
 
 export type RegisterInput = {
   username: string;
@@ -12,7 +15,7 @@ export type RegisterInput = {
 };
 
 export const registerValidation = type({
-  username: 'string',
+  username: usernameSchema,
   password: passwordSchema,
   others: 'object?',
 });
@@ -38,7 +41,13 @@ export const registerStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'token?': 'string',
-    'subject?': 'object',
+    'subject?': type({
+      id: 'string',
+      username: 'string',
+      provider: 'string',
+      verified: 'boolean',
+      profile: 'object?',
+    }),
     'others?': 'object',
   }),
   async run(input, ctx) {
@@ -50,10 +59,14 @@ export const registerStep: AuthStepV2<
     if (tu) {
       const subjectRow = { id: username };
 
-      let token = null;
+      let token: string | null = null;
       if (ctx.config?.loginOnRegister) {
         const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
-        token = await ctx.engine.createSessionFor('subject', subjectRow.id, ttl);
+        token = await ctx.engine.createSessionFor(
+          'subject',
+          subjectRow.id,
+          ttl,
+        );
       }
 
       const subject = {
@@ -90,29 +103,30 @@ export const registerStep: AuthStepV2<
     }
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await checkPasswordSafety(password);
+    const isSafe = await haveIbeenPawned(password);
     if (!isSafe) {
       return {
         success: false,
-        message: 'Password has been found in data breaches. Please choose a stronger password.',
+        message:
+          'Password has been found in data breaches. Please choose a stronger password.',
         status: 'pwr',
         others,
       };
     }
 
     // Create subject
-    const subject = await orm.insertOne('subjects', {});
-    const subjectId = subject.id;
+    const subject = await orm.create('subjects', {});
+    const subjectId = subject.id as string;
 
     // Create credentials (hashed password)
     const passwordHash = await hashPassword(password);
-    await orm.insertOne('credentials', {
+    await orm.create('credentials', {
       subject_id: subjectId,
       password_hash: passwordHash,
     });
 
     // Create identity (username doesn't need verification)
-    const identity = await orm.insertOne('identities', {
+    const identity = await orm.create('identities', {
       subject_id: subjectId,
       provider: 'username',
       identifier: username,
@@ -120,12 +134,12 @@ export const registerStep: AuthStepV2<
     });
 
     // Create username metadata record (minimal)
-    await orm.insertOne('username_identities', {
+    await orm.create('username_identities', {
       identity_id: identity.id,
     });
 
     // Create session if loginOnRegister is true
-    let token = null;
+    let token: string | null = null;
     if (ctx.config?.loginOnRegister) {
       const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
       token = await ctx.engine.createSessionFor('subject', subjectId, ttl);

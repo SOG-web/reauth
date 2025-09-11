@@ -1,8 +1,15 @@
 import { type } from 'arktype';
 import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import type { PhonePasswordConfigV2 } from '../types';
-import { passwordSchema } from '../../../../plugins/shared/validation';
-import { verifyPasswordHash, hashPassword, checkPasswordSafety } from '../../../../lib/password';
+import {
+  passwordSchema,
+  phoneSchema,
+} from '../../../../plugins/shared/validation';
+import {
+  verifyPasswordHash,
+  hashPassword,
+  haveIbeenPawned,
+} from '../../../../lib/password';
 
 export type ResetPasswordInput = {
   phone: string;
@@ -12,7 +19,7 @@ export type ResetPasswordInput = {
 };
 
 export const resetPasswordValidation = type({
-  phone: 'string.phone',
+  phone: phoneSchema,
   code: 'string | number',
   newPassword: passwordSchema,
   others: 'object?',
@@ -45,11 +52,12 @@ export const resetPasswordStep: AuthStepV2<
     const orm = await ctx.engine.getOrm();
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await checkPasswordSafety(newPassword);
+    const isSafe = await haveIbeenPawned(newPassword);
     if (!isSafe) {
       return {
         success: false,
-        message: 'Password has been found in data breaches. Please choose a stronger password.',
+        message:
+          'Password has been found in data breaches. Please choose a stronger password.',
         status: 'pwr',
         others,
       };
@@ -85,8 +93,10 @@ export const resetPasswordStep: AuthStepV2<
     }
 
     // Check if reset code has expired
-    if (phoneData.reset_code_expires_at && 
-        new Date() > new Date(phoneData.reset_code_expires_at)) {
+    if (
+      phoneData.reset_code_expires_at &&
+      new Date() > new Date(phoneData.reset_code_expires_at as string)
+    ) {
       return {
         success: false,
         message: 'Reset code has expired',
@@ -97,7 +107,7 @@ export const resetPasswordStep: AuthStepV2<
 
     // Verify reset code using constant-time comparison
     const isValidCode = await verifyPasswordHash(
-      phoneData.reset_code,
+      phoneData.reset_code as string,
       String(code),
     );
 
@@ -114,7 +124,7 @@ export const resetPasswordStep: AuthStepV2<
     const newPasswordHash = await hashPassword(newPassword);
     await orm.updateMany('credentials', {
       where: (b) => b('subject_id', '=', identity.subject_id),
-      data: {
+      set: {
         password_hash: newPasswordHash,
         password_updated_at: new Date(),
       },
@@ -123,7 +133,7 @@ export const resetPasswordStep: AuthStepV2<
     // Clear reset code
     await orm.updateMany('phone_identities', {
       where: (b) => b('identity_id', '=', identity.id),
-      data: {
+      set: {
         reset_code: null,
         reset_code_expires_at: null,
       },

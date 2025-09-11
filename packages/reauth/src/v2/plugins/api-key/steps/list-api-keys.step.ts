@@ -26,10 +26,10 @@ export const listApiKeysStep: AuthStepV2<
   protocol: {
     http: {
       method: 'GET',
-      codes: { 
+      codes: {
         unauth: 401, // Not authenticated
-        su: 200,     // Success
-        ic: 400      // Invalid input
+        su: 200, // Success
+        ic: 400, // Invalid input
       },
       auth: true, // Requires authentication
     },
@@ -40,10 +40,22 @@ export const listApiKeysStep: AuthStepV2<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'data?': 'object', // Contains array of ApiKeyMetadata
+    'data?': type({
+      api_keys: type({
+        id: 'string',
+        name: 'string',
+        permissions: 'string[]',
+        scopes: 'string[]',
+        expires_at: 'Date',
+        is_active: 'boolean',
+        created_at: 'Date',
+        updated_at: 'Date',
+        last_used_at: 'Date',
+      }), // Contains array of ApiKeyMetadata
+    }),
     'others?': 'object',
   }),
-  
+
   async run(input, ctx) {
     const { token, include_inactive = false, others } = input;
     const orm = await ctx.engine.getOrm();
@@ -65,11 +77,11 @@ export const listApiKeysStep: AuthStepV2<
       // Build query conditions
       const whereConditions = (b: any) => {
         const conditions = [b('subject_id', '=', subjectId)];
-        
+
         if (!include_inactive) {
           conditions.push(b('is_active', '=', true));
         }
-        
+
         return conditions.length === 1 ? conditions[0] : b.and(...conditions);
       };
 
@@ -77,7 +89,8 @@ export const listApiKeysStep: AuthStepV2<
       const apiKeys = await orm.findMany('api_keys', {
         where: whereConditions,
         orderBy: [
-          { created_at: 'desc' }, // Most recent first
+          'created_at',
+          'desc', // Most recent first
         ],
       });
 

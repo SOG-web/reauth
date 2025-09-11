@@ -3,6 +3,7 @@ import type { AuthStepV2, AuthOutput } from '../../../types.v2';
 import { genCode } from '../utils';
 import type { PhonePasswordConfigV2 } from '../types';
 import { hashPassword } from '../../../../lib/password';
+import { phoneSchema } from '../../../../plugins/shared/validation';
 
 export type ResendVerifyPhoneInput = {
   phone: string;
@@ -10,7 +11,7 @@ export type ResendVerifyPhoneInput = {
 };
 
 export const resendVerifyPhoneValidation = type({
-  phone: 'string.phone',
+  phone: phoneSchema,
   others: 'object?',
 });
 
@@ -74,7 +75,7 @@ export const resendVerifyPhoneStep: AuthStepV2<
     const code = ctx.config.generateCode
       ? await ctx.config.generateCode(phone, { id: identity.subject_id })
       : genCode(ctx.config);
-    
+
     // Store hashed code and set expiry
     const hashedCode = await hashPassword(String(code));
     const ms = ctx.config?.verificationCodeExpiresIn ?? 30 * 60 * 1000;
@@ -95,7 +96,12 @@ export const resendVerifyPhoneStep: AuthStepV2<
     });
 
     // Send verification code
-    await ctx.config.sendCode({ id: identity.subject_id }, code, phone, 'verify');
+    await ctx.config.sendCode(
+      { id: identity.subject_id },
+      code,
+      phone,
+      'verify',
+    );
 
     return {
       success: true,

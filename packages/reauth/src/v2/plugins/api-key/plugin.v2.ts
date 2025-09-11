@@ -30,7 +30,8 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
     // Register background cleanup tasks
     const config = this.config || {};
     if (config.cleanupEnabled !== false) {
-      const cleanupIntervalMs = (config.cleanupIntervalMinutes || 60) * 60 * 1000; // Default 1 hour
+      const cleanupIntervalMs =
+        (config.cleanupIntervalMinutes || 60) * 60 * 1000; // Default 1 hour
 
       // Cleanup task for expired API keys
       if (config.cleanupExpiredKeys !== false) {
@@ -50,7 +51,9 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
               return {
                 cleaned: 0,
                 expiredKeysDisabled: 0,
-                errors: [`Key cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
+                errors: [
+                  `Key cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+                ],
               };
             }
           },
@@ -66,7 +69,10 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
           enabled: true,
           runner: async (orm, pluginConfig) => {
             try {
-              const result = await cleanupOldUsageLogs(orm, pluginConfig.cleanupUsageOlderThanDays);
+              const result = await cleanupOldUsageLogs(
+                orm,
+                pluginConfig.cleanupUsageOlderThanDays,
+              );
               return {
                 cleaned: result,
                 usageLogsDeleted: result,
@@ -75,7 +81,9 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
               return {
                 cleaned: 0,
                 usageLogsDeleted: 0,
-                errors: [`Usage cleanup failed: ${error instanceof Error ? error.message : String(error)}`],
+                errors: [
+                  `Usage cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+                ],
               };
             }
           },
@@ -112,52 +120,60 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
 };
 
 // Export a configured plugin creator that validates config at construction time
-const apiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = createAuthPluginV2<ApiKeyConfigV2>(
-  baseApiKeyPluginV2,
-  {
+const apiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> =
+  createAuthPluginV2<ApiKeyConfigV2>(baseApiKeyPluginV2, {
     validateConfig: (config) => {
       const errs: string[] = [];
-      
+
       if (config.keyLength && config.keyLength < 16) {
         errs.push('keyLength must be at least 16 characters for security');
       }
-      
+
       if (config.maxKeysPerUser && config.maxKeysPerUser < 1) {
         errs.push('maxKeysPerUser must be at least 1');
       }
-      
+
       if (config.defaultTtlDays && config.defaultTtlDays < 1) {
         errs.push('defaultTtlDays must be at least 1 day');
       }
-      
+
       if (config.rateLimitPerMinute && config.rateLimitPerMinute < 1) {
         errs.push('rateLimitPerMinute must be at least 1');
       }
-      
-      if (config.cleanupUsageOlderThanDays && config.cleanupUsageOlderThanDays < 1) {
+
+      if (
+        config.cleanupUsageOlderThanDays &&
+        config.cleanupUsageOlderThanDays < 1
+      ) {
         errs.push('cleanupUsageOlderThanDays must be at least 1 day');
       }
-      
+
       // Validate cleanup configuration
       if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
         errs.push('cleanupIntervalMinutes must be at least 1 minute');
       }
-      
-      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes > 1440) {
-        errs.push('cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)');
+
+      if (
+        config.cleanupIntervalMinutes &&
+        config.cleanupIntervalMinutes > 1440
+      ) {
+        errs.push(
+          'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
+        );
       }
-      
+
       if (config.cleanupBatchSize && config.cleanupBatchSize < 1) {
         errs.push('cleanupBatchSize must be at least 1');
       }
-      
+
       if (config.cleanupBatchSize && config.cleanupBatchSize > 1000) {
-        errs.push('cleanupBatchSize cannot exceed 1000 for performance reasons');
+        errs.push(
+          'cleanupBatchSize cannot exceed 1000 for performance reasons',
+        );
       }
-      
+
       return errs.length ? errs : null;
     },
-  },
-);
+  });
 
 export default apiKeyPluginV2;

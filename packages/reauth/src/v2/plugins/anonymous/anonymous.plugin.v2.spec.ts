@@ -21,7 +21,7 @@ describe('Anonymous Plugin V2', () => {
   });
 
   it('should have all required steps', () => {
-    const stepNames = (anonymousPluginV2.steps || []).map(step => step.name);
+    const stepNames = (anonymousPluginV2.steps || []).map((step) => step.name);
     expect(stepNames).toContain('create-guest');
     expect(stepNames).toContain('extend-guest');
     expect(stepNames).toContain('convert-guest');
@@ -44,26 +44,26 @@ describe('Anonymous Plugin V2', () => {
 
   it('should have proper step protocol definitions', () => {
     const steps = anonymousPluginV2.steps || [];
-    
-    const createGuestStep = steps.find(s => s.name === 'create-guest');
+
+    const createGuestStep = steps.find((s) => s.name === 'create-guest');
     expect(createGuestStep?.protocol?.http?.method).toBe('POST');
     expect(createGuestStep?.protocol?.http?.codes).toBeDefined();
 
-    const extendGuestStep = steps.find(s => s.name === 'extend-guest');
+    const extendGuestStep = steps.find((s) => s.name === 'extend-guest');
     expect(extendGuestStep?.protocol?.http?.method).toBe('POST');
     expect(extendGuestStep?.protocol?.http?.auth).toBe(true);
 
-    const convertGuestStep = steps.find(s => s.name === 'convert-guest');
+    const convertGuestStep = steps.find((s) => s.name === 'convert-guest');
     expect(convertGuestStep?.protocol?.http?.method).toBe('POST');
     expect(convertGuestStep?.protocol?.http?.auth).toBe(true);
 
-    const cleanupStep = steps.find(s => s.name === 'cleanup-expired');
+    const cleanupStep = steps.find((s) => s.name === 'cleanup-expired');
     expect(cleanupStep?.protocol?.http?.method).toBe('POST');
   });
 
   it('should have arktype validation schemas for all steps', () => {
     const steps = anonymousPluginV2.steps || [];
-    
+
     for (const step of steps) {
       expect(step.validationSchema).toBeDefined();
       expect(step.outputs).toBeDefined();
@@ -74,7 +74,7 @@ describe('Anonymous Plugin V2', () => {
 
   it('should have input and output definitions for introspection', () => {
     const steps = anonymousPluginV2.steps || [];
-    
+
     for (const step of steps) {
       expect(step.inputs).toBeDefined();
       expect(Array.isArray(step.inputs)).toBe(true);
