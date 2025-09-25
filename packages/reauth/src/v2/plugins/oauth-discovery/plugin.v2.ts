@@ -58,6 +58,11 @@ export const baseOAuthDiscoveryPluginV2: AuthPluginV2<OAuthDiscoveryConfigV2> =
       getOAuthDiscoveryMetadataStep,
       getOAuthProtectedResourceMetadataStep,
     ],
+    async getProfile(_subjectId, _ctx) {
+      // OAuth Discovery plugin is stateless and serves metadata only.
+      // No user/subject-bound data is stored here.
+      return {};
+    },
   };
 
 /**

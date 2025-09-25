@@ -3,22 +3,23 @@
  * Implements OAuth 2.0 Token Revocation as per RFC 7009
  */
 
-import { type, string } from 'arktype';
+import { type } from 'arktype';
 import { createStepV2 } from '../../../utils/create-step.v2';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OIDCProviderConfigV2 } from '../types';
 import { hashToken } from '../utils';
 
 // Input schema for token revocation request
 const RevokeTokenInput = type({
-  token: string,
-  tokenTypeHint: string.optional(),
-  clientId: string,
-  clientSecret: string.optional(),
+  token: 'string',
+  tokenTypeHint: 'string?',
+  clientId: 'string',
+  clientSecret: 'string?',
 });
 
 // Output schema for token revocation response
 const RevokeTokenOutput = type({
-  success: 'true',
+  success: 'boolean',
   status: '"token_revoked" | "invalid_client" | "unsupported_token_type" | "server_error"',
   message: 'string',
 });
@@ -39,7 +40,12 @@ const RevokeTokenOutput = type({
  * });
  * ```
  */
-export const revokeTokenStep = createStepV2({
+export const revokeTokenStep: AuthStepV2<
+  typeof RevokeTokenInput.infer,
+  typeof RevokeTokenOutput.infer,
+  OIDCProviderConfigV2,
+  OrmLike
+> = createStepV2({
   name: 'revoke-token',
   
   inputs: RevokeTokenInput,
@@ -127,7 +133,7 @@ export const revokeTokenStep = createStepV2({
         });
 
         if (accessToken) {
-          await orm.update('oidc_access_tokens', {
+          await orm.updateMany('oidc_access_tokens', {
             where: (b: any) => b('id', '=', accessToken.id),
             set: { revoked_at: now },
           });
@@ -145,14 +151,14 @@ export const revokeTokenStep = createStepV2({
 
         if (refreshToken) {
           // Revoke the refresh token
-          await orm.update('oidc_refresh_tokens', {
+          await orm.updateMany('oidc_refresh_tokens', {
             where: (b: any) => b('id', '=', refreshToken.id),
             set: { revoked_at: now },
           });
 
           // Also revoke associated access token if it exists
           if (refreshToken.access_token_id) {
-            await orm.update('oidc_access_tokens', {
+            await orm.updateMany('oidc_access_tokens', {
               where: (b: any) => b('id', '=', refreshToken.access_token_id)
                 .and(b('revoked_at', 'is', null)),
               set: { revoked_at: now },

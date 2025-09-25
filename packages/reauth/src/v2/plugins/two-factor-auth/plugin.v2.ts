@@ -43,7 +43,7 @@ export const baseTwoFactorAuthPluginV2: AuthPluginV2<TwoFactorAuthConfigV2> = {
     });
 
     // Register background cleanup task for expired 2FA data
-    const config = this.config || {};
+    const config = (this.config || {}) as TwoFactorAuthConfigV2;
     if (config.cleanup?.enabled !== false) {
       const cleanupIntervalMs = (config.cleanup?.intervalMinutes || 60) * 60 * 1000; // Default 1 hour
 
@@ -161,6 +161,57 @@ export const baseTwoFactorAuthPluginV2: AuthPluginV2<TwoFactorAuthConfigV2> = {
       'codeHash',
       'publicKey',
     ];
+  },
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    // two_factor_methods uses user_id to reference subject
+    const methods = await orm.findMany('two_factor_methods', {
+      where: (b: any) => b('user_id', '=', subjectId),
+      orderBy: [['created_at', 'desc']],
+    });
+
+    const mask = (method: any): string | undefined => {
+      if (method.method_type === 'totp') return 'Authenticator App';
+      if (method.method_type === 'sms' && method.phone_number_encrypted) {
+        const phone = String(method.phone_number_encrypted);
+        return phone.length > 4 ? `***-***-${phone.slice(-4)}` : '***-***';
+      }
+      if (method.method_type === 'email' && method.email_encrypted) {
+        const email = String(method.email_encrypted);
+        const at = email.indexOf('@');
+        if (at > 0) {
+          const local = email.slice(0, at);
+          const domain = email.slice(at + 1);
+          const maskedLocal = local.length > 2 ? `${local[0]}***${local.slice(-1)}` : '***';
+          return `${maskedLocal}@${domain}`;
+        }
+        return '***@***';
+      }
+      if (method.method_type === 'hardware') {
+        return `Security Key (${method.name || 'Unnamed'})`;
+      }
+      return undefined;
+    };
+
+    const items = (methods || []).map((m: any) => ({
+      id: String(m.id),
+      type: String(m.method_type),
+      is_primary: Boolean(m.is_primary),
+      is_verified: Boolean(m.is_verified),
+      masked_identifier: mask(m),
+      created_at: m?.created_at
+        ? (m.created_at instanceof Date
+            ? m.created_at.toISOString()
+            : new Date(String(m.created_at)).toISOString())
+        : undefined,
+      last_used_at: m?.last_used_at
+        ? (m.last_used_at instanceof Date
+            ? m.last_used_at.toISOString()
+            : new Date(String(m.last_used_at)).toISOString())
+        : undefined,
+    }));
+
+    return { methods: items };
   },
 };
 

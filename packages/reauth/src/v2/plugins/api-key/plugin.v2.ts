@@ -116,6 +116,51 @@ export const baseApiKeyPluginV2: AuthPluginV2<ApiKeyConfigV2> = {
   getSensitiveFields() {
     return ['key_hash']; // Never expose hashed keys
   },
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    const keys = await orm.findMany('api_keys', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+      orderBy: [['created_at', 'desc']],
+    });
+
+    const items = (keys || []).map((k: any) => {
+      const expiresAt = k?.expires_at
+        ? (k.expires_at instanceof Date
+            ? k.expires_at.toISOString()
+            : new Date(String(k.expires_at)).toISOString())
+        : null;
+      const createdAt = k?.created_at
+        ? (k.created_at instanceof Date
+            ? k.created_at.toISOString()
+            : new Date(String(k.created_at)).toISOString())
+        : undefined;
+      const updatedAt = k?.updated_at
+        ? (k.updated_at instanceof Date
+            ? k.updated_at.toISOString()
+            : new Date(String(k.updated_at)).toISOString())
+        : undefined;
+      const lastUsedAt = k?.last_used_at
+        ? (k.last_used_at instanceof Date
+            ? k.last_used_at.toISOString()
+            : new Date(String(k.last_used_at)).toISOString())
+        : null;
+      return {
+        id: String(k.id),
+        name: String(k.name ?? ''),
+        permissions: Array.isArray(k.permissions)
+          ? k.permissions.map((p: any) => String(p))
+          : [],
+        scopes: Array.isArray(k.scopes) ? k.scopes.map((s: any) => String(s)) : [],
+        expires_at: expiresAt,
+        is_active: Boolean(k.is_active),
+        created_at: createdAt,
+        updated_at: updatedAt,
+        last_used_at: lastUsedAt,
+      };
+    });
+
+    return { api_keys: items };
+  },
   // Background cleanup now handles expired keys and usage logs via SimpleCleanupScheduler
 };
 

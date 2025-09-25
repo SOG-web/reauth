@@ -1,4 +1,4 @@
-import type { AuthPluginV2, OrmLike } from '../../types.v2';
+import type { AuthPluginV2, OrmLike, SessionServiceV2 } from '../../types.v2';
 import type { SessionConfigV2 } from './types';
 export type { SessionConfigV2 } from './types';
 export { sessionSchemaV2 } from './schema.v2';
@@ -149,6 +149,27 @@ export const baseSessionPluginV2: AuthPluginV2<SessionConfigV2> = {
     getSessionStep,
   ],
   // Background cleanup now handles expired session removal via SimpleCleanupScheduler
+  async getProfile(subjectId, ctx) {
+    const sessionService = ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
+    const collect = async (subjectType: string) => {
+      if (!sessionService?.listSessionsForSubject) return [] as any[];
+      const rows = await sessionService.listSessionsForSubject(subjectType, subjectId);
+      return rows.map((s: any) => ({
+        sessionId: String(s.sessionId),
+        token: s.token ? s.token.substring(0, 8) + '...' : undefined,
+        createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : new Date(String(s.createdAt)).toISOString(),
+        expiresAt: s.expiresAt ? (s.expiresAt instanceof Date ? s.expiresAt.toISOString() : new Date(String(s.expiresAt)).toISOString()) : undefined,
+        deviceInfo: s.deviceInfo,
+        metadata: s.metadata,
+      }));
+    };
+
+    const subjSessions = await collect('subject');
+    const guestSessions = await collect('guest');
+
+    const sessions = [...subjSessions, ...guestSessions];
+    return { sessions, totalSessions: sessions.length };
+  },
 };
 
 // Export a configured plugin creator that validates config at construction time.

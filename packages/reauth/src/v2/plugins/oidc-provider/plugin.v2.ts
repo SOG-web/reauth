@@ -282,7 +282,83 @@ export const baseOIDCProviderPluginV2: AuthPluginV2<OIDCProviderConfigV2> = {
   ],
 
   // Additional configuration and validation will be handled by createOIDCProviderPlugin
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    // Access tokens
+    const access = await orm.findMany('oidc_access_tokens', {
+      where: (b: any) => b('user_id', '=', subjectId),
+      orderBy: [['created_at', 'desc']],
+      limit: 10,
+    });
+    const access_tokens = (access || []).map((t: any) => ({
+      id: String(t.id ?? ''),
+      client_id: String(t.client_id ?? ''),
+      scopes: typeof t.scopes === 'string' ? safeParseScopes(t.scopes) : [],
+      token_type: String(t.token_type ?? 'Bearer'),
+      created_at: toIso(t.created_at),
+      expires_at: toIso(t.expires_at),
+      revoked_at: toIso(t.revoked_at),
+    }));
+
+    // Refresh tokens
+    const refresh = await orm.findMany('oidc_refresh_tokens', {
+      where: (b: any) => b('user_id', '=', subjectId),
+      orderBy: [['created_at', 'desc']],
+      limit: 10,
+    });
+    const refresh_tokens = (refresh || []).map((t: any) => ({
+      id: String(t.id ?? ''),
+      client_id: String(t.client_id ?? ''),
+      scopes: typeof t.scopes === 'string' ? safeParseScopes(t.scopes) : [],
+      created_at: toIso(t.created_at),
+      expires_at: toIso(t.expires_at),
+      revoked_at: toIso(t.revoked_at),
+    }));
+
+    // ID tokens (audit)
+    const idt = await orm.findMany('oidc_id_tokens', {
+      where: (b: any) => b('user_id', '=', subjectId),
+      orderBy: [['issued_at', 'desc']],
+      limit: 10,
+    });
+    const id_tokens = (idt || []).map((t: any) => ({
+      id: String(t.id ?? ''),
+      jti: String(t.jti ?? ''),
+      client_id: String(t.client_id ?? ''),
+      audience: typeof t.audience === 'string' ? safeParseScopes(t.audience) : [],
+      scopes: typeof t.scopes === 'string' ? safeParseScopes(t.scopes) : [],
+      issued_at: toIso(t.issued_at),
+      expires_at: toIso(t.expires_at),
+      auth_time: toIso(t.auth_time),
+      nonce: t.nonce ?? undefined,
+    }));
+
+    return {
+      access_tokens,
+      refresh_tokens,
+      id_tokens,
+      counts: {
+        access: Array.isArray(access) ? access.length : 0,
+        refresh: Array.isArray(refresh) ? refresh.length : 0,
+        id: Array.isArray(idt) ? idt.length : 0,
+      },
+    };
+  },
 };
+
+function toIso(v: any): string | undefined {
+  if (!v) return undefined;
+  return v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString();
+}
+
+function safeParseScopes(raw: any): string[] {
+  try {
+    const val = JSON.parse(String(raw));
+    return Array.isArray(val) ? val.map((s) => String(s)) : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Create OIDC Provider plugin with custom configuration

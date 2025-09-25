@@ -1,7 +1,7 @@
 import { type } from 'arktype';
-import type { AuthStepV2, OrmLike } from '../../../../types.v2';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OAuthConfigV2 } from '../types';
-import { 
+import {
   validateOAuthState, 
   exchangeCodeForTokens, 
   fetchOAuthUserProfile,
@@ -11,6 +11,24 @@ import {
   hashOAuthToken,
 } from '../utils';
 
+// Define schemas explicitly to avoid circular type references
+const callbackOAuthInputSchema = type({
+  provider: 'string',
+  code: 'string',
+  state: 'string',
+  'error?': 'string',
+  'error_description?': 'string',
+});
+
+const callbackOAuthOutputSchema = type({
+  success: 'boolean',
+  message: 'string',
+  status: 'string',
+  'token?': 'string',
+  'subject?': 'unknown',
+  'redirect?': 'string',
+});
+
 export const callbackOAuthStep: AuthStepV2<
   typeof callbackOAuthInputSchema.infer,
   typeof callbackOAuthOutputSchema.infer,
@@ -18,29 +36,27 @@ export const callbackOAuthStep: AuthStepV2<
   OrmLike
 > = {
   name: 'callback-oauth',
-  inputs: type({
-    provider: 'string',
-    code: 'string',
-    state: 'string',
-    'error?': 'string',
-    'error_description?': 'string',
-  }),
-  outputs: type({
-    success: 'boolean',
-    message: 'string',
-    status: 'string',
-    'token?': 'string',
-    'subject?': 'unknown',
-    'redirect?': 'string',
-  }),
+  validationSchema: callbackOAuthInputSchema,
+  inputs: ['provider', 'code', 'state', 'error', 'error_description'],
+  outputs: callbackOAuthOutputSchema,
   protocol: {
-    type: 'oauth-callback',
-    description: 'Handle OAuth provider callback',
-    method: 'GET',
-    path: '/oauth/callback',
+    http: {
+      method: 'GET',
+      codes: {
+        oauth_success: 200,
+        oauth_provider_error: 400,
+        invalid_state: 400,
+        provider_not_found: 404,
+        oauth_callback_failed: 500,
+      },
+      auth: false,
+    },
   },
   
-  async handler(input, { orm, config, container }) {
+  async run(input, ctx) {
+    const orm = await ctx.engine.getOrm();
+    const config = ctx.config;
+    const container = ctx.container;
     const { provider, code, state, error, error_description } = input;
     
     try {
@@ -98,22 +114,22 @@ export const callbackOAuthStep: AuthStepV2<
 
       if (existingProfile) {
         // Existing user - update profile and tokens
-        subjectId = existingProfile.subject_id;
-        await storeOAuthProfile(orm, subjectId, oauthProvider.id, userProfile.id, userProfile);
+        subjectId = String(existingProfile.subject_id);
+        await storeOAuthProfile(orm, subjectId, String(oauthProvider.id), userProfile.id, userProfile);
       } else {
         // New user - create subject first
-        const newSubject = await orm.insert('subjects', {
+        const newSubject = await orm.create('subjects', {
           type: 'user',
           created_at: new Date(),
           updated_at: new Date(),
         });
-        subjectId = newSubject.id;
+        subjectId = String(newSubject.id);
         
-        await storeOAuthProfile(orm, subjectId, oauthProvider.id, userProfile.id, userProfile);
+        await storeOAuthProfile(orm, subjectId, String(oauthProvider.id), userProfile.id, userProfile);
       }
 
       // Store OAuth tokens
-      await storeOAuthTokens(orm, subjectId, oauthProvider.id, tokenResponse);
+      await storeOAuthTokens(orm, subjectId, String(oauthProvider.id), tokenResponse);
 
       // Get subject for return
       const subject = await orm.findFirst('subjects', {
@@ -121,7 +137,7 @@ export const callbackOAuthStep: AuthStepV2<
       });
 
       // Create session token
-      const sessionService = container.resolve('sessionService');
+      const sessionService: any = container.resolve('sessionService');
       const sessionTtl = config?.sessionTtlSeconds || 24 * 60 * 60; // Default 24 hours
       const token = await sessionService.createSession('subject', subjectId, sessionTtl);
 
@@ -143,6 +159,3 @@ export const callbackOAuthStep: AuthStepV2<
     }
   },
 };
-
-const callbackOAuthInputSchema = callbackOAuthStep.inputs;
-const callbackOAuthOutputSchema = callbackOAuthStep.outputs;

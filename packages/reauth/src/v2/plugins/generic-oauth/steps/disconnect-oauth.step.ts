@@ -25,14 +25,26 @@ export const disconnectOAuthStep: AuthStepV2<
   validationSchema: disconnectOAuthInputSchema,
   inputs: ['connectionId', 'revokeTokens'],
   outputs: disconnectOAuthOutputSchema,
-  protocol: 'generic-oauth.disconnect-oauth.v1',
+  protocol: {
+    http: {
+      method: 'DELETE',
+      codes: {
+        disconnected: 200,
+        connection_not_found: 404,
+        provider_not_found: 404,
+        disconnect_error: 500,
+      },
+      auth: false,
+    },
+  },
   
   async run(input, ctx) {
     const { connectionId, revokeTokens = true } = input;
+    const orm = await ctx.engine.getOrm();
     
     try {
       // Get OAuth connection
-      const connection = await ctx.orm.findFirst('generic_oauth_connections', {
+      const connection = await orm.findFirst('generic_oauth_connections', {
         where: (b: any) => b('id', '=', connectionId),
       });
 
@@ -49,13 +61,14 @@ export const disconnectOAuthStep: AuthStepV2<
 
       // Revoke tokens with provider if requested and configured
       if (revokeTokens && ctx.config?.tokens?.revokeOnDisconnect !== false) {
-        const providerConfig = ctx.config?.providers?.[connection.provider_id];
+        const providerKey = String(connection.provider_id);
+        const providerConfig = (ctx.config?.providers as any)?.[providerKey];
         
         if (providerConfig && connection.access_token_encrypted) {
           try {
-            const accessToken = await TokenEncryption.decrypt(connection.access_token_encrypted);
+            const accessToken = await TokenEncryption.decrypt(String(connection.access_token_encrypted));
             const refreshToken = connection.refresh_token_encrypted 
-              ? await TokenEncryption.decrypt(connection.refresh_token_encrypted)
+              ? await TokenEncryption.decrypt(String(connection.refresh_token_encrypted))
               : undefined;
 
             const revocationResult = await simulateTokenRevocation(
@@ -76,12 +89,12 @@ export const disconnectOAuthStep: AuthStepV2<
       }
 
       // Remove the OAuth connection from database
-      await ctx.orm.delete('generic_oauth_connections', {
+      await orm.deleteMany('generic_oauth_connections', {
         where: (b: any) => b('id', '=', connectionId),
       });
 
       // Clean up any related authorization sessions
-      await ctx.orm.delete('generic_oauth_authorization_sessions', {
+      await orm.deleteMany('generic_oauth_authorization_sessions', {
         where: (b: any) => b('provider_id', '=', connection.provider_id)
           .and(b('completed_at', 'is not', null)),
       });

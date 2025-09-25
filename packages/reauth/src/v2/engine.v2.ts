@@ -225,6 +225,7 @@ export class ReAuthEngineV2 {
         executeStep: (pluginName: string, stepName: string, input: unknown) =>
           this.executeStep(pluginName, stepName, input),
         getPlugin: (name: string) => this.getPlugin(name),
+        getUnifiedProfile: (subjectId: string) => this.getUnifiedProfile(subjectId),
       },
       config: plugin.config as unknown,
     };
@@ -401,6 +402,40 @@ export class ReAuthEngineV2 {
     input: AuthInput,
   ): Promise<AuthOutput> {
     return (await this.executeStep(pluginName, stepName, input)) as AuthOutput;
+  }
+
+  // Aggregate profile information across all plugins that implement getProfile
+  async getUnifiedProfile(subjectId: string): Promise<{
+    subjectId: string;
+    plugins: Record<string, any>;
+    generatedAt: string;
+  }> {
+    const orm = await this.getOrm();
+    const results = await Promise.all(
+      this.plugins.map(async (plugin) => {
+        if (typeof (plugin as any).getProfile !== 'function') return [plugin.name, undefined] as const;
+        try {
+          const data = await (plugin as any).getProfile(subjectId, {
+            orm,
+            engine: this as any,
+            container: this.container,
+            config: plugin.config,
+          });
+          return [plugin.name, data] as const;
+        } catch (err) {
+          return [plugin.name, { error: err instanceof Error ? err.message : `Unknown error: ${String(err)}` }] as const;
+        }
+      }),
+    );
+    const pluginsData: Record<string, any> = {};
+    for (const [name, data] of results) {
+      if (typeof data !== 'undefined') pluginsData[name] = data;
+    }
+    return {
+      subjectId,
+      plugins: pluginsData,
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   getIntrospectionData(): {

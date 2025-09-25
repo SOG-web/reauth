@@ -51,6 +51,10 @@ export const baseMcpPluginV2: AuthPluginV2<MCPConfigV2> = {
     revokeMcpSessionStep,
     auditMcpAccessStep,
   ],
+  async getProfile(_subjectId, _ctx) {
+    // MCP is server-centric; no per-subject data is stored by this plugin.
+    return {};
+  },
   rootHooks: {
     // Opportunistic cleanup for expired MCP sessions (acts as a soft TTL)
     async before(_input, ctx) {

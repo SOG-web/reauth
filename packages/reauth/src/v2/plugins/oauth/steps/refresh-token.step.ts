@@ -1,7 +1,12 @@
 import { type } from 'arktype';
-import type { AuthStepV2, OrmLike } from '../../../../types.v2';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OAuthConfigV2 } from '../types';
-import { getOAuthProvider, refreshOAuthToken, storeOAuthTokens, hashOAuthToken } from '../utils';
+import {
+  getOAuthProvider,
+  refreshOAuthToken,
+  storeOAuthTokens,
+  hashOAuthToken,
+} from '../utils';
 
 export const refreshTokenStep: AuthStepV2<
   typeof refreshTokenInputSchema.infer,
@@ -28,10 +33,10 @@ export const refreshTokenStep: AuthStepV2<
     path: '/oauth/refresh',
     requiresAuth: true,
   },
-  
+
   async handler(input, { orm, config, container }) {
     const { provider, token } = input;
-    
+
     try {
       // Verify user is authenticated
       if (!token) {
@@ -67,8 +72,10 @@ export const refreshTokenStep: AuthStepV2<
 
       // Get stored OAuth tokens for this user and provider
       const storedToken = await orm.findFirst('oauth_tokens', {
-        where: (b: any) => b('subject_id', '=', currentSubjectId)
-          .and(b('provider_id', '=', oauthProvider.id)),
+        where: (b: any) =>
+          b('subject_id', '=', currentSubjectId).and(
+            b('provider_id', '=', oauthProvider.id),
+          ),
       });
 
       if (!storedToken) {
@@ -110,13 +117,18 @@ export const refreshTokenStep: AuthStepV2<
           oauthProvider.token_url,
           oauthProvider.client_id,
           oauthProvider.client_secret, // This should be decrypted
-          refreshToken
+          refreshToken,
         );
 
         // Store the new tokens
-        await storeOAuthTokens(orm, currentSubjectId, oauthProvider.id, tokenResponse);
+        await storeOAuthTokens(
+          orm,
+          currentSubjectId,
+          oauthProvider.id,
+          tokenResponse,
+        );
 
-        const expiresAt = tokenResponse.expires_in 
+        const expiresAt = tokenResponse.expires_in
           ? new Date(Date.now() + tokenResponse.expires_in * 1000).toISOString()
           : undefined;
 
@@ -130,9 +142,9 @@ export const refreshTokenStep: AuthStepV2<
       } catch (refreshError) {
         // If refresh fails, the refresh token might be expired or invalid
         console.error('Token refresh failed:', refreshError);
-        
+
         // Clean up invalid tokens
-        await orm.delete('oauth_tokens', {
+        await orm.deleteMany('oauth_tokens', {
           where: (b: any) => b('id', '=', storedToken.id),
         });
 

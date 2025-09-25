@@ -1,36 +1,55 @@
 import { type } from 'arktype';
-import type { AuthStepV2, OrmLike } from '../../../../types.v2';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OAuthConfigV2 } from '../types';
 import { getOAuthProvider, fetchOAuthUserProfile, storeOAuthProfile } from '../utils';
 
+// Explicit schemas to avoid circular references
+const GetProfileInput = type({
+  provider: 'string',
+  'token?': 'string',
+  'sync?': 'boolean',
+});
+
+const GetProfileOutput = type({
+  success: 'boolean',
+  message: 'string',
+  status: 'string',
+  'profile?': 'unknown',
+  'synced?': 'boolean',
+});
+
 export const getProfileStep: AuthStepV2<
-  typeof getProfileInputSchema.infer,
-  typeof getProfileOutputSchema.infer,
+  typeof GetProfileInput.infer,
+  typeof GetProfileOutput.infer,
   OAuthConfigV2,
   OrmLike
 > = {
   name: 'get-profile',
-  inputs: type({
-    provider: 'string',
-    'token?': 'string',
-    'sync?': 'boolean', // Whether to sync/update the stored profile
-  }),
-  outputs: type({
-    success: 'boolean',
-    message: 'string',
-    status: 'string',
-    'profile?': 'unknown',
-    'synced?': 'boolean',
-  }),
+  validationSchema: GetProfileInput,
+  inputs: ['provider', 'token', 'sync'],
+  outputs: GetProfileOutput,
   protocol: {
-    type: 'oauth-profile',
-    description: 'Fetch user profile from OAuth provider',
-    method: 'GET',
-    path: '/oauth/profile',
-    requiresAuth: true,
+    http: {
+      method: 'GET',
+      codes: {
+        profile_retrieved: 200,
+        profile_synced: 200,
+        authentication_required: 401,
+        invalid_session: 401,
+        provider_not_found: 404,
+        token_expired: 400,
+        token_invalid: 401,
+        profile_sync_failed: 502,
+        profile_retrieval_failed: 500,
+      },
+      auth: true,
+    },
   },
   
-  async handler(input, { orm, config, container }) {
+  async run(input, ctx) {
+    const orm = await ctx.engine.getOrm();
+    const config = ctx.config;
+    const container = ctx.container;
     const { provider, token, sync = false } = input;
     
     try {
@@ -44,7 +63,7 @@ export const getProfileStep: AuthStepV2<
       }
 
       // Verify session and get current user
-      const sessionService = container.resolve('sessionService');
+      const sessionService: any = container.resolve('sessionService');
       const sessionResult = await sessionService.verifySession(token);
       if (!sessionResult.subject) {
         return {
@@ -116,7 +135,7 @@ export const getProfileStep: AuthStepV2<
 
       // Check if token is expired
       const now = new Date();
-      if (storedToken.expires_at && new Date(storedToken.expires_at) <= now) {
+      if (storedToken.expires_at && new Date(String(storedToken.expires_at)) <= now) {
         return {
           success: false,
           message: `${provider} access token expired. Please refresh token first.`,
@@ -127,11 +146,11 @@ export const getProfileStep: AuthStepV2<
       try {
         // Note: In a real implementation, you would decrypt the access token
         // For this example, we'll assume it's stored in a way that can be retrieved
-        const accessToken = storedToken.access_token_hash; // This should be decrypted
+        const accessToken = String(storedToken.access_token_hash || ''); // This should be decrypted
 
         // Fetch fresh profile from provider
         const freshProfile = await fetchOAuthUserProfile(
-          oauthProvider.user_info_url,
+          String(oauthProvider.user_info_url),
           accessToken
         );
 
@@ -160,10 +179,11 @@ export const getProfileStep: AuthStepV2<
           synced: true,
         };
       } catch (fetchError) {
-        console.error('Profile fetch error:', fetchError);
+        const errMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        console.error('Profile fetch error:', errMsg);
         
         // If fetching fails due to invalid token, suggest refresh
-        if (fetchError.message.includes('401') || fetchError.message.includes('Unauthorized')) {
+        if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
           return {
             success: false,
             message: `${provider} access token invalid. Please refresh token.`,

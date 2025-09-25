@@ -3,48 +3,49 @@
  * Implements OAuth 2.0 token endpoint for authorization code exchange
  */
 
-import { type, string } from 'arktype';
+import { type } from 'arktype';
 import { createStepV2 } from '../../../utils/create-step.v2';
 import type { OIDCProviderConfigV2 } from '../types';
-import { 
-  generateAccessToken, 
+import {
+  generateAccessToken,
   generateRefreshToken,
   hashToken,
   calculateExpirationDate,
   validatePkceChallenge,
   generateSecureRandom,
-  createIdTokenClaims 
+  createIdTokenClaims,
 } from '../utils';
 
 // Input schema for token exchange request
 const ExchangeAuthorizationCodeInput = type({
-  grantType: string,
-  clientId: string,
-  clientSecret: string.optional(),
-  code: string,
-  redirectUri: string,
-  codeVerifier: string.optional(),
+  grantType: 'string',
+  clientId: 'string',
+  clientSecret: 'string?',
+  code: 'string',
+  redirectUri: 'string',
+  codeVerifier: 'string?',
 });
 
 // Output schema for token response
 const ExchangeAuthorizationCodeOutput = type({
-  success: 'true',
-  status: '"tokens_issued" | "invalid_request" | "invalid_client" | "invalid_grant" | "unsupported_grant_type"',
+  success: 'boolean',
+  status:
+    '"tokens_issued" | "invalid_request" | "invalid_client" | "invalid_grant" | "unsupported_grant_type"',
   message: 'string',
-  accessToken: string.optional(),
-  tokenType: string.optional(),
-  expiresIn: 'number | undefined',
-  refreshToken: string.optional(),
-  idToken: string.optional(),
-  scope: string.optional(),
+  accessToken: 'string?',
+  tokenType: 'string?',
+  expiresIn: 'number?',
+  refreshToken: 'string?',
+  idToken: 'string?',
+  scope: 'string?',
 });
 
 /**
  * Exchange Authorization Code Step
- * 
+ *
  * Exchanges an authorization code for access token, refresh token, and ID token.
  * Implements the OAuth 2.0 token endpoint as defined in RFC 6749 with OIDC extensions.
- * 
+ *
  * @example
  * ```typescript
  * const result = await engine.executeStep('exchange-authorization-code', {
@@ -58,12 +59,12 @@ const ExchangeAuthorizationCodeOutput = type({
  */
 export const exchangeAuthorizationCodeStep = createStepV2({
   name: 'exchange-authorization-code',
-  
+
   inputs: ExchangeAuthorizationCodeInput,
   outputs: ExchangeAuthorizationCodeOutput,
-  
+
   protocol: 'oidc-provider.exchange-authorization-code.v1',
-  
+
   meta: {
     http: {
       method: 'POST',
@@ -87,7 +88,7 @@ export const exchangeAuthorizationCodeStep = createStepV2({
       redirectUri,
       codeVerifier,
     } = input;
-    
+
     const oidcConfig = config as OIDCProviderConfigV2;
 
     try {
@@ -135,8 +136,8 @@ export const exchangeAuthorizationCodeStep = createStepV2({
 
       // 3. Retrieve and validate authorization code
       const authCode = await orm.findFirst('oidc_authorization_codes', {
-        where: (b: any) => b('code', '=', code)
-          .and(b('client_id', '=', clientId)),
+        where: (b: any) =>
+          b('code', '=', code).and(b('client_id', '=', clientId)),
       });
 
       if (!authCode) {
@@ -185,7 +186,9 @@ export const exchangeAuthorizationCodeStep = createStepV2({
         }
 
         const method = authCode.code_challenge_method || 'S256';
-        if (!validatePkceChallenge(codeVerifier, authCode.code_challenge, method)) {
+        if (
+          !validatePkceChallenge(codeVerifier, authCode.code_challenge, method)
+        ) {
           return {
             success: false as const,
             status: 'invalid_grant' as const,
@@ -195,7 +198,7 @@ export const exchangeAuthorizationCodeStep = createStepV2({
       }
 
       // 5. Mark authorization code as used
-      await orm.update('oidc_authorization_codes', {
+      await orm.updateMany('oidc_authorization_codes', {
         where: (b: any) => b('id', '=', authCode.id),
         set: { used_at: new Date() },
       });
@@ -203,10 +206,12 @@ export const exchangeAuthorizationCodeStep = createStepV2({
       // 6. Generate access token
       const accessToken = generateAccessToken();
       const accessTokenHash = await hashToken(accessToken);
-      const accessTokenExpiresAt = calculateExpirationDate(oidcConfig.tokens.accessTokenTtl);
-      
+      const accessTokenExpiresAt = calculateExpirationDate(
+        oidcConfig.tokens.accessTokenTtl,
+      );
+
       const scopes = JSON.parse(authCode.scopes || '["openid"]');
-      
+
       const accessTokenRecord = {
         id: generateSecureRandom(16),
         token_hash: accessTokenHash,
@@ -219,15 +224,20 @@ export const exchangeAuthorizationCodeStep = createStepV2({
         created_at: new Date(),
       };
 
-      await orm.insertOne('oidc_access_tokens', accessTokenRecord);
+      await orm.create('oidc_access_tokens', accessTokenRecord);
 
       // 7. Generate refresh token (if enabled and requested)
       let refreshToken: string | undefined;
-      if (oidcConfig.features.refreshTokens && scopes.includes('offline_access')) {
+      if (
+        oidcConfig.features.refreshTokens &&
+        scopes.includes('offline_access')
+      ) {
         refreshToken = generateRefreshToken();
         const refreshTokenHash = await hashToken(refreshToken);
         const refreshTokenExpiresAt = new Date();
-        refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + oidcConfig.tokens.refreshTokenTtl);
+        refreshTokenExpiresAt.setDate(
+          refreshTokenExpiresAt.getDate() + oidcConfig.tokens.refreshTokenTtl,
+        );
 
         const refreshTokenRecord = {
           id: generateSecureRandom(16),
@@ -241,7 +251,7 @@ export const exchangeAuthorizationCodeStep = createStepV2({
           created_at: new Date(),
         };
 
-        await orm.insertOne('oidc_refresh_tokens', refreshTokenRecord);
+        await orm.create('oidc_refresh_tokens', refreshTokenRecord);
       }
 
       // 8. Generate ID token (if openid scope is present)
@@ -260,16 +270,19 @@ export const exchangeAuthorizationCodeStep = createStepV2({
             userProfile,
             scopes,
             authCode.nonce || undefined,
-            new Date(authCode.auth_time)
+            new Date(authCode.auth_time),
           );
 
           // In a real implementation, you would properly sign the JWT here
           // This is a simplified version for demonstration
-          const header = { alg: oidcConfig.tokens.signingAlgorithm, typ: 'JWT' };
+          const header = {
+            alg: oidcConfig.tokens.signingAlgorithm,
+            typ: 'JWT',
+          };
           const headerB64 = btoa(JSON.stringify(header));
           const payloadB64 = btoa(JSON.stringify(idTokenClaims));
           const signature = 'signature'; // Would be actual signature
-          
+
           idToken = `${headerB64}.${payloadB64}.${signature}`;
 
           // Store ID token for audit
@@ -278,7 +291,11 @@ export const exchangeAuthorizationCodeStep = createStepV2({
             jti: idTokenClaims.jti!,
             client_id: clientId,
             user_id: authCode.user_id,
-            audience: JSON.stringify(Array.isArray(idTokenClaims.aud) ? idTokenClaims.aud : [idTokenClaims.aud]),
+            audience: JSON.stringify(
+              Array.isArray(idTokenClaims.aud)
+                ? idTokenClaims.aud
+                : [idTokenClaims.aud],
+            ),
             scopes: JSON.stringify(scopes),
             auth_time: authCode.auth_time ? new Date(authCode.auth_time) : null,
             issued_at: new Date(),
@@ -286,7 +303,7 @@ export const exchangeAuthorizationCodeStep = createStepV2({
             nonce: authCode.nonce || null,
           };
 
-          await orm.insertOne('oidc_id_tokens', idTokenRecord);
+          await orm.create('oidc_id_tokens', idTokenRecord);
         }
       }
 
@@ -301,10 +318,10 @@ export const exchangeAuthorizationCodeStep = createStepV2({
         idToken,
         scope: scopes.join(' '),
       };
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
       return {
         success: false as const,
         status: 'invalid_request' as const,

@@ -151,6 +151,14 @@ export interface RootStepHooksV2<
   ) => Promise<void> | void;
 }
 
+// Context passed to plugin-level utility functions (non-HTTP, non-step)
+export interface PluginProfileContext<OrmT extends OrmLike = OrmLike> {
+  orm: OrmT;
+  engine: EngineApiV2<OrmT>;
+  container: AwilixContainer<ReAuthCradleV2Extension<OrmT>>;
+  config?: any;
+}
+
 export interface EngineInitApiV2<OrmT extends OrmLike = OrmLike>
   extends EngineApiV2<OrmT> {
   registerSessionResolver(
@@ -172,6 +180,8 @@ export interface AuthPluginV2<Cfg = unknown, OrmT extends OrmLike = OrmLike> {
   getSensitiveFields?: () => string[];
   config?: Cfg;
   rootHooks?: RootStepHooksV2<Cfg, OrmT>;
+  // Optional, non-HTTP function to fetch plugin-specific profile details for a subject
+  getProfile?: (subjectId: string, ctx: PluginProfileContext<OrmT>) => Promise<any> | any;
 }
 
 // ---------------- Hook Types (V2) ----------------
@@ -212,6 +222,10 @@ export interface EngineApiV2<OrmT extends OrmLike = OrmLike> {
   ): Promise<unknown>;
   // Optional convenience to check plugin presence
   getPlugin?(name: string): AuthPluginV2 | undefined;
+  // Optional universal profile aggregator
+  getUnifiedProfile?(
+    subjectId: string,
+  ): Promise<{ subjectId: string; plugins: Record<string, any>; generatedAt: string }>;
 }
 
 export interface ReAuthCradleV2Extension<OrmT extends OrmLike = OrmLike> {

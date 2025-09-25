@@ -45,14 +45,26 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
   inputs: ['sessionId', 'code', 'state', 'error', 'errorDescription'],
   outputs: completeOAuth2AuthorizationOutputSchema,
   protocol: {
-    type: 'generic-oauth.complete-oauth2-authorization.v1',
-    description: 'Complete OAuth 2.0 authorization',
-    method: 'POST',
-    path: '/oauth2/complete',
+    http: {
+      method: 'POST',
+      codes: {
+        authorization_completed: 200,
+        oauth_error: 400,
+        session_not_found: 404,
+        session_expired: 400,
+        invalid_state: 400,
+        provider_not_found: 404,
+        token_exchange_failed: 502,
+        profile_fetch_failed: 502,
+        authorization_completion_failed: 500,
+      },
+      auth: false,
+    },
   },
   
   async run(input, ctx) {
     const { sessionId, code, state, error, errorDescription } = input;
+    const orm = await ctx.engine.getOrm();
     
     try {
       // Handle OAuth error responses
@@ -65,7 +77,7 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
       }
 
       // Get authorization session
-      const session = await ctx.orm.findFirst('generic_oauth_authorization_sessions', {
+      const session = await orm.findFirst('generic_oauth_authorization_sessions', {
         where: (b: any) => b('id', '=', sessionId),
       });
 
@@ -78,7 +90,7 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
       }
 
       // Check session expiration
-      if (new Date() > new Date(session.expires_at)) {
+      if (new Date() > new Date(String(session.expires_at))) {
         return {
           success: false,
           message: 'Authorization session has expired',
@@ -87,7 +99,7 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
       }
 
       // Validate state parameter
-      if (!validateOAuthState(state, session.state)) {
+      if (!validateOAuthState(state, String(session.state))) {
         return {
           success: false,
           message: 'Invalid state parameter - possible CSRF attack',
@@ -96,7 +108,8 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
       }
 
       // Get provider configuration
-      const providerConfig = ctx.config?.providers?.[session.provider_id];
+      const providerKey = String(session.provider_id);
+      const providerConfig = (ctx.config?.providers as any)?.[providerKey];
       if (!providerConfig) {
         return {
           success: false,
@@ -143,22 +156,26 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
 
       // Create or update OAuth connection
       let connectionId: string;
-      const existingConnection = await ctx.orm.findFirst('generic_oauth_connections', {
+      const existingConnection = await orm.findFirst('generic_oauth_connections', {
         where: (b: any) => b('provider_id', '=', session.provider_id)
           .and(b('provider_user_id', '=', userProfile.id)),
       });
 
       if (existingConnection) {
         // Update existing connection
-        connectionId = existingConnection.id;
-        await ctx.orm.update('generic_oauth_connections', {
+        connectionId = String(existingConnection.id);
+        await orm.updateMany('generic_oauth_connections', {
           where: (b: any) => b('id', '=', connectionId),
           set: {
             access_token_encrypted: accessTokenEncrypted,
             refresh_token_encrypted: refreshTokenEncrypted,
             token_type: tokenExchangeResult.tokenType || 'Bearer',
             expires_at: tokenExchangeResult.expiresAt || null,
-            scopes: session.scopes || [],
+            scopes: Array.isArray(session.scopes)
+              ? (session.scopes as unknown[]).map((s) => String(s))
+              : (typeof session.scopes === 'string'
+                  ? ((): string[] => { try { const v = JSON.parse(session.scopes as unknown as string); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } })()
+                  : []),
             profile_data: userProfile,
             updated_at: new Date(),
             last_used_at: new Date(),
@@ -178,7 +195,7 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
           // This is simplified for the protocol-agnostic design
         }
 
-        await ctx.orm.insertOne('generic_oauth_connections', {
+        await orm.create('generic_oauth_connections', {
           id: connectionId,
           user_id: userId,
           provider_id: session.provider_id,
@@ -187,7 +204,11 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
           refresh_token_encrypted: refreshTokenEncrypted,
           token_type: tokenExchangeResult.tokenType || 'Bearer',
           expires_at: tokenExchangeResult.expiresAt || null,
-          scopes: session.scopes || [],
+          scopes: Array.isArray(session.scopes)
+            ? (session.scopes as unknown[]).map((s) => String(s))
+            : (typeof session.scopes === 'string'
+                ? ((): string[] => { try { const v = JSON.parse(session.scopes as unknown as string); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } })()
+                : []),
           profile_data: userProfile,
           created_at: new Date(),
           updated_at: new Date(),
@@ -196,12 +217,19 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
       }
 
       // Mark session as completed
-      await ctx.orm.update('generic_oauth_authorization_sessions', {
+      await orm.updateMany('generic_oauth_authorization_sessions', {
         where: (b: any) => b('id', '=', sessionId),
         set: {
           completed_at: new Date(),
         },
       });
+
+      // Normalize scopes for output
+      const outScopes: string[] = Array.isArray(session.scopes)
+        ? (session.scopes as unknown[]).map((s) => String(s))
+        : (typeof session.scopes === 'string'
+            ? ((): string[] => { try { const v = JSON.parse(session.scopes as unknown as string); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } })()
+            : []);
 
       return {
         success: true,
@@ -211,7 +239,7 @@ export const completeOAuth2AuthorizationStep: AuthStepV2<
         refreshToken: tokenExchangeResult.refreshToken,
         tokenType: tokenExchangeResult.tokenType,
         expiresIn: tokenExchangeResult.expiresIn,
-        scopes: session.scopes,
+        scopes: outScopes,
         userProfile,
         connectionId,
       };

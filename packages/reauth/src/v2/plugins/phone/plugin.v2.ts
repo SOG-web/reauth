@@ -86,6 +86,64 @@ export const basePhonePasswordPluginV2: AuthPluginV2<PhonePasswordConfigV2> = {
     changePasswordStep,
     changePhoneStep,
   ],
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    // Phone identities for this subject
+    const phoneIdentities = await orm.findMany('identities', {
+      where: (b: any) =>
+        b.and(b('subject_id', '=', subjectId), b('provider', '=', 'phone')),
+      orderBy: [['created_at', 'desc']],
+    });
+
+    const phones: Array<{
+      phone: string;
+      verified: boolean;
+      pendingVerification?: boolean;
+      created_at?: string;
+      updated_at?: string;
+    }> = [];
+
+    for (const ident of phoneIdentities || []) {
+      const pi = await orm.findFirst('phone_identities', {
+        where: (b: any) => b('identity_id', '=', ident.id),
+      });
+
+      const createdAtRaw = (ident as any)?.created_at;
+      const updatedAtRaw = (ident as any)?.updated_at;
+      const created_at = createdAtRaw
+        ? (createdAtRaw instanceof Date
+            ? createdAtRaw.toISOString()
+            : new Date(String(createdAtRaw)).toISOString())
+        : undefined;
+      const updated_at = updatedAtRaw
+        ? (updatedAtRaw instanceof Date
+            ? updatedAtRaw.toISOString()
+            : new Date(String(updatedAtRaw)).toISOString())
+        : undefined;
+
+      const vraw = (pi as any)?.verification_code_expires_at;
+      const pendingVerification = vraw
+        ? new Date(String(vraw)) > new Date()
+        : false;
+
+      phones.push({
+        phone: String(ident.identifier),
+        verified: Boolean(ident.verified),
+        pendingVerification,
+        created_at,
+        updated_at,
+      });
+    }
+
+    const creds = await orm.findFirst('credentials', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+    });
+
+    return {
+      phones,
+      password: { set: Boolean(creds?.password_hash) },
+    };
+  },
   // Background cleanup now handles expired code removal via SimpleCleanupScheduler
 };
 

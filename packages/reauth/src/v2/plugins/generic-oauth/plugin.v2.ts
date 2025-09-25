@@ -46,7 +46,7 @@ export const baseGenericOAuthPluginV2: AuthPluginV2<GenericOAuthConfigV2> = {
     });
 
     // Register background cleanup task for expired OAuth data
-    const config = this.config || {};
+    const config = (this.config || {}) as GenericOAuthConfigV2;
     if (config.cleanup?.enabled !== false) {
       const cleanupIntervalMs = (config.cleanup?.intervalMinutes || 60) * 60 * 1000; // Default 1 hour
       const retentionHours = (config.cleanup?.expiredTokenRetentionDays || 7) * 24; // Convert days to hours
@@ -102,12 +102,13 @@ export const baseGenericOAuthPluginV2: AuthPluginV2<GenericOAuthConfigV2> = {
             for (const token of expiredTokens) {
               try {
                 // Get provider configuration
-                const providerConfig = config.providers?.[token.provider_id];
+                const providerKey = String(token.provider_id);
+                const providerConfig = (config.providers as any)?.[providerKey];
                 
                 if (providerConfig && providerConfig.version === '2.0') {
                   // Note: In a complete implementation, this would trigger the refresh-token step
                   // For now, we'll just mark it as attempted
-                  await orm.update('generic_oauth_connections', {
+                  await orm.updateMany('generic_oauth_connections', {
                     where: (b: any) => b('id', '=', token.id),
                     set: { last_used_at: new Date() },
                   });
@@ -157,6 +158,58 @@ export const baseGenericOAuthPluginV2: AuthPluginV2<GenericOAuthConfigV2> = {
     
     // Note: Additional steps will be implemented after core functionality is validated
   ],
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    const connections = await orm.findMany('generic_oauth_connections', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+      orderBy: [['updated_at', 'desc']],
+    });
+
+    const providers: Record<string, any> = {};
+    for (const c of connections || []) {
+      const providerId = String(c.provider_id);
+      const cfg = (ctx.config?.providers as any)?.[providerId];
+      const name = cfg?.name || providerId;
+      const createdAt = c?.created_at
+        ? (c.created_at instanceof Date
+            ? c.created_at.toISOString()
+            : new Date(String(c.created_at)).toISOString())
+        : undefined;
+      const updatedAt = c?.updated_at
+        ? (c.updated_at instanceof Date
+            ? c.updated_at.toISOString()
+            : new Date(String(c.updated_at)).toISOString())
+        : undefined;
+      const expiresAt = c?.expires_at
+        ? (c.expires_at instanceof Date
+            ? c.expires_at.toISOString()
+            : new Date(String(c.expires_at)).toISOString())
+        : null;
+      const lastUsedAt = c?.last_used_at
+        ? (c.last_used_at instanceof Date
+            ? c.last_used_at.toISOString()
+            : new Date(String(c.last_used_at)).toISOString())
+        : null;
+
+      providers[name] = {
+        connected: true,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        expires_at: expiresAt,
+        last_used_at: lastUsedAt,
+        profile: c?.profile_data
+          ? {
+              id: (c.profile_data as any).id ?? undefined,
+              email: (c.profile_data as any).email ?? undefined,
+              name: (c.profile_data as any).name ?? undefined,
+              avatar: (c.profile_data as any).avatar ?? (c.profile_data as any).avatar_url ?? undefined,
+            }
+          : undefined,
+      };
+    }
+
+    return { providers };
+  },
 };
 
 /**

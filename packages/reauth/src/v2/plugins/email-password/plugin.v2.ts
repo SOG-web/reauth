@@ -90,6 +90,66 @@ export const baseEmailPasswordPluginV2: AuthPluginV2<EmailPasswordConfigV2> = {
     changePasswordStep,
     changeEmailStep,
   ],
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    // Gather email identities for the subject
+    const emailIdentities = await orm.findMany('identities', {
+      where: (b: any) =>
+        b.and(b('subject_id', '=', subjectId), b('provider', '=', 'email')),
+      orderBy: [['created_at', 'desc']],
+    });
+
+    const emails: Array<{
+      email: string;
+      verified: boolean;
+      pendingVerification?: boolean;
+      created_at?: string;
+      updated_at?: string;
+    }> = [];
+
+    for (const ident of emailIdentities || []) {
+      // Look up email-specific details without exposing codes
+      const ei = await orm.findFirst('email_identities', {
+        where: (b: any) => b('identity_id', '=', ident.id),
+      });
+
+      const createdAtRaw = (ident as any)?.created_at;
+      const updatedAtRaw = (ident as any)?.updated_at;
+      const createdAt = createdAtRaw
+        ? (createdAtRaw instanceof Date
+            ? createdAtRaw.toISOString()
+            : new Date(String(createdAtRaw)).toISOString())
+        : undefined;
+      const updatedAt = updatedAtRaw
+        ? (updatedAtRaw instanceof Date
+            ? updatedAtRaw.toISOString()
+            : new Date(String(updatedAtRaw)).toISOString())
+        : undefined;
+
+      const vraw = (ei as any)?.verification_code_expires_at;
+      const pendingVerification = vraw
+        ? new Date(String(vraw)) > new Date()
+        : false;
+
+      emails.push({
+        email: String(ident.identifier),
+        verified: Boolean(ident.verified),
+        pendingVerification,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      });
+    }
+
+    // Whether password is set
+    const creds = await orm.findFirst('credentials', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+    });
+
+    return {
+      emails,
+      password: { set: Boolean(creds?.password_hash) },
+    };
+  },
   // Background cleanup now handles expired code removal via SimpleCleanupScheduler
 };
 

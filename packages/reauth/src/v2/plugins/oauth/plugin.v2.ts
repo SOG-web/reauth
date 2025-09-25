@@ -112,6 +112,77 @@ export const baseOAuthPluginV2: AuthPluginV2<OAuthConfigV2> = {
     refreshTokenStep,
     getProfileStep,
   ],
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    // Tokens by provider
+    const tokens = await orm.findMany('oauth_tokens', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+      orderBy: [['updated_at', 'desc']],
+    });
+
+    // Profiles by provider
+    const profiles = await orm.findMany('oauth_profiles', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+      orderBy: [['updated_at', 'desc']],
+    });
+
+    const providers: Record<string, any> = {};
+
+    for (const t of tokens || []) {
+      const expiresAt = t?.expires_at
+        ? (t.expires_at instanceof Date
+            ? t.expires_at.toISOString()
+            : new Date(String(t.expires_at)).toISOString())
+        : null;
+      const lastUsedAt = t?.last_used_at
+        ? (t.last_used_at instanceof Date
+            ? t.last_used_at.toISOString()
+            : new Date(String(t.last_used_at)).toISOString())
+        : null;
+      const providerId = String(t.provider_id);
+      providers[providerId] = {
+        ...(providers[providerId] || {}),
+        tokens: {
+          has_refresh_token: t?.refresh_token_hash != null,
+          scope: t?.scope ?? undefined,
+          expires_at: expiresAt,
+          last_used_at: lastUsedAt,
+        },
+      };
+    }
+
+    for (const p of profiles || []) {
+      const updatedAt = p?.updated_at
+        ? (p.updated_at instanceof Date
+            ? p.updated_at.toISOString()
+            : new Date(String(p.updated_at)).toISOString())
+        : undefined;
+      const providerId = String(p.provider_id);
+      providers[providerId] = {
+        ...(providers[providerId] || {}),
+        profile: {
+          id: String(p.provider_user_id),
+          email: p?.email ?? undefined,
+          name: p?.name ?? undefined,
+          avatar_url: p?.avatar_url ?? undefined,
+          updated_at: updatedAt,
+        },
+      };
+    }
+
+    // Optionally map provider IDs to names via oauth_providers
+    const providerRows = await orm.findMany('oauth_providers', {});
+    const byId: Record<string, string> = {};
+    for (const row of providerRows || []) byId[String(row.id)] = String(row.name ?? row.id);
+
+    const mapped: Record<string, any> = {};
+    for (const [pid, data] of Object.entries(providers)) {
+      const name = byId[pid] ?? pid;
+      mapped[name] = data;
+    }
+
+    return { providers: mapped };
+  },
 };
 
 /**

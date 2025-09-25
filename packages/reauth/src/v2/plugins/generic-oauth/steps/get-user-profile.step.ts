@@ -30,14 +30,29 @@ export const getUserProfileStep: AuthStepV2<
   validationSchema: getUserProfileInputSchema,
   inputs: ['connectionId'],
   outputs: getUserProfileOutputSchema,
-  protocol: 'generic-oauth.get-user-profile.v1',
+  protocol: {
+    http: {
+      method: 'GET',
+      codes: {
+        profile_retrieved: 200,
+        connection_not_found: 404,
+        provider_not_found: 404,
+        no_access_token: 400,
+        token_expired: 400,
+        profile_error: 500,
+        no_profile_data: 404,
+      },
+      auth: false,
+    },
+  },
   
   async run(input, ctx) {
     const { connectionId } = input;
+    const orm = await ctx.engine.getOrm();
     
     try {
       // Get OAuth connection
-      const connection = await ctx.orm.findFirst('generic_oauth_connections', {
+      const connection = await orm.findFirst('generic_oauth_connections', {
         where: (b: any) => b('id', '=', connectionId),
       });
 
@@ -50,7 +65,8 @@ export const getUserProfileStep: AuthStepV2<
       }
 
       // Get provider configuration
-      const providerConfig = ctx.config?.providers?.[connection.provider_id];
+      const providerKey = String(connection.provider_id);
+      const providerConfig = (ctx.config?.providers as any)?.[providerKey];
       if (!providerConfig) {
         return {
           success: false,
@@ -69,7 +85,7 @@ export const getUserProfileStep: AuthStepV2<
       }
 
       // Check token expiration
-      if (connection.expires_at && new Date() > new Date(connection.expires_at)) {
+      if (connection.expires_at && new Date() > new Date(String(connection.expires_at))) {
         return {
           success: false,
           message: 'Access token has expired',
@@ -82,14 +98,14 @@ export const getUserProfileStep: AuthStepV2<
       
       if (providerConfig.userInfoUrl) {
         try {
-          const accessToken = await TokenEncryption.decrypt(connection.access_token_encrypted);
+          const accessToken = await TokenEncryption.decrypt(String(connection.access_token_encrypted));
           const profileResult = await simulateUserProfileFetch(accessToken, providerConfig);
           
           if (profileResult.success && profileResult.profile) {
             userProfile = parseUserProfile(profileResult.profile, providerConfig);
             
             // Update stored profile data
-            await ctx.orm.update('generic_oauth_connections', {
+            await orm.updateMany('generic_oauth_connections', {
               where: (b: any) => b('id', '=', connectionId),
               set: {
                 profile_data: userProfile,

@@ -27,14 +27,29 @@ export const refreshOAuth2TokenStep: AuthStepV2<
   validationSchema: refreshOAuth2TokenInputSchema,
   inputs: ['connectionId'],
   outputs: refreshOAuth2TokenOutputSchema,
-  protocol: 'generic-oauth.refresh-oauth2-token.v1',
+  protocol: {
+    http: {
+      method: 'POST',
+      codes: {
+        token_refreshed: 200,
+        connection_not_found: 404,
+        no_refresh_token: 400,
+        provider_not_found: 404,
+        invalid_oauth_version: 400,
+        refresh_failed: 502,
+        refresh_error: 500,
+      },
+      auth: false,
+    },
+  },
   
   async run(input, ctx) {
     const { connectionId } = input;
+    const orm = await ctx.engine.getOrm();
     
     try {
       // Get OAuth connection
-      const connection = await ctx.orm.findFirst('generic_oauth_connections', {
+      const connection = await orm.findFirst('generic_oauth_connections', {
         where: (b: any) => b('id', '=', connectionId),
       });
 
@@ -56,7 +71,8 @@ export const refreshOAuth2TokenStep: AuthStepV2<
       }
 
       // Get provider configuration
-      const providerConfig = ctx.config?.providers?.[connection.provider_id];
+      const providerKey = String(connection.provider_id);
+      const providerConfig = (ctx.config?.providers as any)?.[providerKey];
       if (!providerConfig) {
         return {
           success: false,
@@ -74,7 +90,7 @@ export const refreshOAuth2TokenStep: AuthStepV2<
       }
 
       // Decrypt refresh token
-      const refreshToken = await TokenEncryption.decrypt(connection.refresh_token_encrypted);
+      const refreshToken = await TokenEncryption.decrypt(String(connection.refresh_token_encrypted));
 
       // Perform token refresh
       const refreshResult = await simulateTokenRefresh(refreshToken, providerConfig);
@@ -97,7 +113,7 @@ export const refreshOAuth2TokenStep: AuthStepV2<
       const newExpiresAt = refreshResult.expiresAt || 
         new Date(Date.now() + (refreshResult.expiresIn || 3600) * 1000);
 
-      await ctx.orm.update('generic_oauth_connections', {
+      await orm.updateMany('generic_oauth_connections', {
         where: (b: any) => b('id', '=', connectionId),
         set: {
           access_token_encrypted: newAccessTokenEncrypted,

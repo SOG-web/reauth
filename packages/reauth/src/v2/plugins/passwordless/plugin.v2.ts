@@ -82,6 +82,73 @@ export const basePasswordlessPluginV2: AuthPluginV2<PasswordlessConfigV2> = {
     listCredentialsStep,
     revokeCredentialStep,
   ],
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    const profile: any = {};
+
+    // WebAuthn credentials
+    if (ctx.config?.webauthn) {
+      const credentials = await orm.findMany('webauthn_credentials', {
+        where: (b: any) => b('subject_id', '=', subjectId),
+        orderBy: [['created_at', 'desc']],
+      });
+
+      profile.credentials = (credentials || []).map((cred: any) => {
+        const createdAt = cred?.created_at
+          ? (cred.created_at instanceof Date
+              ? cred.created_at.toISOString()
+              : new Date(String(cred.created_at)).toISOString())
+          : undefined;
+        const lastUsedAt = cred?.last_used_at
+          ? (cred.last_used_at instanceof Date
+              ? cred.last_used_at.toISOString()
+              : new Date(String(cred.last_used_at)).toISOString())
+          : undefined;
+        const transports: string[] = Array.isArray(cred?.transports)
+          ? cred.transports.map((t: any) => String(t))
+          : [];
+        return {
+          id: String(cred.id),
+          name: String(cred.name ?? ''),
+          created_at: createdAt,
+          ...(lastUsedAt ? { last_used_at: lastUsedAt } : {}),
+          is_active: Boolean(cred.is_active),
+          transports,
+        };
+      });
+    }
+
+    // Active magic links (if enabled)
+    if (ctx.config?.magicLinks) {
+      const now = new Date();
+      const magicLinks = await orm.findMany('magic_links', {
+        where: (b: any) =>
+          b.and(b('subject_id', '=', subjectId), b('expires_at', '>', now), b('used_at', '=', null)),
+        orderBy: [['created_at', 'desc']],
+      });
+
+      profile.magic_links = (magicLinks || []).map((link: any) => {
+        const createdAt = link?.created_at
+          ? (link.created_at instanceof Date
+              ? link.created_at.toISOString()
+              : new Date(String(link.created_at)).toISOString())
+          : undefined;
+        const expiresAt = link?.expires_at
+          ? (link.expires_at instanceof Date
+              ? link.expires_at.toISOString()
+              : new Date(String(link.expires_at)).toISOString())
+          : undefined;
+        return {
+          id: String(link.id),
+          email: String(link.email ?? ''),
+          created_at: createdAt,
+          expires_at: expiresAt,
+        };
+      });
+    }
+
+    return profile;
+  },
   // Background cleanup now handles expired magic links via SimpleCleanupScheduler
 };
 

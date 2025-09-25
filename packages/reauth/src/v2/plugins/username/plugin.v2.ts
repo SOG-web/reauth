@@ -76,6 +76,38 @@ export const baseUsernamePasswordPluginV2: AuthPluginV2<UsernamePasswordConfigV2
       // Note: No verification steps since username doesn't require verification
       // Optional: Add reset steps if enableResetByUsername is implemented in the future
     ],
+    async getProfile(subjectId, ctx) {
+      const orm = ctx.orm;
+      const identities = await orm.findMany('identities', {
+        where: (b: any) =>
+          b.and(b('subject_id', '=', subjectId), b('provider', '=', 'username')),
+        orderBy: [['created_at', 'desc']],
+      });
+
+      const usernames = (identities || []).map((ident: any) => ({
+        username: String(ident.identifier),
+        verified: Boolean(ident.verified),
+        created_at: ident?.created_at
+          ? (ident.created_at instanceof Date
+              ? ident.created_at.toISOString()
+              : new Date(String(ident.created_at)).toISOString())
+          : undefined,
+        updated_at: ident?.updated_at
+          ? (ident.updated_at instanceof Date
+              ? ident.updated_at.toISOString()
+              : new Date(String(ident.updated_at)).toISOString())
+          : undefined,
+      }));
+
+      const creds = await orm.findFirst('credentials', {
+        where: (b: any) => b('subject_id', '=', subjectId),
+      });
+
+      return {
+        usernames,
+        password: { set: Boolean(creds?.password_hash) },
+      };
+    },
     // Background cleanup now handles expired reset codes via SimpleCleanupScheduler
   };
 

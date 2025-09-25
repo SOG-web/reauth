@@ -117,6 +117,46 @@ export const baseOrganizationPluginV2: AuthPluginV2<OrganizationConfigV2> = {
     removeMemberStep,
     changeMemberRoleStep,
   ],
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    const memberships = await orm.findMany('organization_memberships', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+      orderBy: [['created_at', 'desc']],
+    });
+
+    const items: any[] = [];
+    for (const m of memberships || []) {
+      let orgName: string | undefined;
+      try {
+        const org = await orm.findFirst('organizations', {
+          where: (b: any) => b('id', '=', m.organization_id),
+        });
+        orgName = org?.name ? String(org.name) : undefined;
+      } catch {}
+
+      const createdAt = m?.created_at
+        ? (m.created_at instanceof Date
+            ? m.created_at.toISOString()
+            : new Date(String(m.created_at)).toISOString())
+        : undefined;
+      const updatedAt = m?.updated_at
+        ? (m.updated_at instanceof Date
+            ? m.updated_at.toISOString()
+            : new Date(String(m.updated_at)).toISOString())
+        : undefined;
+
+      items.push({
+        organization_id: String(m.organization_id),
+        organization_name: orgName,
+        role: String(m.role ?? ''),
+        status: String(m.status ?? ''),
+        created_at: createdAt,
+        updated_at: updatedAt,
+      });
+    }
+
+    return { organizations: items };
+  },
 };
 
 // Export a configured plugin creator that validates config at construction time

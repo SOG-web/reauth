@@ -3,7 +3,7 @@
  * Implements OpenID Connect UserInfo endpoint specification
  */
 
-import { type, string } from 'arktype';
+import { type } from 'arktype';
 import { createStepV2 } from '../../../utils/create-step.v2';
 import type { OIDCProviderConfigV2 } from '../types';
 import { hashToken, generateClaims } from '../utils';
@@ -16,35 +16,36 @@ const GetUserinfoInput = type({
 // Output schema for UserInfo response
 const GetUserinfoOutput = type({
   success: 'true',
-  status: '"userinfo_retrieved" | "invalid_token" | "insufficient_scope" | "server_error"',
+  status:
+    '"userinfo_retrieved" | "invalid_token" | "insufficient_scope" | "server_error"',
   message: 'string',
   userInfo: 'unknown', // Will contain user claims
 });
 
 /**
  * Get UserInfo Step
- * 
+ *
  * Returns user claims based on the provided access token and authorized scopes.
  * Implements OpenID Connect UserInfo endpoint as defined in the specification.
- * 
+ *
  * @example
  * ```typescript
  * const result = await engine.executeStep('get-userinfo', {
  *   accessToken: 'access-token-123'
  * });
- * 
+ *
  * console.log(result.userInfo.sub); // User ID
  * console.log(result.userInfo.email); // User email (if scope permits)
  * ```
  */
 export const getUserinfoStep = createStepV2({
   name: 'get-userinfo',
-  
+
   inputs: GetUserinfoInput,
   outputs: GetUserinfoOutput,
-  
+
   protocol: 'oidc-provider.get-userinfo.v1',
-  
+
   meta: {
     http: {
       method: 'GET',
@@ -65,10 +66,10 @@ export const getUserinfoStep = createStepV2({
     try {
       // 1. Hash and validate access token
       const tokenHash = await hashToken(accessToken);
-      
+
       const tokenRecord = await orm.findFirst('oidc_access_tokens', {
-        where: (b: any) => b('token_hash', '=', tokenHash)
-          .and(b('revoked_at', 'is', null)),
+        where: (b: any) =>
+          b('token_hash', '=', tokenHash).and(b('revoked_at', 'is', null)),
       });
 
       if (!tokenRecord) {
@@ -116,7 +117,7 @@ export const getUserinfoStep = createStepV2({
         tokenRecord.user_id,
         userProfile,
         scopes,
-        oidcConfig
+        oidcConfig,
       );
 
       // 6. Ensure 'sub' claim is always present
@@ -131,10 +132,10 @@ export const getUserinfoStep = createStepV2({
         message: 'User info retrieved successfully',
         userInfo,
       };
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
       return {
         success: false as const,
         status: 'server_error' as const,

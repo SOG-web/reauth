@@ -1,40 +1,46 @@
 import crypto from 'crypto';
-import type { OAuthState, OAuthTokenResponse, OAuthUserProfile } from '../types';
-import type { OrmLike } from '../../../types.v2';
+import type { OAuthState, OAuthTokenResponse, OAuthUserProfile } from './types';
+import type { OrmLike } from '../../types.v2';
 
 /**
  * Generate a secure random state parameter for OAuth flows
  */
-export function generateOAuthState(provider: string, redirectUrl?: string): string {
+export function generateOAuthState(
+  provider: string,
+  redirectUrl?: string,
+): string {
   const state: OAuthState = {
     provider,
     redirectUrl,
     nonce: crypto.randomBytes(16).toString('hex'),
     timestamp: Date.now(),
   };
-  
+
   return Buffer.from(JSON.stringify(state)).toString('base64url');
 }
 
 /**
  * Validate and parse OAuth state parameter
  */
-export function validateOAuthState(stateParam: string, expectedProvider: string): OAuthState | null {
+export function validateOAuthState(
+  stateParam: string,
+  expectedProvider: string,
+): OAuthState | null {
   try {
     const decoded = Buffer.from(stateParam, 'base64url').toString('utf-8');
     const state: OAuthState = JSON.parse(decoded);
-    
+
     // Validate provider matches
     if (state.provider !== expectedProvider) {
       return null;
     }
-    
+
     // Validate timestamp (max 10 minutes old)
     const maxAge = 10 * 60 * 1000; // 10 minutes
     if (Date.now() - state.timestamp > maxAge) {
       return null;
     }
-    
+
     return state;
   } catch {
     return null;
@@ -57,7 +63,7 @@ export function generateAuthorizationUrl(
   redirectUri: string,
   scopes: string[],
   state: string,
-  additionalParams?: Record<string, string>
+  additionalParams?: Record<string, string>,
 ): string {
   const url = new URL(authorizationUrl);
   url.searchParams.set('client_id', clientId);
@@ -65,14 +71,14 @@ export function generateAuthorizationUrl(
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', scopes.join(' '));
   url.searchParams.set('state', state);
-  
+
   // Add any additional provider-specific parameters
   if (additionalParams) {
     for (const [key, value] of Object.entries(additionalParams)) {
       url.searchParams.set(key, value);
     }
   }
-  
+
   return url.toString();
 }
 
@@ -85,7 +91,7 @@ export async function exchangeCodeForTokens(
   clientSecret: string,
   code: string,
   redirectUri: string,
-  additionalParams?: Record<string, string>
+  additionalParams?: Record<string, string>,
 ): Promise<OAuthTokenResponse> {
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -100,14 +106,16 @@ export async function exchangeCodeForTokens(
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
     body: params.toString(),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OAuth token exchange failed: ${response.status} ${errorText}`);
+    throw new Error(
+      `OAuth token exchange failed: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json() as Promise<OAuthTokenResponse>;
@@ -118,18 +126,20 @@ export async function exchangeCodeForTokens(
  */
 export async function fetchOAuthUserProfile(
   userInfoUrl: string,
-  accessToken: string
+  accessToken: string,
 ): Promise<OAuthUserProfile> {
   const response = await fetch(userInfoUrl, {
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
     },
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OAuth user info fetch failed: ${response.status} ${errorText}`);
+    throw new Error(
+      `OAuth user info fetch failed: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json() as Promise<OAuthUserProfile>;
@@ -142,7 +152,7 @@ export async function refreshOAuthToken(
   tokenUrl: string,
   clientId: string,
   clientSecret: string,
-  refreshToken: string
+  refreshToken: string,
 ): Promise<OAuthTokenResponse> {
   const params = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -155,14 +165,16 @@ export async function refreshOAuthToken(
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
     body: params.toString(),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OAuth token refresh failed: ${response.status} ${errorText}`);
+    throw new Error(
+      `OAuth token refresh failed: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json() as Promise<OAuthTokenResponse>;
@@ -173,7 +185,8 @@ export async function refreshOAuthToken(
  */
 export async function getOAuthProvider(orm: OrmLike, providerName: string) {
   return await orm.findFirst('oauth_providers', {
-    where: (b: any) => b('name', '=', providerName).and(b('is_active', '=', true)),
+    where: (b: any) =>
+      b('name', '=', providerName).and(b('is_active', '=', true)),
   });
 }
 
@@ -184,9 +197,9 @@ export async function storeOAuthTokens(
   orm: OrmLike,
   subjectId: string,
   providerId: string,
-  tokenResponse: OAuthTokenResponse
+  tokenResponse: OAuthTokenResponse,
 ) {
-  const expiresAt = tokenResponse.expires_in 
+  const expiresAt = tokenResponse.expires_in
     ? new Date(Date.now() + tokenResponse.expires_in * 1000)
     : null;
 
@@ -194,8 +207,8 @@ export async function storeOAuthTokens(
     subject_id: subjectId,
     provider_id: providerId,
     access_token_hash: hashOAuthToken(tokenResponse.access_token),
-    refresh_token_hash: tokenResponse.refresh_token 
-      ? hashOAuthToken(tokenResponse.refresh_token) 
+    refresh_token_hash: tokenResponse.refresh_token
+      ? hashOAuthToken(tokenResponse.refresh_token)
       : null,
     expires_at: expiresAt,
     scope: tokenResponse.scope || null,
@@ -205,15 +218,17 @@ export async function storeOAuthTokens(
 
   // Upsert token record
   const existing = await orm.findFirst('oauth_tokens', {
-    where: (b: any) => b('subject_id', '=', subjectId).and(b('provider_id', '=', providerId)),
+    where: (b: any) =>
+      b('subject_id', '=', subjectId).and(b('provider_id', '=', providerId)),
   });
 
   if (existing) {
-    return await orm.update('oauth_tokens', tokenData, {
+    return await orm.updateMany('oauth_tokens', {
       where: (b: any) => b('id', '=', existing.id),
+      set: tokenData,
     });
   } else {
-    return await orm.insert('oauth_tokens', tokenData);
+    return await orm.create('oauth_tokens', tokenData);
   }
 }
 
@@ -225,7 +240,7 @@ export async function storeOAuthProfile(
   subjectId: string,
   providerId: string,
   providerUserId: string,
-  profile: OAuthUserProfile
+  profile: OAuthUserProfile,
 ) {
   const profileData = {
     subject_id: subjectId,
@@ -240,14 +255,18 @@ export async function storeOAuthProfile(
 
   // Upsert profile record
   const existing = await orm.findFirst('oauth_profiles', {
-    where: (b: any) => b('provider_id', '=', providerId).and(b('provider_user_id', '=', providerUserId)),
+    where: (b: any) =>
+      b('provider_id', '=', providerId).and(
+        b('provider_user_id', '=', providerUserId),
+      ),
   });
 
   if (existing) {
-    return await orm.update('oauth_profiles', profileData, {
+    return await orm.updateMany('oauth_profiles', {
       where: (b: any) => b('id', '=', existing.id),
+      set: profileData,
     });
   } else {
-    return await orm.insert('oauth_profiles', profileData);
+    return await orm.create('oauth_profiles', profileData);
   }
 }

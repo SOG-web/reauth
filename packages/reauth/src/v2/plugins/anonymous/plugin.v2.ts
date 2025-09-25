@@ -100,6 +100,37 @@ export const baseAnonymousPluginV2: AuthPluginV2<AnonymousConfigV2> = {
   ],
   // Removed rootHooks to avoid affecting response time
   // Background cleanup now handles expired session removal
+  async getProfile(subjectId, ctx) {
+    const orm = ctx.orm;
+    const session = await orm.findFirst('anonymous_sessions', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+      orderBy: [['created_at', 'desc']],
+    });
+
+    if (!session) return {};
+
+    const createdAt = session?.created_at
+      ? (session.created_at instanceof Date
+          ? session.created_at.toISOString()
+          : new Date(String(session.created_at)).toISOString())
+      : undefined;
+    const expiresAt = session?.expires_at
+      ? (session.expires_at instanceof Date
+          ? session.expires_at.toISOString()
+          : new Date(String(session.expires_at)).toISOString())
+      : undefined;
+
+    return {
+      anonymous_session: {
+        fingerprint: String(session.fingerprint ?? ''), // stored hashed upstream
+        created_at: createdAt,
+        expires_at: expiresAt,
+        extension_count:
+          typeof session.extension_count === 'number' ? session.extension_count : 0,
+        metadata: session.metadata ?? undefined,
+      },
+    };
+  },
 };
 
 // Export a configured plugin creator that validates config at construction time.

@@ -1,7 +1,20 @@
 import { type } from 'arktype';
-import type { AuthStepV2, OrmLike } from '../../../../types.v2';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OAuthConfigV2 } from '../types';
 import { getOAuthProvider } from '../utils';
+
+// Explicit schemas
+const unlinkOAuthInputSchema = type({
+  provider: 'string',
+  'token?': 'string',
+});
+
+const unlinkOAuthOutputSchema = type({
+  success: 'boolean',
+  message: 'string',
+  status: 'string',
+  'unlinkedProvider?': 'string',
+});
 
 export const unlinkOAuthStep: AuthStepV2<
   typeof unlinkOAuthInputSchema.infer,
@@ -10,25 +23,29 @@ export const unlinkOAuthStep: AuthStepV2<
   OrmLike
 > = {
   name: 'unlink-oauth',
-  inputs: type({
-    provider: 'string',
-    'token?': 'string',
-  }),
-  outputs: type({
-    success: 'boolean',
-    message: 'string',
-    status: 'string',
-    'unlinkedProvider?': 'string',
-  }),
+  validationSchema: unlinkOAuthInputSchema,
+  inputs: ['provider', 'token'],
+  outputs: unlinkOAuthOutputSchema,
   protocol: {
-    type: 'oauth-unlink',
-    description: 'Remove OAuth provider from user account',
-    method: 'DELETE',
-    path: '/oauth/unlink',
-    requiresAuth: true,
+    http: {
+      method: 'DELETE',
+      codes: {
+        oauth_unlinked: 200,
+        authentication_required: 401,
+        invalid_session: 401,
+        provider_not_found: 404,
+        provider_not_linked: 404,
+        last_auth_method: 400,
+        oauth_unlinking_failed: 500,
+      },
+      auth: true,
+    },
   },
   
-  async handler(input, { orm, config, container }) {
+  async run(input, ctx) {
+    const orm = await ctx.engine.getOrm();
+    const config = ctx.config;
+    const container = ctx.container;
     const { provider, token } = input;
     
     try {
@@ -42,7 +59,7 @@ export const unlinkOAuthStep: AuthStepV2<
       }
 
       // Verify session and get current user
-      const sessionService = container.resolve('sessionService');
+      const sessionService: any = container.resolve('sessionService');
       const sessionResult = await sessionService.verifySession(token);
       if (!sessionResult.subject) {
         return {
@@ -98,11 +115,11 @@ export const unlinkOAuthStep: AuthStepV2<
       }
 
       // Remove OAuth profile and tokens
-      await orm.delete('oauth_profiles', {
+      await orm.deleteMany('oauth_profiles', {
         where: (b: any) => b('id', '=', linkedProfile.id),
       });
 
-      await orm.delete('oauth_tokens', {
+      await orm.deleteMany('oauth_tokens', {
         where: (b: any) => b('subject_id', '=', currentSubjectId)
           .and(b('provider_id', '=', oauthProvider.id)),
       });
@@ -123,6 +140,3 @@ export const unlinkOAuthStep: AuthStepV2<
     }
   },
 };
-
-const unlinkOAuthInputSchema = unlinkOAuthStep.inputs;
-const unlinkOAuthOutputSchema = unlinkOAuthStep.outputs;

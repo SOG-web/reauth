@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import type { AuthStepV2, OrmLike } from '../../../../types.v2';
+import type { AuthStepV2, OrmLike } from '../../../types.v2';
 import type { OAuthConfigV2 } from '../types';
 import { 
   validateOAuthState, 
@@ -10,6 +10,21 @@ import {
   storeOAuthProfile,
 } from '../utils';
 
+// Explicit schemas
+const linkOAuthInputSchema = type({
+  provider: 'string',
+  code: 'string',
+  state: 'string',
+  'token?': 'string',
+});
+
+const linkOAuthOutputSchema = type({
+  success: 'boolean',
+  message: 'string',
+  status: 'string',
+  'linkedProvider?': 'string',
+});
+
 export const linkOAuthStep: AuthStepV2<
   typeof linkOAuthInputSchema.infer,
   typeof linkOAuthOutputSchema.infer,
@@ -17,27 +32,31 @@ export const linkOAuthStep: AuthStepV2<
   OrmLike
 > = {
   name: 'link-oauth',
-  inputs: type({
-    provider: 'string',
-    code: 'string',
-    state: 'string',
-    'token?': 'string',
-  }),
-  outputs: type({
-    success: 'boolean',
-    message: 'string',
-    status: 'string',
-    'linkedProvider?': 'string',
-  }),
+  validationSchema: linkOAuthInputSchema,
+  inputs: ['provider', 'code', 'state', 'token'],
+  outputs: linkOAuthOutputSchema,
   protocol: {
-    type: 'oauth-link',
-    description: 'Link OAuth account to existing authenticated user',
-    method: 'POST',
-    path: '/oauth/link',
-    requiresAuth: true,
+    http: {
+      method: 'POST',
+      codes: {
+        oauth_linked: 200,
+        account_linking_disabled: 400,
+        authentication_required: 401,
+        invalid_session: 401,
+        invalid_state: 400,
+        provider_not_found: 404,
+        account_already_linked: 409,
+        provider_already_linked: 409,
+        oauth_linking_failed: 500,
+      },
+      auth: true,
+    },
   },
   
-  async handler(input, { orm, config, container }) {
+  async run(input, ctx) {
+    const orm = await ctx.engine.getOrm();
+    const config = ctx.config;
+    const container = ctx.container;
     const { provider, code, state, token } = input;
     
     try {
@@ -60,7 +79,7 @@ export const linkOAuthStep: AuthStepV2<
       }
 
       // Verify session and get current user
-      const sessionService = container.resolve('sessionService');
+      const sessionService: any = container.resolve('sessionService');
       const sessionResult = await sessionService.verifySession(token);
       if (!sessionResult.subject) {
         return {
@@ -94,16 +113,16 @@ export const linkOAuthStep: AuthStepV2<
 
       // Exchange authorization code for tokens
       const tokenResponse = await exchangeCodeForTokens(
-        oauthProvider.token_url,
-        oauthProvider.client_id,
-        oauthProvider.client_secret, // Note: This should be decrypted in production
+        String(oauthProvider.token_url),
+        String(oauthProvider.client_id),
+        String(oauthProvider.client_secret), // Note: decrypt in production
         code,
-        oauthProvider.redirect_uri
+        String(oauthProvider.redirect_uri)
       );
 
       // Fetch user profile from provider
       const userProfile = await fetchOAuthUserProfile(
-        oauthProvider.user_info_url,
+        String(oauthProvider.user_info_url),
         tokenResponse.access_token
       );
 
@@ -136,8 +155,8 @@ export const linkOAuthStep: AuthStepV2<
       }
 
       // Link OAuth account to current user
-      await storeOAuthProfile(orm, currentSubjectId, oauthProvider.id, userProfile.id, userProfile);
-      await storeOAuthTokens(orm, currentSubjectId, oauthProvider.id, tokenResponse);
+      await storeOAuthProfile(orm, currentSubjectId, String(oauthProvider.id), userProfile.id, userProfile);
+      await storeOAuthTokens(orm, currentSubjectId, String(oauthProvider.id), tokenResponse);
 
       return {
         success: true,
@@ -155,6 +174,3 @@ export const linkOAuthStep: AuthStepV2<
     }
   },
 };
-
-const linkOAuthInputSchema = linkOAuthStep.inputs;
-const linkOAuthOutputSchema = linkOAuthStep.outputs;
