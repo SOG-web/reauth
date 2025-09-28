@@ -169,6 +169,28 @@ export class MockDatabase implements OrmLike {
     return deletedCount;
   }
 
+  async count(table: string, options?: {
+    where?: (builder: any) => any;
+  }): Promise<number> {
+    const tableMap = this.tables.get(table);
+    if (!tableMap) return 0;
+
+    let records = Array.from(tableMap.values());
+    
+    if (options?.where) {
+      const mockBuilder = this.createMockBuilder(records);
+      try {
+        options.where(mockBuilder);
+        records = mockBuilder.getResults();
+      } catch {
+        // If where clause fails, return 0
+        return 0;
+      }
+    }
+
+    return records.length;
+  }
+
   private createMockBuilder(records: any[]) {
     let filteredRecords = records;
 

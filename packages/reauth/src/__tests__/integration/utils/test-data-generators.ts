@@ -37,6 +37,7 @@ export class TestDataFactory {
       email: this.email('test'),
       password: 'TestPassword123!',
       confirmPassword: 'TestPassword123!',
+      others: {}, // Required field for plugin steps
       ...overrides,
     };
   }
@@ -72,6 +73,7 @@ export class TestDataFactory {
       description: 'Generated for testing',
       expiresInDays: 30,
       permissions: ['read', 'write'],
+      others: {}, // Required field for plugin steps
       ...overrides,
     };
   }
@@ -125,6 +127,7 @@ export class TestDataFactory {
       metadata: {
         testMode: true,
       },
+      others: {}, // Required field for plugin steps
       ...overrides,
     };
   }

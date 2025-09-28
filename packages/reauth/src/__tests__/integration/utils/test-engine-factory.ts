@@ -78,6 +78,7 @@ export function createTestReAuthEngine(options: TestEngineOptions = {}): ReAuthE
       cleanupIntervalMinutes: 60,
       allowUnverifiedLogin: false,
       minPasswordLength: 8,
+      checkPasswordBreach: false, // Disable external API calls in tests
     }),
     usernamePlugin({
       minUsernameLength: 3,
@@ -136,7 +137,8 @@ export function createMinimalTestEngine(pluginNames: string[]): ReAuthEngine {
     'anonymous': anonymousPlugin({ maxSessionDurationHours: 24 }),
     'api-key': apiKeyPlugin({ keyLength: 32 }),
     'email-password': emailPasswordPlugin({ 
-      testUsers: { enabled: true, environment: 'test', users: [], checkEnvironment: () => true }
+      testUsers: { enabled: true, environment: 'test', users: [], checkEnvironment: () => true },
+      checkPasswordBreach: false,
     }),
     'username': usernamePlugin({ minUsernameLength: 3 }),
     'phone': phonePlugin({ testMode: { enabled: true, testCode: '123456' } }),
