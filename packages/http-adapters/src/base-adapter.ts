@@ -1,11 +1,9 @@
+import { AuthInput, ReAuthEngine, Token } from '@re-auth/reauth';
 import type {
-  ReAuthEngineV2,
-  AuthInputV2,
-  AuthOutputV2,
-  HttpAdapterV2Config,
+  HttpAdapterConfig,
   HttpRequest,
   HttpResponse,
-  FrameworkAdapterV2,
+  FrameworkAdapter,
   RouteHandler,
   AuthStepRequest,
   SessionRequest,
@@ -23,12 +21,12 @@ import {
   NotFoundError,
 } from './types.js';
 
-export class ReAuthHttpAdapterV2 {
-  private engine: ReAuthEngineV2;
-  private config: HttpAdapterV2Config;
+export class ReAuthHttpAdapter {
+  private engine: ReAuthEngine;
+  private config: HttpAdapterConfig;
   private endpoints: Map<string, PluginEndpoint> = new Map();
 
-  constructor(config: HttpAdapterV2Config) {
+  constructor(config: HttpAdapterConfig) {
     this.engine = config.engine;
     this.config = config;
     this.buildEndpoints();
@@ -39,22 +37,22 @@ export class ReAuthHttpAdapterV2 {
    */
   private buildEndpoints(): void {
     const plugins = this.engine.getAllPlugins();
-    
+
     for (const plugin of plugins) {
       if (!plugin.steps) continue;
-      
+
       for (const step of plugin.steps) {
         const endpoint: PluginEndpoint = {
           pluginName: plugin.name,
           stepName: step.name,
-          path: `${this.config.basePath || ''}/auth/${plugin.name}/${step.name}`,
+          path: `${this.config.basePath || ''}/${plugin.name}/${step.name}`,
           method: step.protocol?.http?.method || 'POST',
           requiresAuth: Boolean(step.protocol?.http?.auth),
           description: step.description,
           inputSchema: step.validationSchema,
           outputSchema: step.outputs,
         };
-        
+
         const key = `${plugin.name}:${step.name}`;
         this.endpoints.set(key, endpoint);
       }
@@ -71,7 +69,10 @@ export class ReAuthHttpAdapterV2 {
   /**
    * Get endpoint by plugin and step name
    */
-  getEndpoint(pluginName: string, stepName: string): PluginEndpoint | undefined {
+  getEndpoint(
+    pluginName: string,
+    stepName: string,
+  ): PluginEndpoint | undefined {
     return this.endpoints.get(`${pluginName}:${stepName}`);
   }
 
@@ -80,7 +81,7 @@ export class ReAuthHttpAdapterV2 {
    */
   async executeAuthStep(req: AuthStepRequest): Promise<AuthStepResponse> {
     const { plugin: pluginName, step: stepName } = req.params;
-    
+
     const endpoint = this.getEndpoint(pluginName, stepName);
     if (!endpoint) {
       throw new NotFoundError(`Endpoint not found: ${pluginName}/${stepName}`);
@@ -89,6 +90,9 @@ export class ReAuthHttpAdapterV2 {
     // Check authentication if required
     if (endpoint.requiresAuth) {
       await this.requireAuthentication(req);
+    } else {
+      //NOTE: this is to ensure token will be auto refresh if needed when a token is availabe
+      await this.getCurrentUser(req);
     }
 
     // Extract input from request
@@ -97,23 +101,30 @@ export class ReAuthHttpAdapterV2 {
     try {
       // Execute the step
       const output = await this.engine.executeStep(pluginName, stepName, input);
-      
+
+      // Return standardized response
+      const pl = this.engine.getPlugin(pluginName);
+      const step = pl?.steps?.find((s) => s.name === stepName);
+
+      const status = step?.protocol?.http?.codes?.[output.status] || 200;
+
       return {
         success: true,
         data: {
           ...output,
-          sessionToken: output.token || undefined,
+          sessionToken: output.token,
         },
         meta: {
           timestamp: new Date().toISOString(),
         },
+        status,
       };
     } catch (error) {
       throw new HttpAdapterError(
         `Step execution failed: ${error instanceof Error ? error.message : String(error)}`,
         500,
         'STEP_EXECUTION_ERROR',
-        { pluginName, stepName, error }
+        { pluginName, stepName, error },
       );
     }
   }
@@ -123,20 +134,24 @@ export class ReAuthHttpAdapterV2 {
    */
   async createSession(req: SessionRequest): Promise<SessionResponse> {
     const { subjectType, subjectId, ttlSeconds } = req.body || {};
-    
+
     if (!subjectType || !subjectId) {
       throw new ValidationError('subjectType and subjectId are required');
     }
 
     try {
-      const token = await this.engine.createSessionFor(subjectType, subjectId, ttlSeconds);
-      
+      const token = await this.engine.createSessionFor(
+        subjectType,
+        subjectId,
+        ttlSeconds,
+      );
+
       return {
         success: true,
         data: {
           valid: true,
           token,
-          expiresAt: ttlSeconds 
+          expiresAt: ttlSeconds
             ? new Date(Date.now() + ttlSeconds * 1000).toISOString()
             : undefined,
         },
@@ -148,7 +163,7 @@ export class ReAuthHttpAdapterV2 {
       throw new HttpAdapterError(
         `Session creation failed: ${error instanceof Error ? error.message : String(error)}`,
         500,
-        'SESSION_CREATION_ERROR'
+        'SESSION_CREATION_ERROR',
       );
     }
   }
@@ -158,10 +173,10 @@ export class ReAuthHttpAdapterV2 {
    */
   async checkSession(req: SessionRequest): Promise<SessionResponse> {
     const token = this.extractSessionToken(req);
-    
+
     if (!token) {
       return {
-        success: true,
+        success: false,
         data: {
           valid: false,
         },
@@ -173,13 +188,29 @@ export class ReAuthHttpAdapterV2 {
 
     try {
       const result = await this.engine.checkSession(token);
-      
+
+      if (!result.subject) {
+        return {
+          success: false,
+          data: {
+            valid: false,
+          },
+          meta: {
+            timestamp: new Date().toISOString(),
+          },
+        };
+      }
+
       return {
         success: true,
         data: {
           valid: result.valid,
           subject: result.subject,
-          token: result.token || undefined,
+          token: result.token,
+          metadata: {
+            payload: result.payload,
+            type: result.type,
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -187,7 +218,7 @@ export class ReAuthHttpAdapterV2 {
       };
     } catch (error) {
       return {
-        success: true,
+        success: false,
         data: {
           valid: false,
         },
@@ -203,14 +234,14 @@ export class ReAuthHttpAdapterV2 {
    */
   async destroySession(req: SessionRequest): Promise<ApiResponse> {
     const token = this.extractSessionToken(req);
-    
+
     if (!token) {
       throw new ValidationError('No session token provided');
     }
 
     try {
       await this.engine.getSessionService().destroySession(token);
-      
+
       return {
         success: true,
         meta: {
@@ -221,7 +252,7 @@ export class ReAuthHttpAdapterV2 {
       throw new HttpAdapterError(
         `Session destruction failed: ${error instanceof Error ? error.message : String(error)}`,
         500,
-        'SESSION_DESTRUCTION_ERROR'
+        'SESSION_DESTRUCTION_ERROR',
       );
     }
   }
@@ -231,11 +262,11 @@ export class ReAuthHttpAdapterV2 {
    */
   async listPlugins(): Promise<PluginListResponse> {
     const plugins = this.engine.getAllPlugins();
-    
-    const data = plugins.map(plugin => ({
+
+    const data = plugins.map((plugin) => ({
       name: plugin.name,
       description: `${plugin.name} authentication plugin`,
-      steps: (plugin.steps || []).map(step => ({
+      steps: (plugin.steps || []).map((step) => ({
         name: step.name,
         description: step.description,
         method: step.protocol?.http?.method || 'POST',
@@ -258,7 +289,7 @@ export class ReAuthHttpAdapterV2 {
    */
   async getPlugin(pluginName: string): Promise<ApiResponse> {
     const plugin = this.engine.getPlugin(pluginName);
-    
+
     if (!plugin) {
       throw new NotFoundError(`Plugin not found: ${pluginName}`);
     }
@@ -266,7 +297,7 @@ export class ReAuthHttpAdapterV2 {
     const data = {
       name: plugin.name,
       description: `${plugin.name} authentication plugin`,
-      steps: (plugin.steps || []).map(step => ({
+      steps: (plugin.steps || []).map((step) => ({
         name: step.name,
         description: step.description,
         method: step.protocol?.http?.method || 'POST',
@@ -292,7 +323,7 @@ export class ReAuthHttpAdapterV2 {
    */
   async getIntrospection(): Promise<ApiResponse> {
     const introspectionData = this.engine.getIntrospectionData();
-    
+
     return {
       success: true,
       data: introspectionData,
@@ -323,21 +354,66 @@ export class ReAuthHttpAdapterV2 {
   /**
    * Extract session token from request
    */
-  private extractSessionToken(req: HttpRequest): string | null {
+  private extractSessionToken(req: HttpRequest): Token {
+    let accessToken: string | null = null;
+    let refreshToken: string | null = null;
+
     // Try Authorization header first
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
-      return authHeader.substring(7);
+      accessToken = authHeader.substring(7);
+    }
+
+    // check custom headers
+    if (
+      !accessToken &&
+      req.headers[
+        this.config.headerToken?.accesssTokenHeader || 'x-access-token'
+      ]
+    ) {
+      accessToken =
+        req.headers[
+          this.config.headerToken?.accesssTokenHeader || 'x-access-token'
+        ]!;
+    }
+    if (
+      !refreshToken &&
+      req.headers[
+        this.config.headerToken?.refreshTokenHeader || 'x-refresh-token'
+      ]
+    ) {
+      refreshToken =
+        req.headers[
+          this.config.headerToken?.refreshTokenHeader || 'x-refresh-token'
+        ]!;
     }
 
     // Try cookie
-    if (req.cookies?.['reauth-session']) {
-      return req.cookies['reauth-session'];
+    if (
+      !accessToken &&
+      req.cookies?.[this.config.cookie?.name || 'reauth-session']
+    ) {
+      accessToken = req.cookies[this.config.cookie?.name || 'reauth-session']!;
     }
 
-    // Try body token
-    if (req.body?.token) {
-      return req.body.token;
+    if (
+      !refreshToken &&
+      req.cookies?.[this.config.cookie?.refreshTokenName || 'reauth-refresh']
+    ) {
+      refreshToken =
+        req.cookies[this.config.cookie?.refreshTokenName || 'reauth-refresh']!;
+    }
+
+    if (!accessToken) {
+      return null;
+    }
+
+    if (accessToken && refreshToken) {
+      return { accessToken, refreshToken };
+    }
+
+    if (accessToken && !refreshToken) {
+      return accessToken;
     }
 
     return null;
@@ -346,8 +422,11 @@ export class ReAuthHttpAdapterV2 {
   /**
    * Extract step input from request
    */
-  private extractStepInput(req: HttpRequest, endpoint: PluginEndpoint): AuthInputV2 {
-    const input: AuthInputV2 = {
+  private extractStepInput(
+    req: HttpRequest,
+    endpoint: PluginEndpoint,
+  ): AuthInput {
+    const input: AuthInput = {
       ...req.body,
       ...req.query,
     };
@@ -374,14 +453,14 @@ export class ReAuthHttpAdapterV2 {
    */
   async getCurrentUser(req: HttpRequest): Promise<AuthenticatedUser | null> {
     const token = this.extractSessionToken(req);
-    
+
     if (!token) {
       return null;
     }
 
     try {
       const session = await this.engine.checkSession(token);
-      
+
       if (!session.valid || !session.subject) {
         return null;
       }
@@ -391,8 +470,8 @@ export class ReAuthHttpAdapterV2 {
         token: session.token || token,
         valid: session.valid,
         metadata: {
-          // Add any available metadata from the session
-          lastAccessed: new Date().toISOString(),
+          payload: session.payload,
+          type: session.type,
         },
       };
     } catch (error) {
@@ -406,7 +485,7 @@ export class ReAuthHttpAdapterV2 {
    */
   async requireAuthentication(req: HttpRequest): Promise<AuthenticatedUser> {
     const user = await this.getCurrentUser(req);
-    
+
     if (!user) {
       throw new AuthenticationError('Authentication required');
     }
@@ -427,8 +506,8 @@ export class ReAuthHttpAdapterV2 {
    * Create framework-specific adapter
    */
   createAdapter<TRequest = any, TResponse = any, TNext = any>(
-    adapter: FrameworkAdapterV2<TRequest, TResponse, TNext>
-  ): FrameworkAdapterV2<TRequest, TResponse, TNext> {
+    adapter: FrameworkAdapter<TRequest, TResponse, TNext>,
+  ): FrameworkAdapter<TRequest, TResponse, TNext> {
     return adapter;
   }
 

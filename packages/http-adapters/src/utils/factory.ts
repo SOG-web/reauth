@@ -1,12 +1,14 @@
-import type { ReAuthEngineV2 } from '../types.js';
-import type { HttpAdapterV2Config, PluginEndpoint } from '../types.js';
-import { ReAuthHttpAdapterV2 } from '../base-adapter.js';
+import type { HttpAdapterConfig, PluginEndpoint } from '../types.js';
+import { ReAuthHttpAdapter } from '../base-adapter.js';
+import { ReAuthEngine } from '@re-auth/reauth/.';
 
 /**
  * Factory function to create HTTP adapter with default configuration
  */
-export function createReAuthHttpAdapter(config: Partial<HttpAdapterV2Config> & { engine: ReAuthEngineV2 }): ReAuthHttpAdapterV2 {
-  const defaultConfig: HttpAdapterV2Config = {
+export function createReAuthHttpAdapter(
+  config: Partial<HttpAdapterConfig> & { engine: ReAuthEngine },
+): ReAuthHttpAdapter {
+  const defaultConfig: HttpAdapterConfig = {
     basePath: '/api/v2',
     cors: {
       origin: true,
@@ -32,13 +34,13 @@ export function createReAuthHttpAdapter(config: Partial<HttpAdapterV2Config> & {
     ...config,
   };
 
-  return new ReAuthHttpAdapterV2(defaultConfig);
+  return new ReAuthHttpAdapter(defaultConfig);
 }
 
 /**
  * Auto-discover endpoints from engine and generate OpenAPI-like spec
  */
-export function generateApiSpec(adapter: ReAuthHttpAdapterV2): {
+export function generateApiSpec(adapter: ReAuthHttpAdapter): {
   openapi: string;
   info: object;
   paths: Record<string, any>;
@@ -460,7 +462,9 @@ export function getPluginNames(endpoints: PluginEndpoint[]): string[] {
 /**
  * Utility to group endpoints by plugin
  */
-export function groupEndpointsByPlugin(endpoints: PluginEndpoint[]): Record<string, PluginEndpoint[]> {
+export function groupEndpointsByPlugin(
+  endpoints: PluginEndpoint[],
+): Record<string, PluginEndpoint[]> {
   const groups: Record<string, PluginEndpoint[]> = {};
   for (const endpoint of endpoints) {
     if (!groups[endpoint.pluginName]) {
@@ -474,7 +478,10 @@ export function groupEndpointsByPlugin(endpoints: PluginEndpoint[]): Record<stri
 /**
  * Utility to validate adapter configuration
  */
-export function validateConfig(config: HttpAdapterV2Config): { valid: boolean; errors: string[] } {
+export function validateConfig(config: HttpAdapterConfig): {
+  valid: boolean;
+  errors: string[];
+} {
   const errors: string[] = [];
 
   if (!config.engine) {
@@ -493,7 +500,10 @@ export function validateConfig(config: HttpAdapterV2Config): { valid: boolean; e
     errors.push('rateLimit.windowMs must be greater than 0');
   }
 
-  if (config.validation?.maxPayloadSize && config.validation.maxPayloadSize <= 0) {
+  if (
+    config.validation?.maxPayloadSize &&
+    config.validation.maxPayloadSize <= 0
+  ) {
     errors.push('validation.maxPayloadSize must be greater than 0');
   }
 

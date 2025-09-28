@@ -1,55 +1,47 @@
-// Local V2 types to avoid cross-package import issues during development
-export interface AuthInput {
-  token?: string | null;
-  [key: string]: any;
-}
-
-export interface AuthOutput {
-  token?: string | null;
-  redirect?: string;
-  success: boolean;
-  message: string;
-  status: string;
-  subject?: any;
-  others?: Record<string, any>;
-  [key: string]: any;
-}
-
-export interface AuthStep {
-  name: string;
-  description?: string;
-  validationSchema?: any;
-  outputs?: any;
-  run: (input: any, ctx: any) => Promise<any> | any;
-  hooks?: any;
-  inputs?: string[];
-  protocol?: {
-    http?: {
-      method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-      codes?: Record<string, number>;
-      auth?: boolean;
-    };
-    [key: string]: any;
-  };
-}
-
-export interface AuthPlugin {
-  name: string;
-  initialize?: (engine: any) => Promise<void> | void;
-  steps?: AuthStep[];
-  getSensitiveFields?: () => string[];
-  config?: any;
-  rootHooks?: any;
-}
+import { AuthOutput, ReAuthEngine, Token } from '@re-auth/reauth';
+import { ReAuthJWTPayload } from '@re-auth/reauth/services';
+import { CookiePrefixOptions } from 'hono/utils/cookie';
 
 // Base HTTP adapter configuration
-export interface HttpAdapterV2Config {
+export interface HttpAdapterConfig {
   engine: ReAuthEngine;
   basePath?: string;
   cors?: CorsConfig;
   rateLimit?: RateLimitConfig;
   security?: SecurityConfig;
   validation?: ValidationConfig;
+  cookie?: {
+    name: string;
+    refreshTokenName?: string;
+    options: {
+      httpOnly?: boolean;
+      secure?: boolean;
+      sameSite?: 'lax' | 'strict' | 'none';
+      path?: string;
+      domain?: string;
+      maxAge?: number; // in seconds
+      expires?: Date;
+      partitioned?: boolean;
+      prefix?: CookiePrefixOptions;
+      priority?: 'low' | 'medium' | 'high';
+    };
+    refreshOptions?: {
+      httpOnly?: boolean;
+      secure?: boolean;
+      sameSite?: 'lax' | 'strict' | 'none';
+      path?: string;
+      domain?: string;
+      maxAge?: number; // in seconds
+      expires?: Date;
+      partitioned?: boolean;
+      prefix?: CookiePrefixOptions;
+      priority?: 'low' | 'medium' | 'high';
+    };
+  };
+  headerToken?: {
+    accesssTokenHeader: string;
+    refreshTokenHeader?: string;
+  };
 }
 
 // CORS configuration
@@ -144,14 +136,14 @@ export interface AuthenticatedUser {
   /** The authenticated subject from the session */
   subject: any;
   /** The session token */
-  token: string;
+  token: Token;
   /** Whether the session is valid */
   valid: boolean;
   /** Session metadata */
   metadata?: {
-    expiresAt?: string;
-    createdAt?: string;
-    lastAccessed?: string;
+    payload?: ReAuthJWTPayload;
+    type?: 'jwt' | 'legacy' | undefined;
+    // Add any other metadata fields as needed
     [key: string]: any;
   };
 }
@@ -166,7 +158,7 @@ export interface HttpResponse {
 }
 
 // Framework adapter interface
-export interface FrameworkAdapterV2<
+export interface FrameworkAdapter<
   TRequest = any,
   TResponse = any,
   TNext = any,
@@ -242,17 +234,23 @@ export interface AuthStepResponse extends ApiResponse<AuthOutput> {
   data?: AuthOutput & {
     nextStep?: string;
     requiresRedirect?: boolean;
-    sessionToken?: string;
+    sessionToken?: Token;
   };
+  status: number;
 }
 
 export interface SessionResponse extends ApiResponse {
   data?: {
     valid: boolean;
     subject?: any;
-    token?: string;
+    token?: Token;
     expiresAt?: string;
-    metadata?: any;
+    metadata?: {
+      payload?: ReAuthJWTPayload;
+      type?: 'jwt' | 'legacy' | undefined;
+      // Add any other metadata fields as needed
+      [key: string]: any;
+    };
   };
 }
 

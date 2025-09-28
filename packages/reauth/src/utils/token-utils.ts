@@ -30,7 +30,7 @@ export function attachNewTokenIfDifferent<Result extends Record<string, any>>(
 ): Result {
   try {
     if (!originalToken) {
-      if (sessionToken) {
+      if (sessionToken && !result.token) {
         return { ...result, token: sessionToken } as Result;
       }
       return result;

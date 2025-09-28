@@ -7,6 +7,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./package.json": "./package.json",
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
@@ -71,6 +72,46 @@
       "types": "./dist/services/index.d.ts",
       "import": "./dist/services/index.js",
       "require": "./dist/services/index.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      ".": [
+        "./dist/index.d.ts"
+      ],
+      "plugins/anonymous": [
+        "./dist/plugins/anonymous/index.d.ts"
+      ],
+      "plugins/email-password": [
+        "./dist/plugins/email-password/index.d.ts"
+      ],
+      "plugins/email-or-username": [
+        "./dist/plugins/email-or-username/index.d.ts"
+      ],
+      "plugins/jwt": [
+        "./dist/plugins/jwt/index.d.ts"
+      ],
+      "plugins/phone": [
+        "./dist/plugins/phone/index.d.ts"
+      ],
+      "plugins/api-key": [
+        "./dist/plugins/api-key/index.d.ts"
+      ],
+      "plugins/organization": [
+        "./dist/plugins/organization/index.d.ts"
+      ],
+      "plugins/passwordless": [
+        "./dist/plugins/passwordless/index.d.ts"
+      ],
+      "plugins/session": [
+        "./dist/plugins/session/index.d.ts"
+      ],
+      "plugins/username": [
+        "./dist/plugins/username/index.d.ts"
+      ],
+      "services": [
+        "./dist/services/index.d.ts"
+      ]
     }
   },
   "scripts": {

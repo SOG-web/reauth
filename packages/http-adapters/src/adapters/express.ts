@@ -1,27 +1,41 @@
 import type { Request, Response, NextFunction, Router } from 'express';
+import express from 'express';
 import type {
-  HttpAdapterV2Config,
-  FrameworkAdapterV2,
+  HttpAdapterConfig,
+  FrameworkAdapter,
   HttpRequest,
   HttpResponse,
   MiddlewareFunction,
   AuthenticatedUser,
 } from '../types.js';
-import { ReAuthHttpAdapterV2 } from '../base-adapter.js';
+import { ReAuthHttpAdapter } from '../base-adapter.js';
 
-export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, NextFunction> {
+export class ExpressAdapter
+  implements FrameworkAdapter<Request, Response, NextFunction>
+{
   public readonly name = 'express';
-  private adapter: ReAuthHttpAdapterV2;
+  private adapter: ReAuthHttpAdapter;
 
-  constructor(config: HttpAdapterV2Config) {
-    this.adapter = new ReAuthHttpAdapterV2(config);
+  constructor(
+    config: HttpAdapterConfig,
+    private exposeIntrospection: boolean,
+  ) {
+    this.adapter = new ReAuthHttpAdapter(config);
   }
 
   /**
    * Create Express middleware that populates req.user
    */
-  createUserMiddleware(): (req: Request, res: Response, next: NextFunction) => Promise<void> {
-    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  createUserMiddleware(): (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => Promise<void> {
+    return async (
+      req: Request,
+      res: Response,
+      next: NextFunction,
+    ): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
         (req as any).user = await this.adapter.getCurrentUser(httpReq);
@@ -37,8 +51,16 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   /**
    * Create Express middleware that adds adapter to request
    */
-  createMiddleware(): (req: Request, res: Response, next: NextFunction) => Promise<void> {
-    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  createMiddleware(): (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => Promise<void> {
+    return async (
+      req: Request,
+      res: Response,
+      next: NextFunction,
+    ): Promise<void> => {
       // Add adapter to request for access in route handlers
       (req as any).reauth = this.adapter;
       next();
@@ -89,35 +111,39 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   /**
    * Create Express router with all ReAuth routes
    */
-  createRouter(): Router {
-    const express = require('express');
-    const router = express.Router();
+  createRouter(router?: Router, basePath: string = ''): Router {
+    // Create a new router if not provided
+    router = router || express.Router();
 
     // Add middleware
     router.use(this.createMiddleware());
 
-    // Optionally add user middleware if configured
-    // Users can add this separately: router.use(adapter.createUserMiddleware());
-
-    // Authentication step routes
-    router.post('/auth/:plugin/:step', this.createStepHandler());
-    router.get('/auth/:plugin/:step', this.createStepHandler());
-    router.put('/auth/:plugin/:step', this.createStepHandler());
-    router.patch('/auth/:plugin/:step', this.createStepHandler());
-    router.delete('/auth/:plugin/:step', this.createStepHandler());
-
     // Session management routes
-    router.get('/session', this.createSessionCheckHandler());
-    router.post('/session', this.createSessionCreateHandler());
-    router.delete('/session', this.createSessionDestroyHandler());
+    router.get(`${basePath}/session`, this.createSessionCheckHandler());
 
     // Plugin introspection routes
-    router.get('/plugins', this.createPluginListHandler());
-    router.get('/plugins/:plugin', this.createPluginDetailsHandler());
 
     // Introspection and health
-    router.get('/introspection', this.createIntrospectionHandler());
-    router.get('/health', this.createHealthHandler());
+    if (this.exposeIntrospection) {
+      router.get(
+        `${basePath}/introspection`,
+        this.createIntrospectionHandler(),
+      );
+      router.get(`${basePath}/plugins`, this.createPluginListHandler());
+      router.get(
+        `${basePath}/plugins/:plugin`,
+        this.createPluginDetailsHandler(),
+      );
+    }
+
+    router.get(`${basePath}/health`, this.createHealthHandler());
+
+    // Authentication step routes
+    router.post(`${basePath}/:plugin/:step`, this.createStepHandler());
+    router.get(`${basePath}/:plugin/:step`, this.createStepHandler());
+    router.put(`${basePath}/:plugin/:step`, this.createStepHandler());
+    router.patch(`${basePath}/:plugin/:step`, this.createStepHandler());
+    router.delete(`${basePath}/:plugin/:step`, this.createStepHandler());
 
     return router;
   }
@@ -130,7 +156,7 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
       try {
         const httpReq = this.extractRequest(req);
         const result = await this.adapter.executeAuthStep(httpReq as any);
-        this.sendResponse(res, result);
+        this.sendResponse(res, result, result.status);
       } catch (error) {
         this.handleError(res, error as Error);
       }
@@ -140,7 +166,10 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   /**
    * Create session check handler
    */
-  private createSessionCheckHandler(): (req: Request, res: Response) => Promise<void> {
+  private createSessionCheckHandler(): (
+    req: Request,
+    res: Response,
+  ) => Promise<void> {
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
@@ -153,39 +182,12 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   }
 
   /**
-   * Create session creation handler
-   */
-  private createSessionCreateHandler(): (req: Request, res: Response) => Promise<void> {
-    return async (req: Request, res: Response): Promise<void> => {
-      try {
-        const httpReq = this.extractRequest(req);
-        const result = await this.adapter.createSession(httpReq as any);
-        this.sendResponse(res, result, 201);
-      } catch (error) {
-        this.handleError(res, error as Error);
-      }
-    };
-  }
-
-  /**
-   * Create session destruction handler
-   */
-  private createSessionDestroyHandler(): (req: Request, res: Response) => Promise<void> {
-    return async (req: Request, res: Response): Promise<void> => {
-      try {
-        const httpReq = this.extractRequest(req);
-        const result = await this.adapter.destroySession(httpReq as any);
-        this.sendResponse(res, result);
-      } catch (error) {
-        this.handleError(res, error as Error);
-      }
-    };
-  }
-
-  /**
    * Create plugin list handler
    */
-  private createPluginListHandler(): (req: Request, res: Response) => Promise<void> {
+  private createPluginListHandler(): (
+    req: Request,
+    res: Response,
+  ) => Promise<void> {
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const result = await this.adapter.listPlugins();
@@ -199,7 +201,10 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   /**
    * Create plugin details handler
    */
-  private createPluginDetailsHandler(): (req: Request, res: Response) => Promise<void> {
+  private createPluginDetailsHandler(): (
+    req: Request,
+    res: Response,
+  ) => Promise<void> {
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const { plugin } = req.params;
@@ -218,7 +223,10 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   /**
    * Create introspection handler
    */
-  private createIntrospectionHandler(): (req: Request, res: Response) => Promise<void> {
+  private createIntrospectionHandler(): (
+    req: Request,
+    res: Response,
+  ) => Promise<void> {
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const result = await this.adapter.getIntrospection();
@@ -232,7 +240,10 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   /**
    * Create health check handler
    */
-  private createHealthHandler(): (req: Request, res: Response) => Promise<void> {
+  private createHealthHandler(): (
+    req: Request,
+    res: Response,
+  ) => Promise<void> {
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const result = await this.adapter.healthCheck();
@@ -260,7 +271,7 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
   /**
    * Get the base adapter instance
    */
-  getAdapter(): ReAuthHttpAdapterV2 {
+  getAdapter(): ReAuthHttpAdapter {
     return this.adapter;
   }
 }
@@ -268,14 +279,20 @@ export class ExpressAdapterV2 implements FrameworkAdapterV2<Request, Response, N
 /**
  * Factory function to create Express adapter
  */
-export function createExpressAdapter(config: HttpAdapterV2Config): ExpressAdapterV2 {
-  return new ExpressAdapterV2(config);
+export function createExpressAdapter(
+  config: HttpAdapterConfig,
+  exposeIntrospection: boolean = false,
+): ExpressAdapter {
+  return new ExpressAdapter(config, exposeIntrospection);
 }
 
 /**
  * Express middleware factory function
  */
-export function expressReAuth(config: HttpAdapterV2Config): MiddlewareFunction<Request, Response, NextFunction> {
-  const adapter = new ExpressAdapterV2(config);
+export function expressReAuth(
+  config: HttpAdapterConfig,
+  exposeIntrospection: boolean = false,
+): MiddlewareFunction<Request, Response, NextFunction> {
+  const adapter = new ExpressAdapter(config, exposeIntrospection);
   return adapter.createMiddleware();
 }

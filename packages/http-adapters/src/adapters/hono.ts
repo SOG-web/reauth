@@ -6,39 +6,33 @@ import type {
   AuthenticatedUser,
 } from '../types.js';
 import { ReAuthHttpAdapter } from '../base-adapter.js';
-import { Hono } from 'hono';
+import { Context, Hono } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 
 export class HonoAdapter {
   public readonly name = 'hono';
   private adapter: ReAuthHttpAdapter;
+  private config: HttpAdapterConfig;
 
   constructor(config: HttpAdapterConfig) {
     this.adapter = new ReAuthHttpAdapter(config);
-  }
-
-  /**
-   * Create Hono middleware
-   */
-  createMiddleware() {
-    return async (c: any, next: any) => {
-      // Add adapter to context for access in route handlers
-      c.set('reauth', this.adapter);
-      await next();
-    };
+    this.config = config;
   }
 
   /**
    * Create Hono user middleware that populates c.get('user')
    */
   createUserMiddleware() {
-    return async (c: any, next: any) => {
+    return async (c: Context, next: any) => {
       try {
         const httpReq = this.extractRequest(c);
         const user = await this.adapter.getCurrentUser(httpReq);
         c.set('user', user);
+        c.set('authenticated', !!user);
       } catch (error) {
         // Don't fail the request if user lookup fails
         c.set('user', null);
+        c.set('authenticated', false);
       }
       await next();
     };
@@ -47,7 +41,7 @@ export class HonoAdapter {
   /**
    * Get current user from Hono context
    */
-  async getCurrentUser(c: any): Promise<AuthenticatedUser | null> {
+  async getCurrentUser(c: Context): Promise<AuthenticatedUser | null> {
     // If user is already populated by middleware, return it
     const user = c.get('user');
     if (user !== undefined) {
@@ -56,13 +50,18 @@ export class HonoAdapter {
 
     // Otherwise, check session
     const httpReq = this.extractRequest(c);
-    return await this.adapter.getCurrentUser(httpReq);
+    const u = await this.adapter.getCurrentUser(httpReq);
+
+    // Store in context for future use
+    c.set('user', u);
+    c.set('authenticated', !!u);
+    return u;
   }
 
   /**
    * Extract HTTP request from Hono context
    */
-  extractRequest(c: any): HttpRequest {
+  extractRequest(c: Context): HttpRequest {
     const url = new URL(c.req.url);
 
     return {
@@ -95,7 +94,7 @@ export class HonoAdapter {
   /**
    * Handle error using Hono context
    */
-  handleError(c: any, error: Error, statusCode: number = 500): void {
+  handleError(c: Context, error: Error, statusCode: number = 500): void {
     c.status(statusCode as any);
     c.json({
       success: false,
@@ -110,72 +109,55 @@ export class HonoAdapter {
   }
 
   /**
-   * Create Hono app with all ReAuth routes
-   */
-  createApp(): any {
-    const app = new Hono();
-
-    // Add middleware
-    app.use('*', this.createMiddleware());
-
-    // Authentication step routes
-    app.post('/auth/:plugin/:step', this.createStepHandler());
-    app.get('/auth/:plugin/:step', this.createStepHandler());
-    app.put('/auth/:plugin/:step', this.createStepHandler());
-    app.patch('/auth/:plugin/:step', this.createStepHandler());
-    app.delete('/auth/:plugin/:step', this.createStepHandler());
-
-    // Session management routes
-    app.get('/session', this.createSessionCheckHandler());
-    app.post('/session', this.createSessionCreateHandler());
-    app.delete('/session', this.createSessionDestroyHandler());
-
-    // Plugin introspection routes
-    app.get('/plugins', this.createPluginListHandler());
-    app.get('/plugins/:plugin', this.createPluginDetailsHandler());
-
-    // Introspection and health
-    app.get('/introspection', this.createIntrospectionHandler());
-    app.get('/health', this.createHealthHandler());
-
-    return app;
-  }
-
-  /**
    * Register routes on existing Hono app
    */
-  registerRoutes(app: any, basePath: string = ''): void {
-    // Add middleware
-    app.use(`${basePath}/*`, this.createMiddleware());
-
-    // Authentication step routes
-    app.post(`${basePath}/auth/:plugin/:step`, this.createStepHandler());
-    app.get(`${basePath}/auth/:plugin/:step`, this.createStepHandler());
-    app.put(`${basePath}/auth/:plugin/:step`, this.createStepHandler());
-    app.patch(`${basePath}/auth/:plugin/:step`, this.createStepHandler());
-    app.delete(`${basePath}/auth/:plugin/:step`, this.createStepHandler());
+  registerRoutes(
+    app: Hono,
+    basePath: string = '',
+    exposeIntrospection: boolean = false,
+  ): void {
+    // Introspection and health
+    if (exposeIntrospection) {
+      // Plugin introspection routes
+      app.get(`${basePath}/plugins`, this.createPluginListHandler());
+      app.get(`${basePath}/plugins/:plugin`, this.createPluginDetailsHandler());
+      app.get(`${basePath}/introspection`, this.createIntrospectionHandler());
+    }
+    app.get(`${basePath}/health`, this.createHealthHandler());
 
     // Session management routes
     app.get(`${basePath}/session`, this.createSessionCheckHandler());
-    app.post(`${basePath}/session`, this.createSessionCreateHandler());
-    app.delete(`${basePath}/session`, this.createSessionDestroyHandler());
 
-    // Plugin introspection routes
-    app.get(`${basePath}/plugins`, this.createPluginListHandler());
-    app.get(`${basePath}/plugins/:plugin`, this.createPluginDetailsHandler());
-
-    // Introspection and health
-    app.get(`${basePath}/introspection`, this.createIntrospectionHandler());
-    app.get(`${basePath}/health`, this.createHealthHandler());
+    // Authentication step routes
+    app.post(`${basePath}/:plugin/:step`, this.createStepHandler());
+    app.get(`${basePath}/:plugin/:step`, this.createStepHandler());
+    app.put(`${basePath}/:plugin/:step`, this.createStepHandler());
+    app.patch(`${basePath}/:plugin/:step`, this.createStepHandler());
+    app.delete(`${basePath}/:plugin/:step`, this.createStepHandler());
   }
 
   /**
    * Create step execution handler
    */
   private createStepHandler() {
-    return async (c: any) => {
+    return async (c: Context) => {
       try {
         const httpReq = this.extractRequest(c);
+
+        // parse cookies
+        const cookieHeader = c.req.header('cookie');
+        if (cookieHeader) {
+          const cookies: Record<string, string> = {};
+          cookieHeader.split(';').forEach((cookie) => {
+            const parts = cookie.split('=');
+            const key = parts.shift()?.trim();
+            const value = decodeURIComponent(parts.join('='));
+            if (key) {
+              cookies[key] = value;
+            }
+          });
+          httpReq.cookies = cookies;
+        }
 
         // Parse body for POST/PUT/PATCH requests
         if (['POST', 'PUT', 'PATCH'].includes(c.req.method)) {
@@ -187,7 +169,65 @@ export class HonoAdapter {
         }
 
         const result = await this.adapter.executeAuthStep(httpReq as any);
-        return c.json(result);
+
+        if (this.config.cookie) {
+          const cookie = this.config.cookie;
+          const options = cookie.options;
+          if (result.data?.token) {
+            // Set cookies in response
+            const token = result.data.token;
+            if (typeof token === 'string') {
+              setCookie(c, cookie.name, token, {
+                domain: options.domain,
+                httpOnly: options.httpOnly,
+                secure: options.secure,
+                path: options.path || '/',
+                sameSite: options.sameSite || 'Lax',
+                partitioned: options.partitioned,
+                maxAge: options.maxAge,
+                expires: options.expires,
+                prefix: options.prefix,
+                priority: options.priority,
+              });
+            } else {
+              setCookie(c, cookie.name, token.accessToken, {
+                domain: options.domain,
+                httpOnly: options.httpOnly,
+                secure: options.secure,
+                path: options.path || '/',
+                sameSite: options.sameSite || 'Lax',
+                partitioned: options.partitioned,
+                maxAge: options.maxAge,
+                expires: options.expires,
+                prefix: options.prefix,
+                priority: options.priority,
+              });
+
+              if (cookie.refreshOptions && token.refreshToken) {
+                const refreshOptions = cookie.refreshOptions;
+                setCookie(
+                  c,
+                  cookie.refreshTokenName || 'refreshToken',
+                  token.refreshToken,
+                  {
+                    domain: refreshOptions.domain,
+                    httpOnly: refreshOptions.httpOnly,
+                    secure: refreshOptions.secure,
+                    path: refreshOptions.path || '/',
+                    sameSite: refreshOptions.sameSite || 'Lax',
+                    partitioned: refreshOptions.partitioned,
+                    maxAge: refreshOptions.maxAge,
+                    expires: refreshOptions.expires,
+                    prefix: refreshOptions.prefix,
+                    priority: refreshOptions.priority,
+                  },
+                );
+              }
+            }
+          }
+        }
+
+        return c.json(result, result.status as any);
       } catch (error) {
         return this.handleErrorResponse(c, error as Error);
       }
@@ -198,7 +238,7 @@ export class HonoAdapter {
    * Create session check handler
    */
   private createSessionCheckHandler() {
-    return async (c: any) => {
+    return async (c: Context) => {
       try {
         const httpReq = this.extractRequest(c);
         const result = await this.adapter.checkSession(httpReq as any);
@@ -210,47 +250,10 @@ export class HonoAdapter {
   }
 
   /**
-   * Create session creation handler
-   */
-  private createSessionCreateHandler() {
-    return async (c: any) => {
-      try {
-        const httpReq = this.extractRequest(c);
-        try {
-          httpReq.body = await c.req.json();
-        } catch {
-          httpReq.body = {};
-        }
-
-        const result = await this.adapter.createSession(httpReq as any);
-        c.status(201 as any);
-        return c.json(result);
-      } catch (error) {
-        return this.handleErrorResponse(c, error as Error);
-      }
-    };
-  }
-
-  /**
-   * Create session destruction handler
-   */
-  private createSessionDestroyHandler() {
-    return async (c: any) => {
-      try {
-        const httpReq = this.extractRequest(c);
-        const result = await this.adapter.destroySession(httpReq as any);
-        return c.json(result);
-      } catch (error) {
-        return this.handleErrorResponse(c, error as Error);
-      }
-    };
-  }
-
-  /**
    * Create plugin list handler
    */
   private createPluginListHandler() {
-    return async (c: any) => {
+    return async (c: Context) => {
       try {
         const result = await this.adapter.listPlugins();
         return c.json(result);
@@ -264,7 +267,7 @@ export class HonoAdapter {
    * Create plugin details handler
    */
   private createPluginDetailsHandler() {
-    return async (c: any) => {
+    return async (c: Context) => {
       try {
         const plugin = c.req.param('plugin');
         const result = await this.adapter.getPlugin(plugin);
@@ -279,7 +282,7 @@ export class HonoAdapter {
    * Create introspection handler
    */
   private createIntrospectionHandler() {
-    return async (c: any) => {
+    return async (c: Context) => {
       try {
         const result = await this.adapter.getIntrospection();
         return c.json(result);
@@ -293,7 +296,7 @@ export class HonoAdapter {
    * Create health check handler
    */
   private createHealthHandler() {
-    return async (c: any) => {
+    return async (c: Context) => {
       try {
         const result = await this.adapter.healthCheck();
         return c.json(result);
@@ -306,8 +309,8 @@ export class HonoAdapter {
   /**
    * Handle error response
    */
-  private handleErrorResponse(c: any, error: Error) {
-    c.status(500 as any);
+  private handleErrorResponse(c: Context, error: Error) {
+    c.status(500);
     return c.json({
       success: false,
       error: {
@@ -329,16 +332,17 @@ export class HonoAdapter {
 }
 
 /**
- * Factory function to create Hono adapter
- */
-export function createHonoAdapter(config: HttpAdapterConfig): HonoAdapter {
-  return new HonoAdapter(config);
-}
-
-/**
  * Hono middleware factory function
  */
-export function honoReAuth(config: HttpAdapterConfig): any {
+export function honoReAuth(config: HttpAdapterConfig): HonoAdapter {
   const adapter = new HonoAdapter(config);
-  return adapter.createMiddleware();
+  return adapter;
+}
+
+declare module 'hono' {
+  interface ContextVariableMap {
+    // Lightweight context variables - no heavy objects attached
+    user?: AuthenticatedUser | null;
+    authenticated: boolean;
+  }
 }
