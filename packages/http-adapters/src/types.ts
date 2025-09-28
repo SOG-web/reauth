@@ -1,10 +1,10 @@
 // Local V2 types to avoid cross-package import issues during development
-export interface AuthInputV2 {
+export interface AuthInput {
   token?: string | null;
   [key: string]: any;
 }
 
-export interface AuthOutputV2 {
+export interface AuthOutput {
   token?: string | null;
   redirect?: string;
   success: boolean;
@@ -15,7 +15,7 @@ export interface AuthOutputV2 {
   [key: string]: any;
 }
 
-export interface AuthStepV2 {
+export interface AuthStep {
   name: string;
   description?: string;
   validationSchema?: any;
@@ -33,50 +33,18 @@ export interface AuthStepV2 {
   };
 }
 
-export interface AuthPluginV2 {
+export interface AuthPlugin {
   name: string;
   initialize?: (engine: any) => Promise<void> | void;
-  steps?: AuthStepV2[];
+  steps?: AuthStep[];
   getSensitiveFields?: () => string[];
   config?: any;
   rootHooks?: any;
 }
 
-export interface ReAuthEngineV2 {
-  getAllPlugins(): AuthPluginV2[];
-  getPlugin(name: string): AuthPluginV2 | undefined;
-  executeStep(pluginName: string, stepName: string, input: AuthInputV2): Promise<AuthOutputV2>;
-  createSessionFor(subjectType: string, subjectId: string, ttlSeconds?: number): Promise<string>;
-  checkSession(token: string): Promise<{
-    subject: any | null;
-    token: string | null;
-    valid: boolean;
-  }>;
-  getSessionService(): {
-    destroySession(token: string): Promise<void>;
-  };
-  getIntrospectionData(): {
-    entity: any;
-    plugins: Array<{
-      name: string;
-      description: string;
-      steps: Array<{
-        name: string;
-        description?: string;
-        inputs: unknown;
-        outputs: unknown;
-        protocol: unknown;
-        requiresAuth: boolean;
-      }>;
-    }>;
-    generatedAt: string;
-    version: string;
-  };
-}
-
 // Base HTTP adapter configuration
 export interface HttpAdapterV2Config {
-  engine: ReAuthEngineV2;
+  engine: ReAuthEngine;
   basePath?: string;
   cors?: CorsConfig;
   rateLimit?: RateLimitConfig;
@@ -86,7 +54,14 @@ export interface HttpAdapterV2Config {
 
 // CORS configuration
 export interface CorsConfig {
-  origin?: string | string[] | boolean | ((origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => void);
+  origin?:
+    | string
+    | string[]
+    | boolean
+    | ((
+        origin: string | undefined,
+        callback: (err: Error | null, allow?: boolean) => void,
+      ) => void);
   credentials?: boolean;
   allowedHeaders?: string[];
   exposedHeaders?: string[];
@@ -191,10 +166,22 @@ export interface HttpResponse {
 }
 
 // Framework adapter interface
-export interface FrameworkAdapterV2<TRequest = any, TResponse = any, TNext = any> {
+export interface FrameworkAdapterV2<
+  TRequest = any,
+  TResponse = any,
+  TNext = any,
+> {
   name: string;
-  createMiddleware(): (req: TRequest, res: TResponse, next: TNext) => Promise<void> | void;
-  createUserMiddleware(): (req: TRequest, res: TResponse, next: TNext) => Promise<void> | void;
+  createMiddleware(): (
+    req: TRequest,
+    res: TResponse,
+    next: TNext,
+  ) => Promise<void> | void;
+  createUserMiddleware(): (
+    req: TRequest,
+    res: TResponse,
+    next: TNext,
+  ) => Promise<void> | void;
   extractRequest(req: TRequest): HttpRequest;
   sendResponse(res: TResponse, data: any, statusCode?: number): void;
   handleError(res: TResponse, error: Error, statusCode?: number): void;
@@ -251,8 +238,8 @@ export interface ApiResponse<T = any> {
   };
 }
 
-export interface AuthStepResponse extends ApiResponse<AuthOutputV2> {
-  data?: AuthOutputV2 & {
+export interface AuthStepResponse extends ApiResponse<AuthOutput> {
+  data?: AuthOutput & {
     nextStep?: string;
     requiresRedirect?: boolean;
     sessionToken?: string;
@@ -284,7 +271,11 @@ export interface PluginListResponse extends ApiResponse {
 }
 
 // Middleware types
-export interface MiddlewareFunction<TRequest = any, TResponse = any, TNext = any> {
+export interface MiddlewareFunction<
+  TRequest = any,
+  TResponse = any,
+  TNext = any,
+> {
   (req: TRequest, res: TResponse, next: TNext): Promise<void> | void;
 }
 
@@ -301,7 +292,7 @@ export class HttpAdapterError extends Error {
     message: string,
     public statusCode: number = 500,
     public code: string = 'INTERNAL_ERROR',
-    public details?: any
+    public details?: any,
   ) {
     super(message);
     this.name = 'HttpAdapterError';

@@ -1,4 +1,4 @@
-import type { AuthPlugin, OrmLike, Subject } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike, Subject } from '../../types';
 import type { EmailOrUsernameConfig } from './types';
 export type { EmailOrUsernameConfig } from './types';
 import { loginStep } from './steps/login.step';
@@ -11,7 +11,7 @@ export const baseEmailOrUsernamePlugin: AuthPlugin<EmailOrUsernameConfig> = {
   initialize(engine) {
     // Check that required plugins are present
     const emailPlugin = engine.getPlugin('email-password');
-    const usernamePlugin = engine.getPlugin('username');
+    const usernamePlugin = engine.getPlugin('username-password');
 
     if (!emailPlugin) {
       throw new Error(
@@ -119,9 +119,17 @@ export const baseEmailOrUsernamePlugin: AuthPlugin<EmailOrUsernameConfig> = {
   },
 };
 
-// Export a configured plugin creator with validation
-const emailOrUsernamePlugin: AuthPlugin<EmailOrUsernameConfig> =
+// Export a factory function that creates a configured plugin
+const emailOrUsernamePlugin = (
+  config: Partial<EmailOrUsernameConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<EmailOrUsernameConfig>>;
+  }>,
+): AuthPlugin<EmailOrUsernameConfig> =>
   createAuthPlugin<EmailOrUsernameConfig>(baseEmailOrUsernamePlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
 

@@ -1,14 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   SetRolesPermissionsInput,
   SetRolesPermissionsOutput,
   OrganizationConfig,
 } from '../types';
 import { hasOrganizationPermission } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const setRolesPermissionsValidation = type({
-  token: 'string',
+  token: tokenType,
   organization_id: 'string',
   'subject_id?': 'string',
   'email?': 'string',
@@ -56,6 +57,7 @@ export const setRolesPermissionsStep: AuthStep<
       permissions: ['string'],
       updated_at: 'string',
     },
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const {
@@ -84,11 +86,15 @@ export const setRolesPermissionsStep: AuthStep<
 
     // Validate that either subject_id or email is provided
     if (!subject_id && !email) {
-      return {
-        success: false,
-        message: 'Either subject_id or email must be provided',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Either subject_id or email must be provided',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Get email if needed
@@ -102,11 +108,15 @@ export const setRolesPermissionsStep: AuthStep<
       try {
         targetEmail = await ctx.config.getEmail(email);
       } catch (error) {
-        return {
-          success: false,
-          message: 'Failed to retrieve email for subject',
-          status: 'ic',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Failed to retrieve email for subject',
+            status: 'ic',
+          },
+          token,
+          session.token,
+        );
       }
     }
 
@@ -117,11 +127,15 @@ export const setRolesPermissionsStep: AuthStep<
     });
 
     if (!organization) {
-      return {
-        success: false,
-        message: 'Organization not found',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization not found',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check admin permission
@@ -132,11 +146,15 @@ export const setRolesPermissionsStep: AuthStep<
       orm,
     );
     if (!hasPermission) {
-      return {
-        success: false,
-        message: 'Admin access required to manage roles and permissions',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Admin access required to manage roles and permissions',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Find the membership to update
@@ -152,11 +170,15 @@ export const setRolesPermissionsStep: AuthStep<
     });
 
     if (!membership) {
-      return {
-        success: false,
-        message: 'User is not a member of this organization',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'User is not a member of this organization',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -214,25 +236,33 @@ export const setRolesPermissionsStep: AuthStep<
         },
       });
 
-      return {
-        success: true,
-        message: 'Roles and permissions updated successfully',
-        status: 'su',
-        membership: {
-          id: membership.id as string,
-          subject_id: membership.subject_id as string,
-          organization_id: membership.organization_id as string,
-          roles: newRoles,
-          permissions: newPermissions,
-          updated_at: now.toISOString(),
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Roles and permissions updated successfully',
+          status: 'su',
+          membership: {
+            id: membership.id as string,
+            subject_id: membership.subject_id as string,
+            organization_id: membership.organization_id as string,
+            roles: newRoles,
+            permissions: newPermissions,
+            updated_at: now.toISOString(),
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to update roles and permissions',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to update roles and permissions',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

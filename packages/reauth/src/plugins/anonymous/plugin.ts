@@ -1,10 +1,9 @@
-import type { AuthPlugin, OrmLike } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike } from '../../types';
 import type { AnonymousConfig } from './types';
 export type { AnonymousConfig } from './types';
 import { createGuestStep } from './steps/create-guest.step';
 import { extendGuestStep } from './steps/extend-guest.step';
 import { convertGuestStep } from './steps/convert-guest.step';
-import { cleanupExpiredStep } from './steps/cleanup-expired.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredSessions } from './utils';
 
@@ -51,35 +50,34 @@ export const baseAnonymousPlugin: AuthPlugin<AnonymousConfig> = {
 
     // Register background cleanup task if enabled
     const config = this.config || {};
-    if (config.enableBackgroundCleanup !== false) {
-      const cleanupIntervalMs = config.cleanupIntervalMs || 300000; // Default 5 minutes
 
-      engine.registerCleanupTask({
-        name: 'expired-sessions',
-        pluginName: 'anonymous',
-        intervalMs: cleanupIntervalMs,
-        enabled: true,
-        runner: async (orm, pluginConfig) => {
-          try {
-            const result = await cleanupExpiredSessions(orm, pluginConfig);
-            return {
-              cleaned: result.sessionsDeleted + result.subjectsDeleted,
-              sessionsDeleted: result.sessionsDeleted,
-              subjectsDeleted: result.subjectsDeleted,
-            };
-          } catch (error) {
-            return {
-              cleaned: 0,
-              sessionsDeleted: 0,
-              subjectsDeleted: 0,
-              errors: [
-                `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
-              ],
-            };
-          }
-        },
-      });
-    }
+    const cleanupIntervalMs = config.cleanupIntervalMs || 300000; // Default 5 minutes
+
+    engine.registerCleanupTask({
+      name: 'expired-sessions',
+      pluginName: 'anonymous',
+      intervalMs: cleanupIntervalMs,
+      enabled: true,
+      runner: async (orm, pluginConfig) => {
+        try {
+          const result = await cleanupExpiredSessions(orm, pluginConfig);
+          return {
+            cleaned: result.sessionsDeleted + result.subjectsDeleted,
+            sessionsDeleted: result.sessionsDeleted,
+            subjectsDeleted: result.subjectsDeleted,
+          };
+        } catch (error) {
+          return {
+            cleaned: 0,
+            sessionsDeleted: 0,
+            subjectsDeleted: 0,
+            errors: [
+              `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+            ],
+          };
+        }
+      },
+    });
   },
   config: {
     sessionTtlSeconds: 1800, // 30 minutes (shorter than regular sessions)
@@ -90,14 +88,8 @@ export const baseAnonymousPlugin: AuthPlugin<AnonymousConfig> = {
     maxSessionExtensions: 3,
     fingerprintRequired: true,
     cleanupIntervalMs: 300000, // 5 minutes
-    enableBackgroundCleanup: true,
   },
-  steps: [
-    createGuestStep,
-    extendGuestStep,
-    convertGuestStep,
-    cleanupExpiredStep,
-  ],
+  steps: [createGuestStep, extendGuestStep, convertGuestStep],
   // Removed rootHooks to avoid affecting response time
   // Background cleanup now handles expired session removal
   async getProfile(subjectId, ctx) {
@@ -135,9 +127,17 @@ export const baseAnonymousPlugin: AuthPlugin<AnonymousConfig> = {
   },
 };
 
-// Export a configured plugin creator that validates config at construction time.
-const anonymousPlugin: AuthPlugin<AnonymousConfig> =
+// Export a factory function that creates a configured plugin
+const anonymousPlugin = (
+  config: Partial<AnonymousConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<AnonymousConfig>>;
+  }>,
+): AuthPlugin<AnonymousConfig> =>
   createAuthPlugin<AnonymousConfig>(baseAnonymousPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
 

@@ -1,15 +1,21 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  tokenType,
+  Token,
+} from '../../../types';
 import type { AnonymousConfig } from '../types';
 import { calculateExpiresAt, canExtendSession } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ExtendGuestInput = {
-  token: string;
+  token: Token;
   others?: Record<string, any>;
 };
 
 export const extendGuestValidation = type({
-  token: 'string',
+  token: tokenType,
   others: 'object?',
 });
 
@@ -33,7 +39,7 @@ export const extendGuestStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       type: 'string',
@@ -69,33 +75,45 @@ export const extendGuestStep: AuthStep<
     });
 
     if (!anonymousSession) {
-      return {
-        success: false,
-        message: 'Session is not a guest session',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Session is not a guest session',
+          status: 'ic',
+          others,
+        },
+        token,
+        sessionCheck.token,
+      );
     }
 
     // Check if session can be extended
     const canExtend = await canExtendSession(subjectId, orm, ctx.config);
     if (!canExtend) {
-      return {
-        success: false,
-        message: 'Session cannot be extended (maximum extensions reached)',
-        status: 'tl',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Session cannot be extended (maximum extensions reached)',
+          status: 'tl',
+          others,
+        },
+        token,
+        sessionCheck.token,
+      );
     }
 
     // Check if session has not already expired
     if (new Date() > new Date(anonymousSession.expires_at as string)) {
-      return {
-        success: false,
-        message: 'Session has already expired',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Session has already expired',
+          status: 'ip',
+          others,
+        },
+        token,
+        sessionCheck.token,
+      );
     }
 
     try {
@@ -135,23 +153,28 @@ export const extendGuestStep: AuthStep<
         extensionsRemaining,
       };
 
-      return {
+      const base = {
         success: true,
         message: 'Guest session extended successfully',
         status: 'su',
-        token: newToken,
         subject: updatedSubject,
         newExpiresAt: newExpiresAt.toISOString(),
         extensionsRemaining,
         others,
-      };
+      } as const;
+
+      return attachNewTokenIfDifferent(base, token, newToken);
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to extend guest session',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to extend guest session',
+          status: 'ic',
+          others,
+        },
+        token,
+        sessionCheck.token,
+      );
     }
   },
 };

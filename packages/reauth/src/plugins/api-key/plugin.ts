@@ -1,4 +1,4 @@
-import type { AuthPlugin, OrmLike } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike } from '../../types';
 import type { ApiKeyConfig } from './types';
 export type { ApiKeyConfig } from './types';
 import { authenticateApiKeyStep } from './steps/authenticate-api-key.step';
@@ -157,10 +157,17 @@ export const baseApiKeyPlugin: AuthPlugin<ApiKeyConfig> = {
   // Background cleanup now handles expired keys and usage logs via SimpleCleanupScheduler
 };
 
-// Export a configured plugin creator that validates config at construction time
-const apiKeyPlugin: AuthPlugin<ApiKeyConfig> = createAuthPlugin<ApiKeyConfig>(
-  baseApiKeyPlugin,
-  {
+// Export a factory function that creates a configured plugin
+const apiKeyPlugin = (
+  config: Partial<ApiKeyConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<ApiKeyConfig>>;
+  }>,
+): AuthPlugin<ApiKeyConfig> =>
+  createAuthPlugin<ApiKeyConfig>(baseApiKeyPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
 
@@ -192,7 +199,6 @@ const apiKeyPlugin: AuthPlugin<ApiKeyConfig> = createAuthPlugin<ApiKeyConfig>(
 
       return errs.length ? errs : null;
     },
-  },
-);
+  });
 
 export default apiKeyPlugin;

@@ -1,19 +1,25 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { EmailPasswordConfig } from '../types';
 import { verifyPasswordHash, hashPassword } from '../../../lib/password';
 import { emailSchema, passwordSchema } from '../../shared/validation';
 import { generateCode as defaultGenerateCode } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ChangeEmailInput = {
-  token: string;
+  token: Token;
   currentPassword: string;
   newEmail: string;
   others?: Record<string, any>;
 };
 
 export const changeEmailValidation = type({
-  token: 'string',
+  token: tokenType,
   currentPassword: passwordSchema,
   newEmail: emailSchema,
   others: 'object?',
@@ -41,6 +47,7 @@ export const changeEmailStep: AuthStep<
     'error?': 'string | object',
     status: 'string',
     'others?': 'object',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, currentPassword, newEmail, others } = input;
@@ -65,12 +72,16 @@ export const changeEmailStep: AuthStep<
     });
 
     if (!creds?.password_hash) {
-      return {
-        success: false,
-        message: 'Current password not found',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current password not found',
+          status: 'ip',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Verify current password
@@ -80,12 +91,16 @@ export const changeEmailStep: AuthStep<
     );
 
     if (!isCurrentPasswordValid) {
-      return {
-        success: false,
-        message: 'Current password is incorrect',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current password is incorrect',
+          status: 'ip',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Check if new email is already taken by another user
@@ -99,12 +114,16 @@ export const changeEmailStep: AuthStep<
     });
 
     if (existingIdentity) {
-      return {
-        success: false,
-        message: 'Email address is already in use',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Email address is already in use',
+          status: 'ic',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Find current email identity
@@ -114,12 +133,16 @@ export const changeEmailStep: AuthStep<
     });
 
     if (!currentIdentity) {
-      return {
-        success: false,
-        message: 'Current email identity not found',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current email identity not found',
+          status: 'ic',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Update email address immediately regardless of verification settings
@@ -172,33 +195,46 @@ export const changeEmailStep: AuthStep<
       // Send verification code to new email address for future login verification
       try {
         await ctx.config.sendCode(check.subject, code, newEmail, 'verify');
-        return {
-          success: true,
-          message:
-            'Email address changed successfully. Verification code sent for next login.',
-          status: 'su',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: true,
+            message:
+              'Email address changed successfully. Verification code sent for next login.',
+            status: 'su',
+            others,
+            token,
+          },
+          token,
+          check.token,
+        );
       } catch (error) {
         // Even if sending fails, the email was already updated successfully
-        return {
-          success: true,
-          message:
-            'Email address changed successfully. Verification code could not be sent.',
-          status: 'su',
-          others: {
-            ...others,
-            sendCodeError: error,
+        return attachNewTokenIfDifferent(
+          {
+            success: true,
+            message:
+              'Email address changed successfully. Verification code could not be sent.',
+            status: 'su',
+            others: {
+              ...others,
+              sendCodeError: error,
+            },
           },
-        };
+          token,
+          check.token,
+        );
       }
     } else {
-      return {
-        success: true,
-        message: 'Email address changed successfully',
-        status: 'su',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Email address changed successfully',
+          status: 'su',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
   },
 };

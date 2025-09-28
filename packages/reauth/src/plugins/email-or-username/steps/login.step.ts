@@ -1,9 +1,10 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import type { EmailOrUsernameConfig } from '../types';
 import { passwordSchema } from '../../shared/validation';
 import { detectInputType, findTestUser } from '../utils';
 import { hashPassword, verifyPasswordHash } from '../../../lib/password';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 import { genCode } from '../../email-password/utils';
 
 export type LoginInput = {
@@ -38,7 +39,7 @@ export const loginStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       emailOrUsername: 'string',
@@ -72,14 +73,15 @@ export const loginStep: AuthStep<
         ...testUser.profile,
       };
 
-      return {
+      const baseResult = {
         success: true,
         message: 'Login successful (test user)',
         status: 'su',
-        token,
         subject,
         others,
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined as any, token);
     }
 
     // Detect input type (email vs username)
@@ -207,13 +209,14 @@ export const loginStep: AuthStep<
       verified: identity.verified,
     };
 
-    return {
+    const baseResult = {
       success: true,
       message: 'Login successful',
       status: 'su',
-      token,
       subject,
       others,
     };
+
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
   },
 };

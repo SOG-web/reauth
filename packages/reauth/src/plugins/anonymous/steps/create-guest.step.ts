@@ -1,6 +1,6 @@
 import { type } from 'arktype';
 import { createHash } from 'crypto';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import type { AnonymousConfig } from '../types';
 import {
   generateFingerprint,
@@ -8,6 +8,7 @@ import {
   canCreateGuestSession,
   cleanupExpiredSessions,
 } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type CreateGuestInput = {
   fingerprint?: string;
@@ -44,7 +45,7 @@ export const createGuestStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       type: 'string',
@@ -140,16 +141,17 @@ export const createGuestStep: AuthStep<
         metadata: metadata || {},
       };
 
-      return {
+      const baseResult = {
         success: true,
         message: 'Guest session created successfully',
         status: 'su',
-        token,
         subject: guestSubject,
         guestId: subjectId,
         expiresAt: expiresAt.toISOString(),
         others,
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined as any, token);
     } catch (error) {
       return {
         success: false,

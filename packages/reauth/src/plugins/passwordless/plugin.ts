@@ -1,4 +1,4 @@
-import type { AuthPlugin, OrmLike, Subject } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike, Subject } from '../../types';
 import type { PasswordlessConfig } from './types';
 export type { PasswordlessConfig } from './types';
 import { sendMagicLinkStep } from './steps/send-magic-link.step';
@@ -160,16 +160,17 @@ export const basePasswordlessPlugin: AuthPlugin<PasswordlessConfig> = {
   // Background cleanup now handles expired magic links via SimpleCleanupScheduler
 };
 
-// Export a configured plugin creator that validates config at construction time
-const passwordlessPlugin: AuthPlugin<PasswordlessConfig> =
-  basePasswordlessPlugin;
-
-// Factory function for creating validated passwordless plugin
-export function createPasswordlessPlugin(
-  config: PasswordlessConfig,
-): AuthPlugin<PasswordlessConfig> {
-  return createAuthPlugin<PasswordlessConfig>(basePasswordlessPlugin, {
-    config,
+// Export a factory function that creates a configured plugin
+const passwordlessPlugin = (
+  config: Partial<PasswordlessConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<PasswordlessConfig>>;
+  }>,
+): AuthPlugin<PasswordlessConfig> =>
+  createAuthPlugin<PasswordlessConfig>(basePasswordlessPlugin, {
+    config: config as PasswordlessConfig,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
 
@@ -241,6 +242,12 @@ export function createPasswordlessPlugin(
       return errs.length ? errs : null;
     },
   });
+
+// Keep the old helper for explicit creation style
+export function createPasswordlessPlugin(
+  config: PasswordlessConfig,
+): AuthPlugin<PasswordlessConfig> {
+  return passwordlessPlugin(config, []);
 }
 
 export default passwordlessPlugin;

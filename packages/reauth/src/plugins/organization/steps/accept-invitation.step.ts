@@ -1,14 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   AcceptInvitationInput,
   AcceptInvitationOutput,
   OrganizationConfig,
 } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const acceptInvitationValidation = type({
   'invitation_token?': 'string', // invitation
-  'token?': 'string', // authentication
+  'token?': tokenType, // authentication
 });
 
 export const acceptInvitationStep: AuthStep<
@@ -36,68 +37,11 @@ export const acceptInvitationStep: AuthStep<
       organization_id: 'string',
       role: 'string',
     },
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { invitation_token, token } = input;
     const orm = await ctx.engine.getOrm();
-
-    // Find the invitation
-    const invitation = await orm.findFirst('organization_invitations', {
-      where: (b: any) => b('token', '=', invitation_token),
-    });
-
-    if (!invitation) {
-      return {
-        success: false,
-        message: 'Invalid invitation token',
-        status: 'unf',
-      };
-    }
-
-    // Check if invitation is still valid
-    if (invitation.status !== 'pending') {
-      return {
-        success: false,
-        message: `Invitation is ${invitation.status}`,
-        status: 'ic',
-      };
-    }
-
-    // Check if invitation has expired
-    const now = new Date();
-    if (new Date(invitation.expires_at as any) < now) {
-      // Update invitation status to expired
-      await orm.updateMany('organization_invitations', {
-        where: (b: any) => b('id', '=', invitation.id),
-        set: {
-          status: 'expired',
-          updated_at: now,
-        },
-      });
-
-      return {
-        success: false,
-        message: 'Invitation has expired',
-        status: 'ic',
-      };
-    }
-
-    // Check if organization still exists and is active
-    const organization = await orm.findFirst('organizations', {
-      where: (b: any) =>
-        b.and(
-          b('id', '=', invitation.organization_id),
-          b('is_active', '=', true),
-        ),
-    });
-
-    if (!organization) {
-      return {
-        success: false,
-        message: 'Organization no longer exists',
-        status: 'unf',
-      };
-    }
 
     let subjectId: string | null = null;
 
@@ -121,6 +65,80 @@ export const acceptInvitationStep: AuthStep<
       };
     }
 
+    // Find the invitation
+    const invitation = await orm.findFirst('organization_invitations', {
+      where: (b: any) => b('token', '=', invitation_token),
+    });
+
+    if (!invitation) {
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Invalid invitation token',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
+    }
+
+    // Check if invitation is still valid
+    if (invitation.status !== 'pending') {
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: `Invitation is ${invitation.status}`,
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
+    }
+
+    // Check if invitation has expired
+    const now = new Date();
+    if (new Date(invitation.expires_at as any) < now) {
+      // Update invitation status to expired
+      await orm.updateMany('organization_invitations', {
+        where: (b: any) => b('id', '=', invitation.id),
+        set: {
+          status: 'expired',
+          updated_at: now,
+        },
+      });
+
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Invitation has expired',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
+    }
+
+    // Check if organization still exists and is active
+    const organization = await orm.findFirst('organizations', {
+      where: (b: any) =>
+        b.and(
+          b('id', '=', invitation.organization_id),
+          b('is_active', '=', true),
+        ),
+    });
+
+    if (!organization) {
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization no longer exists',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
+    }
+
     // Check if user is already a member
     const existingMembership = await orm.findFirst('organization_memberships', {
       where: (b: any) =>
@@ -133,11 +151,15 @@ export const acceptInvitationStep: AuthStep<
     });
 
     if (existingMembership) {
-      return {
-        success: false,
-        message: 'User is already a member of this organization',
-        status: 'eq',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'User is already a member of this organization',
+          status: 'eq',
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -167,22 +189,30 @@ export const acceptInvitationStep: AuthStep<
         },
       });
 
-      return {
-        success: true,
-        message: 'Successfully joined organization',
-        status: 'su',
-        membership: {
-          id: membership.id as string,
-          organization_id: invitation.organization_id as string,
-          role: invitation.role as string,
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Successfully joined organization',
+          status: 'su',
+          membership: {
+            id: membership.id as string,
+            organization_id: invitation.organization_id as string,
+            role: invitation.role as string,
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to accept invitation',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to accept invitation',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

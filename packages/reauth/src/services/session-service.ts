@@ -1,0 +1,793 @@
+import type {
+  CreateSessionOptions,
+  FumaClient,
+  OrmLike,
+  SessionResolvers,
+  SessionService,
+  Subject,
+  Token,
+} from '../types';
+import type { ReAuthJWTPayload, TokenPair } from './jwt.types';
+import { EnhancedJWKSService } from './jwt-service';
+import { JWK } from 'jose';
+import { generateSessionToken } from '../lib';
+
+export class FumaSessionService implements SessionService {
+  private enhancedMode = false;
+  private jwtService: EnhancedJWKSService | null = null;
+  private useJwks: boolean = false;
+
+  constructor(
+    private dbClient: FumaClient,
+    private resolvers: SessionResolvers,
+    private tokenFactory: () => string = generateSessionToken,
+    private getUserData?: (
+      subjectId: string,
+      orm: OrmLike,
+    ) => Promise<Record<string, any>>,
+  ) {}
+
+  // Enable JWKS functionality
+  enableJWKS(options: {
+    issuer: string;
+    keyRotationIntervalDays: number;
+    keyGracePeriodDays: number;
+    defaultAccessTokenTtlSeconds: number;
+    defaultRefreshTokenTtlSeconds: number;
+    enableRefreshTokenRotation: boolean;
+  }): void {
+    this.jwtService = new EnhancedJWKSService(
+      this.dbClient,
+      options.issuer,
+      options.keyRotationIntervalDays,
+      options.keyGracePeriodDays,
+      options.defaultAccessTokenTtlSeconds,
+      options.defaultRefreshTokenTtlSeconds,
+      options.enableRefreshTokenRotation,
+    );
+    this.useJwks = true;
+  }
+
+  // Enable enhanced session features (called by session plugin)
+  enableEnhancedFeatures(): void {
+    this.enhancedMode = true;
+  }
+
+  getJwkService(): EnhancedJWKSService | null {
+    return this.jwtService;
+  }
+
+  // Hybrid token verification - supports both JWT and legacy tokens
+  async verifyToken(token: Token): Promise<{
+    subject: any | null;
+    token: Token | null;
+    type: 'jwt' | 'legacy';
+    payload?: ReAuthJWTPayload;
+  }> {
+    const result = await this.verifySession(token);
+    return {
+      subject: result.subject,
+      token: result.token,
+      type: result.type || 'legacy',
+      payload: result.payload,
+    };
+  }
+
+  // Legacy session methods
+  async createSession(
+    subjectType: string,
+    subjectId: string,
+    ttlSeconds?: number,
+  ): Promise<Token> {
+    const result = await this.createSessionWithMetadata(
+      subjectType,
+      subjectId,
+      {
+        ttlSeconds,
+      },
+    );
+
+    return result;
+  }
+
+  // JWT-enhanced session creation - returns Token when JWT is enabled
+  async createJWTSession(
+    subjectType: string,
+    subjectId: string,
+    ttlSeconds?: number,
+  ): Promise<Token> {
+    if (!this.jwtService) {
+      throw new Error(
+        'JWT features not enabled. Call enableJWTFeatures() first.',
+      );
+    }
+
+    return this.createSessionWithMetadata(subjectType, subjectId, {
+      ttlSeconds,
+    });
+  }
+
+  async createSessionWithMetadata(
+    subjectType: string,
+    subjectId: string,
+    options: CreateSessionOptions,
+  ): Promise<Token> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    if (options.ttlSeconds && options.ttlSeconds < 30) {
+      throw new Error("'ttlSeconds' must be greater than or equal to 30");
+    }
+
+    let expiresAt = options.ttlSeconds
+      ? new Date(Date.now() + options.ttlSeconds * 1000)
+      : null;
+
+    let token: string;
+    let refreshToken: string | undefined;
+
+    const userData = this.getUserData
+      ? await this.getUserData(subjectId, orm)
+      : {};
+
+    // Generate token based on mode
+    if (this.useJwks && this.jwtService) {
+      const payload: ReAuthJWTPayload = {
+        sub: subjectId,
+        subject_type: subjectType,
+        userData,
+      };
+
+      const tokenPair = await this.jwtService.createTokenPair(
+        payload,
+        options.deviceInfo, //TODO: complete this with full parity on the jwt side
+        options.ttlSeconds,
+      );
+      token = tokenPair.accessToken;
+      refreshToken = tokenPair.refreshToken;
+
+      // Sync session expires_at with JWT expiration for unified management
+      if (!options.ttlSeconds) {
+        try {
+          const jwtPayload = await this.jwtService.verifyJWT(token);
+          if (jwtPayload.exp) {
+            const jwtExpiresAt = new Date(jwtPayload.exp * 1000);
+            // Use JWT expiration time instead of default session expiration
+            expiresAt = jwtExpiresAt;
+          }
+        } catch {
+          // If we can't verify the JWT, keep the original expiresAt
+        }
+      }
+    } else {
+      token = this.tokenFactory();
+    }
+
+    // Create the basic session (always store in sessions table for unified management)
+    const session = await orm.create('sessions', {
+      subject_type: subjectType,
+      subject_id: subjectId,
+      token,
+      expires_at: expiresAt,
+    });
+
+    // If enhanced mode is enabled and we have additional data, store it
+    if (this.enhancedMode) {
+      const sessionId = session.id || token; // Use session ID or token as fallback
+
+      // Store device information if provided
+      if (options.deviceInfo) {
+        await orm.create('session_devices', {
+          session_id: sessionId,
+          fingerprint: options.deviceInfo.fingerprint,
+          user_agent: options.deviceInfo.userAgent,
+          ip_address: options.deviceInfo.ipAddress,
+          is_trusted: options.deviceInfo.isTrusted || false,
+          device_name: options.deviceInfo.deviceName,
+        });
+      }
+
+      // Store metadata if provided
+      if (options.metadata) {
+        for (const [key, value] of Object.entries(options.metadata)) {
+          await orm.create('session_metadata', {
+            session_id: sessionId,
+            key,
+            value: JSON.stringify(value),
+          });
+        }
+      }
+    }
+
+    // Return token in appropriate format
+    if (this.useJwks && refreshToken) {
+      return { accessToken: token, refreshToken };
+    }
+    return token;
+  }
+
+  async listSessionsForSubject(
+    subjectType: string,
+    subjectId: string,
+  ): Promise<any[]> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    const now = new Date();
+
+    // Get all active sessions for the subject
+    const sessions = await orm.findMany('sessions', {
+      where: (b: any) =>
+        b.and(
+          b('subject_type', '=', subjectType),
+          b('subject_id', '=', subjectId),
+          b.or(b.isNull('expires_at'), b('expires_at', '>', now)),
+        ),
+    });
+
+    const result: any[] = [];
+
+    for (const session of sessions) {
+      const sessionData: any = {
+        sessionId: session.id || session.token,
+        token: session.token,
+        createdAt: session.created_at,
+        expiresAt: session.expires_at,
+      };
+
+      // If enhanced mode, fetch additional data
+      if (this.enhancedMode) {
+        const sessionId = session.id || session.token;
+
+        // Get device info
+        const deviceInfo = await orm.findFirst('session_devices', {
+          where: (b: any) => b('session_id', '=', sessionId),
+        });
+
+        if (deviceInfo) {
+          sessionData.deviceInfo = {
+            fingerprint: (deviceInfo as any).fingerprint,
+            userAgent: (deviceInfo as any).user_agent,
+            ipAddress: (deviceInfo as any).ip_address,
+            isTrusted: (deviceInfo as any).is_trusted,
+            deviceName: (deviceInfo as any).device_name,
+          };
+        }
+
+        // Get metadata
+        const metadataRows = await orm.findMany('session_metadata', {
+          where: (b: any) => b('session_id', '=', sessionId),
+        });
+
+        if (metadataRows.length > 0) {
+          sessionData.metadata = {};
+          for (const row of metadataRows) {
+            try {
+              sessionData.metadata[(row as any).key] = JSON.parse(
+                (row as any).value,
+              );
+            } catch {
+              sessionData.metadata[(row as any).key] = (row as any).value;
+            }
+          }
+        }
+      }
+
+      result.push(sessionData);
+    }
+
+    return result;
+  }
+
+  async verifySession(token: Token): Promise<{
+    subject: any | null;
+    token: Token | null;
+    type?: 'jwt' | 'legacy';
+    payload?: ReAuthJWTPayload;
+  }> {
+    if (!token) {
+      return { subject: null, token: null };
+    }
+
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    const now = new Date();
+    let payload: ReAuthJWTPayload | undefined;
+    let isJWT = false;
+    let needsRefresh = false;
+    let sessionExpired = false;
+    const accessToken = typeof token === 'string' ? token : token.accessToken;
+    const refreshToken = typeof token === 'string' ? null : token.refreshToken;
+
+    // Always check session table first for unified management
+    let session = await orm.findFirst('sessions', {
+      where: (b: any) => b('token', '=', accessToken),
+    });
+
+    if (!session) {
+      return { subject: null, token: null };
+    }
+
+    // Check session expiration and if it's about to expire (within 1 minute)
+    const sessionExpiresAt = (session as any).expires_at;
+    if (sessionExpiresAt) {
+      const expirationDate = new Date(sessionExpiresAt);
+      const oneMinuteFromNow = new Date(now.getTime() + 1 * 60 * 1000);
+
+      if (expirationDate <= now) {
+        sessionExpired = true;
+      } else if (expirationDate <= oneMinuteFromNow) {
+        needsRefresh = true;
+      }
+    }
+
+    // Try JWT verification if enabled
+    if ((!needsRefresh || !sessionExpired) && this.jwtService && accessToken) {
+      try {
+        payload = await this.jwtService.verifyJWT(accessToken);
+        isJWT = true;
+      } catch (jwtError: any) {
+        // JWT verification failed, could be expired
+        isJWT = false;
+      }
+    }
+
+    // Handle expired session or token that needs refresh
+    if ((sessionExpired || !isJWT) && refreshToken && this.jwtService) {
+      try {
+        // Attempt to refresh the token pair
+        const newTokenPair =
+          await this.jwtService.refreshAccessToken(refreshToken);
+
+        // Verify the new access token to get payload and expiration
+        const newPayload = await this.jwtService.verifyJWT(
+          newTokenPair.accessToken,
+        );
+        const newExpiresAt = newPayload.exp
+          ? new Date(newPayload.exp * 1000)
+          : null;
+
+        // Delete old session record
+        await orm.deleteMany('sessions', {
+          where: (b: any) => b('token', '=', accessToken),
+        });
+
+        // Create new session record with new access token
+        const newSession = await orm.create('sessions', {
+          subject_type: (session as any).subject_type,
+          subject_id: (session as any).subject_id,
+          token: newTokenPair.accessToken,
+          expires_at: newExpiresAt,
+        });
+
+        // If enhanced mode, transfer session metadata to new session
+        if (this.enhancedMode) {
+          const oldSessionId = (session as any).id;
+          const newSessionId = newSession.id || newTokenPair.accessToken;
+
+          // Transfer device info
+          const deviceInfo = await orm.findFirst('session_devices', {
+            where: (b: any) => b('session_id', '=', oldSessionId),
+          });
+
+          if (deviceInfo) {
+            await orm.deleteMany('session_devices', {
+              where: (b: any) => b('session_id', '=', oldSessionId),
+            });
+
+            await orm.create('session_devices', {
+              session_id: newSessionId,
+              fingerprint: (deviceInfo as any).fingerprint,
+              user_agent: (deviceInfo as any).user_agent,
+              ip_address: (deviceInfo as any).ip_address,
+              is_trusted: (deviceInfo as any).is_trusted,
+              device_name: (deviceInfo as any).device_name,
+            });
+          }
+
+          // Transfer metadata
+          const metadataRows = await orm.findMany('session_metadata', {
+            where: (b: any) => b('session_id', '=', oldSessionId),
+          });
+
+          if (metadataRows.length > 0) {
+            await orm.deleteMany('session_metadata', {
+              where: (b: any) => b('session_id', '=', oldSessionId),
+            });
+
+            for (const row of metadataRows) {
+              await orm.create('session_metadata', {
+                session_id: newSessionId,
+                key: (row as any).key,
+                value: (row as any).value,
+              });
+            }
+          }
+        }
+
+        // Update variables for the rest of the flow
+        payload = newPayload;
+        isJWT = true;
+        session = newSession;
+
+        // Create the updated token for return
+        const updatedToken =
+          typeof token === 'string'
+            ? newTokenPair.accessToken
+            : {
+                accessToken: newTokenPair.accessToken,
+                refreshToken: newTokenPair.refreshToken,
+              };
+
+        // Continue with subject resolution using refreshed token
+        const finalSubjectType = payload.subject_type;
+        const finalSubjectId = payload.sub;
+
+        const resolver = this.resolvers.get(finalSubjectType);
+        if (!resolver) {
+          return {
+            subject: null,
+            token: updatedToken,
+            type: 'jwt',
+            payload,
+          };
+        }
+
+        const subject = await resolver.getById(finalSubjectId, orm);
+        if (!subject) {
+          return {
+            subject: null,
+            token: updatedToken,
+            type: 'jwt',
+            payload,
+          };
+        }
+
+        const safeSubject = resolver.sanitize
+          ? resolver.sanitize(subject)
+          : subject;
+        return {
+          subject: safeSubject,
+          token: updatedToken,
+          type: 'jwt',
+          payload,
+        };
+      } catch (refreshError) {
+        // Refresh failed, return null (session invalid)
+        return { subject: null, token: null };
+      }
+    }
+
+    // Handle proactive refresh (session valid but about to expire)
+    if (
+      needsRefresh &&
+      !sessionExpired &&
+      refreshToken &&
+      this.jwtService &&
+      isJWT
+    ) {
+      try {
+        const newTokenPair =
+          await this.jwtService.refreshAccessToken(refreshToken);
+        const newPayload = await this.jwtService.verifyJWT(
+          newTokenPair.accessToken,
+        );
+        const newExpiresAt = newPayload.exp
+          ? new Date(newPayload.exp * 1000)
+          : null;
+
+        // Delete old session and create new one
+        await orm.deleteMany('sessions', {
+          where: (b: any) => b('token', '=', accessToken),
+        });
+
+        const newSession = await orm.create('sessions', {
+          subject_type: (session as any).subject_type,
+          subject_id: (session as any).subject_id,
+          token: newTokenPair.accessToken,
+          expires_at: newExpiresAt,
+        });
+
+        // Transfer enhanced session data if needed
+        if (this.enhancedMode) {
+          const oldSessionId = (session as any).id;
+          const newSessionId = newSession.id || newTokenPair.accessToken;
+
+          // Transfer device info and metadata (same logic as above)
+          const deviceInfo = await orm.findFirst('session_devices', {
+            where: (b: any) => b('session_id', '=', oldSessionId),
+          });
+
+          if (deviceInfo) {
+            await orm.deleteMany('session_devices', {
+              where: (b: any) => b('session_id', '=', oldSessionId),
+            });
+
+            await orm.create('session_devices', {
+              session_id: newSessionId,
+              fingerprint: (deviceInfo as any).fingerprint,
+              user_agent: (deviceInfo as any).user_agent,
+              ip_address: (deviceInfo as any).ip_address,
+              is_trusted: (deviceInfo as any).is_trusted,
+              device_name: (deviceInfo as any).device_name,
+            });
+          }
+
+          const metadataRows = await orm.findMany('session_metadata', {
+            where: (b: any) => b('session_id', '=', oldSessionId),
+          });
+
+          if (metadataRows.length > 0) {
+            await orm.deleteMany('session_metadata', {
+              where: (b: any) => b('session_id', '=', oldSessionId),
+            });
+
+            for (const row of metadataRows) {
+              await orm.create('session_metadata', {
+                session_id: newSessionId,
+                key: (row as any).key,
+                value: (row as any).value,
+              });
+            }
+          }
+        }
+
+        // Update variables and continue with normal flow
+        payload = newPayload;
+        session = newSession;
+
+        const updatedToken =
+          typeof token === 'string'
+            ? newTokenPair.accessToken
+            : {
+                accessToken: newTokenPair.accessToken,
+                refreshToken: newTokenPair.refreshToken,
+              };
+
+        const finalSubjectType = payload.subject_type;
+        const finalSubjectId = payload.sub;
+
+        const resolver = this.resolvers.get(finalSubjectType);
+        if (!resolver) {
+          return {
+            subject: null,
+            token: updatedToken,
+            type: 'jwt',
+            payload,
+          };
+        }
+
+        const subject = await resolver.getById(finalSubjectId, orm);
+        if (!subject) {
+          return {
+            subject: null,
+            token: updatedToken,
+            type: 'jwt',
+            payload,
+          };
+        }
+
+        const safeSubject = resolver.sanitize
+          ? resolver.sanitize(subject)
+          : subject;
+        return {
+          subject: safeSubject,
+          token: updatedToken,
+          type: 'jwt',
+          payload,
+        };
+      } catch (refreshError) {
+        // If proactive refresh fails, continue with current token
+        console.warn('Failed to proactively refresh token:', refreshError);
+      }
+    }
+
+    // Normal flow - session is valid and not expiring soon
+    if (sessionExpired) {
+      return { subject: null, token: null };
+    }
+
+    const subjectType = String(
+      (session as Record<string, unknown>).subject_type,
+    );
+    const subjectId = String((session as Record<string, unknown>).subject_id);
+
+    // For JWT tokens, use payload data if available, otherwise use session data
+    const finalSubjectType =
+      isJWT && payload ? payload.subject_type : subjectType;
+    const finalSubjectId = isJWT && payload ? payload.sub : subjectId;
+
+    const resolver = this.resolvers.get(finalSubjectType);
+    if (!resolver) {
+      return {
+        subject: null,
+        token: token,
+        type: isJWT ? 'jwt' : 'legacy',
+        payload,
+      };
+    }
+
+    const subject = await resolver.getById(finalSubjectId, orm);
+    if (!subject) {
+      return { subject: null, token, type: isJWT ? 'jwt' : 'legacy', payload };
+    }
+
+    const safeSubject = resolver.sanitize
+      ? resolver.sanitize(subject)
+      : subject;
+    return {
+      subject: safeSubject,
+      token,
+      type: isJWT ? 'jwt' : 'legacy',
+      payload,
+    };
+  }
+
+  async destroySession(token: Token): Promise<void> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    if (!token) return;
+
+    const accessToken = typeof token === 'string' ? token : token.accessToken;
+    const refreshToken = typeof token === 'string' ? null : token.refreshToken;
+
+    // If JWT service is enabled, blacklist the token
+    if (this.jwtService) {
+      try {
+        if (refreshToken)
+          await this.jwtService.blacklistToken(refreshToken, 'logout');
+      } catch {
+        // Token might not be JWT, continue with session cleanup
+      }
+    }
+
+    // If enhanced mode, cleanup related data first
+    if (this.enhancedMode) {
+      // Get session ID to cleanup related data
+      const session = await orm.findFirst('sessions', {
+        where: (b: any) => b('token', '=', accessToken),
+      });
+
+      if (session) {
+        const sessionId = (session as any).id;
+
+        // Cleanup device info
+        await orm.deleteMany('session_devices', {
+          where: (b: any) => b('session_id', '=', sessionId),
+        });
+
+        // Cleanup metadata
+        await orm.deleteMany('session_metadata', {
+          where: (b: any) => b('session_id', '=', sessionId),
+        });
+      }
+    }
+
+    // Always cleanup from sessions table for unified management
+    await orm.deleteMany('sessions', {
+      // See note above about the adapter-specific predicate builder type.
+      where: (b: any) => b('token', '=', accessToken),
+    });
+  }
+
+  async destroyAllSessions(
+    subjectType: string,
+    subjectId: string,
+  ): Promise<void> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    // Get all sessions for cleanup
+    const sessions = await orm.findMany('sessions', {
+      where: (b: any) =>
+        b.and(
+          b('subject_type', '=', subjectType),
+          b('subject_id', '=', subjectId),
+        ),
+    });
+
+    // If JWT service is enabled, blacklist all tokens
+    if (this.jwtService) {
+      await this.jwtService.revokeAllRefreshTokens(
+        subjectType,
+        subjectId,
+        'logout',
+      );
+    }
+
+    // If enhanced mode, cleanup related data first
+    if (this.enhancedMode) {
+      const sessionIds = sessions.map((s: any) => s.id || s.token);
+
+      if (sessionIds.length > 0) {
+        // Cleanup device info for all sessions
+        await orm.deleteMany('session_devices', {
+          where: (b: any) => b('session_id', 'in', sessionIds),
+        });
+
+        // Cleanup metadata for all sessions
+        await orm.deleteMany('session_metadata', {
+          where: (b: any) => b('session_id', 'in', sessionIds),
+        });
+      }
+    }
+
+    // Always cleanup from sessions table for unified management
+    await orm.deleteMany('sessions', {
+      // See note above about the adapter-specific predicate builder type.
+      where: (b: any) =>
+        b.and(
+          b('subject_type', '=', subjectType),
+          b('subject_id', '=', subjectId),
+        ),
+    });
+  }
+
+  // JWT-specific token management methods
+  async blacklistJWTToken(
+    token: string,
+    reason: 'logout' | 'revocation' | 'security' = 'logout',
+  ): Promise<void> {
+    if (!this.jwtService) {
+      throw new Error(
+        'JWT features not enabled. Call enableJWTFeatures() first.',
+      );
+    }
+
+    await this.jwtService.blacklistToken(token, reason);
+  }
+
+  async refreshJWTTokenPair(refreshToken: string): Promise<TokenPair> {
+    if (!this.jwtService) {
+      throw new Error(
+        'JWT features not enabled. Call enableJWTFeatures() first.',
+      );
+    }
+
+    return await this.jwtService.refreshAccessToken(refreshToken);
+  }
+
+  async revokeRefreshToken(
+    refreshToken: string,
+    reason: 'logout' | 'rotation' | 'security' | 'expired' = 'logout',
+  ): Promise<void> {
+    if (!this.jwtService) {
+      throw new Error(
+        'JWT features not enabled. Call enableJWTFeatures() first.',
+      );
+    }
+
+    await this.jwtService.revokeRefreshToken(refreshToken, reason);
+  }
+
+  async revokeAllRefreshTokens(
+    subjectType: string,
+    subjectId: string,
+    reason: 'logout' | 'rotation' | 'security' | 'expired' = 'logout',
+  ): Promise<number> {
+    if (!this.jwtService) {
+      throw new Error(
+        'JWT features not enabled. Call enableJWTFeatures() first.',
+      );
+    }
+
+    return await this.jwtService.revokeAllRefreshTokens(
+      subjectType,
+      subjectId,
+      reason,
+    );
+  }
+
+  // JWKS endpoint support
+  async getPublicJWKS(): Promise<{ keys: JWK[] }> {
+    if (!this.jwtService) {
+      throw new Error(
+        'JWT features not enabled. Call enableJWTFeatures() first.',
+      );
+    }
+
+    return await this.jwtService.getPublicJWKS();
+  }
+}

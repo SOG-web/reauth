@@ -1,9 +1,11 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import type { EmailOrUsernameConfig } from '../types';
 import { passwordSchema } from '../../shared/validation';
 import { detectInputType, findTestUser } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 import { hashPassword } from '../../../lib';
+import { Token } from '../../../types';
 import { genCode } from '../../email-password/utils';
 
 export type RegisterInput = {
@@ -43,7 +45,7 @@ export const registerStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       emailOrUsername: 'string',
@@ -62,7 +64,7 @@ export const registerStep: AuthStep<
     if (testUser) {
       // For test users, just return success without creating DB records
       const subjectRow = { id: emailOrUsername };
-      let token: string | null = null;
+      let token: Token | null = null;
 
       if (ctx.config?.loginOnRegister) {
         const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
@@ -81,14 +83,15 @@ export const registerStep: AuthStep<
         ...testUser.profile,
       };
 
-      return {
+      const baseResult = {
         success: true,
         message: 'Registration successful (test user)',
         status: 'su',
-        token,
         subject,
         others,
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined, token);
     }
 
     // Detect input type (email vs username)
@@ -146,7 +149,7 @@ export const registerStep: AuthStep<
     }
 
     // Handle login after registration
-    let token: string | null = null;
+    let token: Token | null = null;
     if (ctx.config?.loginOnRegister) {
       const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
       token = await ctx.engine.createSessionFor('subject', subjectId, ttl);
@@ -184,12 +187,11 @@ export const registerStep: AuthStep<
           'verify',
         );
 
-        return {
+        const baseResult = {
           success: false,
           message:
             'Registration successful. Verification code sent to your email.',
           status: 'eq',
-          token,
           subject: {
             id: subjectId,
             [inputType]: emailOrUsername,
@@ -198,12 +200,13 @@ export const registerStep: AuthStep<
           },
           others,
         };
+
+        return attachNewTokenIfDifferent(baseResult, undefined as any, token);
       } else {
-        return {
+        const baseResult = {
           success: false,
           message: 'Registration successful. Please verify your email.',
           status: 'eq',
-          token,
           subject: {
             id: subjectId,
             emailOrUsername,
@@ -212,14 +215,15 @@ export const registerStep: AuthStep<
           },
           others,
         };
+
+        return attachNewTokenIfDifferent(baseResult, undefined, token);
       }
     }
 
-    return {
+    const baseResult = {
       success: true,
       message: 'Registration successful',
       status: 'su',
-      token,
       subject: {
         id: subjectId,
         emailOrUsername,
@@ -228,5 +232,7 @@ export const registerStep: AuthStep<
       },
       others,
     };
+
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
   },
 };

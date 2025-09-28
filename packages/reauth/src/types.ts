@@ -1,9 +1,10 @@
 import type { AwilixContainer } from 'awilix';
-import type { Type } from 'arktype';
+import { type, type Type } from 'arktype';
 import { InferAbstractQuery } from 'fumadb';
-import { JWTPayload } from 'jose';
+import { JWK, JWTPayload } from 'jose';
 import { ReAuthEngine } from './engine';
 import { RelationBuilder, column, idColumn, table } from 'fumadb/schema';
+import { EnhancedJWKSService, ReAuthJWTPayload } from './services';
 
 // Minimal Fuma client interface used by
 export interface FumaClient {
@@ -33,14 +34,27 @@ export type JWKSTokenParams = {
 
 export type Subject = { id: string; [key: string]: any };
 
+export type Token =
+  | {
+      accessToken: string;
+      refreshToken: string;
+    }
+  | string
+  | null;
+
+export const tokenType = type({
+  accessToken: 'string',
+  refreshToken: 'string',
+}).or(type('string'));
+
 // Shared  input/output shapes (entity removed). Keep names the same for cross-package compatibility.
 export interface AuthInput {
-  token?: string | null;
+  token?: Token;
   [key: string]: any;
 }
 
 export interface AuthOutput {
-  token?: string | null;
+  token?: Token;
   redirect?: string;
   success: boolean;
   message: string;
@@ -81,21 +95,32 @@ export interface CreateSessionOptions {
 
 export interface SessionService {
   enableEnhancedFeatures(): void;
+  enableJWKS(options: {
+    issuer: string;
+    keyRotationIntervalDays: number;
+    keyGracePeriodDays: number;
+    defaultAccessTokenTtlSeconds: number;
+    defaultRefreshTokenTtlSeconds: number;
+    enableRefreshTokenRotation: boolean;
+  }): void;
   createSession(
     subjectType: string,
     subjectId: string,
     ttlSeconds?: number,
-  ): Promise<string>;
+  ): Promise<Token>;
   // Enhanced version for advanced session features
   createSessionWithMetadata?(
     subjectType: string,
     subjectId: string,
     options: CreateSessionOptions,
-  ): Promise<string>;
-  verifySession(
-    token: string,
-  ): Promise<{ subject: any | null; token: string | null }>;
-  destroySession(token: string): Promise<void>;
+  ): Promise<Token>;
+  verifySession(token: Token): Promise<{
+    subject: any | null;
+    token: Token | null;
+    type?: 'jwt' | 'legacy';
+    payload?: ReAuthJWTPayload;
+  }>;
+  destroySession(token: Token): Promise<void>;
   destroyAllSessions(subjectType: string, subjectId: string): Promise<void>;
   // Enhanced session listing
   listSessionsForSubject?(
@@ -111,6 +136,8 @@ export interface SessionService {
       metadata?: Record<string, any>;
     }>
   >;
+  getPublicJWKS?(): Promise<{ keys: JWK[] }>;
+  getJwkService(): EnhancedJWKSService | null;
 }
 
 // ---------------- Step/Plugin Types () ----------------

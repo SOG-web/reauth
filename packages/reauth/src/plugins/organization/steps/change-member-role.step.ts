@@ -1,14 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   ChangeMemberRoleInput,
   ChangeMemberRoleOutput,
   OrganizationConfig,
 } from '../types';
 import { hasOrganizationPermission, isValidRole } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const changeMemberRoleValidation = type({
-  token: 'string',
+  token: tokenType,
   organization_id: 'string',
   'subject_id?': 'string',
   'email?': 'string',
@@ -42,6 +43,7 @@ export const changeMemberRoleStep: AuthStep<
       role: 'string',
       updated_at: 'string',
     },
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, organization_id, subject_id, email, role } = input;
@@ -61,11 +63,15 @@ export const changeMemberRoleStep: AuthStep<
 
     // Validate role
     if (!isValidRole(role, ctx.config)) {
-      return {
-        success: false,
-        message: `Invalid role. Available roles: ${ctx.config?.availableRoles?.join(', ') || 'admin, member, viewer'}`,
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: `Invalid role. Available roles: ${ctx.config?.availableRoles?.join(', ') || 'admin, member, viewer'}`,
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check if organization exists
@@ -75,11 +81,15 @@ export const changeMemberRoleStep: AuthStep<
     });
 
     if (!organization) {
-      return {
-        success: false,
-        message: 'Organization not found',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization not found',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check admin permission
@@ -90,11 +100,15 @@ export const changeMemberRoleStep: AuthStep<
       orm,
     );
     if (!hasPermission) {
-      return {
-        success: false,
-        message: 'Admin access required to change member roles',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Admin access required to change member roles',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check if target user is a member
@@ -109,11 +123,15 @@ export const changeMemberRoleStep: AuthStep<
     });
 
     if (!membership) {
-      return {
-        success: false,
-        message: 'User is not a member of this organization',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'User is not a member of this organization',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Prevent removing admin role from the last admin
@@ -129,21 +147,29 @@ export const changeMemberRoleStep: AuthStep<
 
       const adminCountNumber = typeof adminCount === 'number' ? adminCount : 0;
       if (adminCountNumber <= 1) {
-        return {
-          success: false,
-          message: 'Cannot remove admin role from the last admin',
-          status: 'ic',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Cannot remove admin role from the last admin',
+            status: 'ic',
+          },
+          token,
+          session.token,
+        );
       }
     }
 
     // Check if role is already the same
     if (membership.role === role) {
-      return {
-        success: false,
-        message: 'User already has this role',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'User already has this role',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -162,24 +188,32 @@ export const changeMemberRoleStep: AuthStep<
         },
       });
 
-      return {
-        success: true,
-        message: 'Member role updated successfully',
-        status: 'su',
-        membership: {
-          id: membership.id as string,
-          subject_id: membership.subject_id as string,
-          organization_id: membership.organization_id as string,
-          role,
-          updated_at: now.toISOString(),
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Member role updated successfully',
+          status: 'su',
+          membership: {
+            id: membership.id as string,
+            subject_id: membership.subject_id as string,
+            organization_id: membership.organization_id as string,
+            role,
+            updated_at: now.toISOString(),
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to update member role',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to update member role',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

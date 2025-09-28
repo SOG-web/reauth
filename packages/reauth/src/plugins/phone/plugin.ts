@@ -1,4 +1,4 @@
-import type { AuthPlugin, OrmLike, Subject } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike, Subject } from '../../types';
 import type { PhonePasswordConfig } from './types';
 export type { PhonePasswordConfig } from './types';
 import { loginStep } from './steps/login.step';
@@ -139,9 +139,17 @@ export const basePhonePasswordPlugin: AuthPlugin<PhonePasswordConfig> = {
   // Background cleanup now handles expired code removal via SimpleCleanupScheduler
 };
 
-// Export a configured plugin creator that validates config at construction time.
-const phonePasswordPlugin: AuthPlugin<PhonePasswordConfig> =
+// Export a factory function that creates a configured plugin
+const phonePasswordPlugin = (
+  config: Partial<PhonePasswordConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<PhonePasswordConfig>>;
+  }>,
+): AuthPlugin<PhonePasswordConfig> =>
   createAuthPlugin<PhonePasswordConfig>(basePhonePasswordPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
       if (

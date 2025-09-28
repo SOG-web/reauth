@@ -1,19 +1,25 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { PhonePasswordConfig } from '../types';
 import { hashPassword, verifyPasswordHash } from '../../../lib/password';
 import { passwordSchema, phoneSchema } from '../../shared/validation';
 import { generateCode as defaultGenerateCode } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ChangePhoneInput = {
-  token: string;
+  token: Token;
   currentPassword: string;
   newPhone: string;
   others?: Record<string, any>;
 };
 
 export const changePhoneValidation = type({
-  token: 'string',
+  token: tokenType,
   currentPassword: passwordSchema,
   newPhone: phoneSchema,
   others: 'object?',
@@ -41,6 +47,7 @@ export const changePhoneStep: AuthStep<
     'error?': 'string | object',
     status: 'string',
     'others?': 'object',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, currentPassword, newPhone, others } = input;
@@ -65,12 +72,16 @@ export const changePhoneStep: AuthStep<
     });
 
     if (!creds?.password_hash) {
-      return {
-        success: false,
-        message: 'Current password not found',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current password not found',
+          status: 'ip',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Verify current password
@@ -80,12 +91,16 @@ export const changePhoneStep: AuthStep<
     );
 
     if (!isCurrentPasswordValid) {
-      return {
-        success: false,
-        message: 'Current password is incorrect',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current password is incorrect',
+          status: 'ip',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Check if new phone is already taken by another user
@@ -99,12 +114,16 @@ export const changePhoneStep: AuthStep<
     });
 
     if (existingIdentity) {
-      return {
-        success: false,
-        message: 'Phone number is already in use',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Phone number is already in use',
+          status: 'ic',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Find current phone identity
@@ -114,12 +133,16 @@ export const changePhoneStep: AuthStep<
     });
 
     if (!currentIdentity) {
-      return {
-        success: false,
-        message: 'Current phone identity not found',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current phone identity not found',
+          status: 'ic',
+          others,
+        },
+        token,
+        check.token,
+      );
     }
 
     // Update phone number immediately regardless of verification settings
@@ -132,6 +155,7 @@ export const changePhoneStep: AuthStep<
       },
     });
 
+    let baseResult: AuthOutput;
     // If verification is enabled and sendCode is configured, send verification code for future login
     if (ctx.config?.verifyPhone && ctx.config.sendCode) {
       const generateCode = ctx.config.generateCode || defaultGenerateCode;
@@ -172,7 +196,7 @@ export const changePhoneStep: AuthStep<
       // Send verification code to new phone number for future login verification
       try {
         await ctx.config.sendCode(check.subject, code, newPhone, 'verify');
-        return {
+        baseResult = {
           success: true,
           message:
             'Phone number changed successfully. Verification code sent for next login.',
@@ -181,7 +205,7 @@ export const changePhoneStep: AuthStep<
         };
       } catch (error) {
         // Even if sending fails, the phone was already updated successfully
-        return {
+        baseResult = {
           success: true,
           message:
             'Phone number changed successfully. Verification code could not be sent.',
@@ -193,12 +217,14 @@ export const changePhoneStep: AuthStep<
         };
       }
     } else {
-      return {
+      baseResult = {
         success: true,
         message: 'Phone number changed successfully',
         status: 'su',
         others,
       };
     }
+
+    return attachNewTokenIfDifferent(baseResult, token, check.token);
   },
 };

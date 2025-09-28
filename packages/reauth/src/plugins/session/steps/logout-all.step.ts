@@ -1,14 +1,19 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput, SessionService } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  Token,
+  tokenType,
+} from '../../../types';
 import type { SessionConfig } from '../types';
 
 export type LogoutAllInput = {
-  token: string;
+  token: Token;
   others?: Record<string, any>;
 };
 
 export const logoutAllValidation = type({
-  token: 'string',
+  token: tokenType,
   others: 'object?',
 });
 
@@ -28,6 +33,7 @@ export const logoutAllStep: AuthStep<
     http: {
       method: 'POST',
       codes: { unf: 401, su: 200, ic: 400 },
+      auth: true,
     },
   },
   inputs: ['token', 'others'],

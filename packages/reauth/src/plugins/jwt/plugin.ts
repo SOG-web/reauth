@@ -1,17 +1,10 @@
-import type { AuthPlugin, OrmLike } from '../../types';
-import type { JWTPluginConfig } from '../../jwt.types';
+import type { AuthPlugin, AuthStep, OrmLike } from '../../types';
 import { createAuthPlugin } from '../../utils/create-plugin';
-import { jwtSchema } from '../../jwt.schema';
+import { jwtSchema, type JWTPluginConfig } from '../../services';
 
 // JWT Plugin Steps
-import { createJWTTokenStep } from './steps/create-jwt-token.step';
-import { verifyJWTTokenStep } from './steps/verify-jwt-token.step';
-import { blacklistJWTTokenStep } from './steps/blacklist-jwt-token.step';
+
 import { getJWKSStep } from './steps/get-jwks.step';
-import { createTokenPairStep } from './steps/create-token-pair.step';
-import { refreshAccessTokenStep } from './steps/refresh-access-token.step';
-import { revokeRefreshTokenStep } from './steps/revoke-refresh-token.step';
-import { revokeAllRefreshTokensStep } from './steps/revoke-all-refresh-tokens.step';
 
 export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
   name: 'jwt',
@@ -58,7 +51,8 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
         try {
           const sessionService = engine.getSessionService() as any;
           if (sessionService.jwtService) {
-            const cleaned = await sessionService.jwtService.cleanupExpiredKeys();
+            const cleaned =
+              await sessionService.jwtService.cleanupExpiredKeys();
             return {
               cleaned,
               expiredKeysDeleted: cleaned,
@@ -88,7 +82,8 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
           try {
             const sessionService = engine.getSessionService() as any;
             if (sessionService.jwtService) {
-              const cleaned = await sessionService.jwtService.cleanupBlacklistedTokens();
+              const cleaned =
+                await sessionService.jwtService.cleanupBlacklistedTokens();
               return {
                 cleaned,
                 blacklistedTokensDeleted: cleaned,
@@ -118,7 +113,8 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
         try {
           const sessionService = engine.getSessionService() as any;
           if (sessionService.jwtService) {
-            const cleaned = await sessionService.jwtService.cleanupExpiredRefreshTokens();
+            const cleaned =
+              await sessionService.jwtService.cleanupExpiredRefreshTokens();
             return {
               cleaned,
               expiredRefreshTokensDeleted: cleaned,
@@ -141,35 +137,26 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
     // Token lifetimes
     defaultAccessTokenTtlSeconds: 900, // 15 minutes
     defaultRefreshTokenTtlSeconds: 30 * 24 * 60 * 60, // 30 days
-    
+
     // Key management
     keyRotationIntervalDays: 10,
     keyGracePeriodDays: 2,
-    
+
     // Security
     enableBlacklist: true,
     enableRefreshTokenRotation: true,
-    
+
     // Cleanup
     cleanupIntervalMinutes: 60, // 1 hour
-    
+
     // Plugin-specific settings
     enableLegacyTokenSupport: true,
     issuer: 'reauth',
   },
-  steps: [
-    createJWTTokenStep,
-    verifyJWTTokenStep,
-    blacklistJWTTokenStep,
-    getJWKSStep,
-    createTokenPairStep,
-    refreshAccessTokenStep,
-    revokeRefreshTokenStep,
-    revokeAllRefreshTokensStep,
-  ],
+  steps: [getJWKSStep],
   async getProfile(subjectId, ctx) {
     const sessionService = ctx.engine.getSessionService() as any;
-    
+
     // Get JWT-related information for the subject
     const profile: any = {
       jwt_enabled: !!sessionService.jwtService,
@@ -181,7 +168,8 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
         const jwks = await sessionService.jwtService.getPublicJWKS();
         profile.active_keys = jwks.keys.length;
       } catch (error) {
-        profile.jwt_error = error instanceof Error ? error.message : String(error);
+        profile.jwt_error =
+          error instanceof Error ? error.message : String(error);
       }
     }
 
@@ -189,10 +177,17 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
   },
 };
 
-// Export a configured plugin creator that validates config at construction time
-const jwtPlugin: AuthPlugin<JWTPluginConfig> = createAuthPlugin<JWTPluginConfig>(
-  baseJWTPlugin,
-  {
+// Export a factory function that creates a configured plugin
+const jwtPlugin = (
+  config: Partial<JWTPluginConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<JWTPluginConfig>>;
+  }>,
+): AuthPlugin<JWTPluginConfig> =>
+  createAuthPlugin<JWTPluginConfig>(baseJWTPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
 
@@ -200,15 +195,26 @@ const jwtPlugin: AuthPlugin<JWTPluginConfig> = createAuthPlugin<JWTPluginConfig>
         errs.push('issuer is required and cannot be empty');
       }
 
-      if (config.defaultAccessTokenTtlSeconds && config.defaultAccessTokenTtlSeconds < 60) {
+      if (
+        config.defaultAccessTokenTtlSeconds &&
+        config.defaultAccessTokenTtlSeconds < 60
+      ) {
         errs.push('defaultAccessTokenTtlSeconds must be at least 60 seconds');
       }
 
-      if (config.defaultRefreshTokenTtlSeconds && config.defaultRefreshTokenTtlSeconds < 3600) {
-        errs.push('defaultRefreshTokenTtlSeconds must be at least 1 hour (3600 seconds)');
+      if (
+        config.defaultRefreshTokenTtlSeconds &&
+        config.defaultRefreshTokenTtlSeconds < 3600
+      ) {
+        errs.push(
+          'defaultRefreshTokenTtlSeconds must be at least 1 hour (3600 seconds)',
+        );
       }
 
-      if (config.keyRotationIntervalDays && config.keyRotationIntervalDays < 1) {
+      if (
+        config.keyRotationIntervalDays &&
+        config.keyRotationIntervalDays < 1
+      ) {
         errs.push('keyRotationIntervalDays must be at least 1 day');
       }
 
@@ -222,10 +228,6 @@ const jwtPlugin: AuthPlugin<JWTPluginConfig> = createAuthPlugin<JWTPluginConfig>
 
       return errs.length ? errs : null;
     },
-    extendSchema: () => jwtSchema,
-  },
-);
+  });
 
 export default jwtPlugin;
-export type { JWTPluginConfig } from '../../jwt.types';
-export { jwtSchema } from '../../jwt.schema';

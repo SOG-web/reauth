@@ -1,6 +1,12 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  tokenType,
+  Token,
+} from '../../../types';
 import { findTestUser } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 import type { UsernamePasswordConfig } from '../types';
 import { passwordSchema, usernameSchema } from '../../shared/validation';
 import { hashPassword, haveIbeenPawned } from '../../../lib/password';
@@ -37,7 +43,7 @@ export const registerStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       username: 'string',
@@ -56,7 +62,7 @@ export const registerStep: AuthStep<
     if (tu) {
       const subjectRow = { id: username };
 
-      let token: string | null = null;
+      let token: Token | null = null;
       if (ctx.config?.loginOnRegister) {
         const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
         token = await ctx.engine.createSessionFor(
@@ -74,14 +80,15 @@ export const registerStep: AuthStep<
         profile: tu.profile,
       };
 
-      return {
+      const baseResult = {
         success: true,
         message: 'Registration successful (test user)',
         status: 'su',
-        ...(token ? { token } : {}),
         subject,
         others,
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined, token);
     }
 
     // Check if username already exists
@@ -100,7 +107,14 @@ export const registerStep: AuthStep<
     }
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await haveIbeenPawned(password);
+    let isSafe = false;
+    try {
+      isSafe = await haveIbeenPawned(password);
+    } catch (err) {
+      console.log('haveIbeenPawned check failed', { err });
+      // Decide: fail-open vs fail-closed per policy.
+      isSafe = true;
+    }
     if (!isSafe) {
       return {
         success: false,
@@ -136,17 +150,16 @@ export const registerStep: AuthStep<
     });
 
     // Create session if loginOnRegister is true
-    let token: string | null = null;
+    let token: Token | null = null;
     if (ctx.config?.loginOnRegister) {
       const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
       token = await ctx.engine.createSessionFor('subject', subjectId, ttl);
     }
 
-    return {
+    const baseResult = {
       success: true,
       message: 'Registration successful',
       status: 'su',
-      token,
       subject: {
         id: subjectId,
         username,
@@ -155,5 +168,7 @@ export const registerStep: AuthStep<
       },
       others,
     };
+
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
   },
 };

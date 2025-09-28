@@ -1,16 +1,22 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { ApiKeyConfig, ApiKeyMetadata } from '../types';
 import { sanitizeApiKeyMetadata } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ListApiKeysInput = {
-  token: string; // Required - must be authenticated
+  token: Token; // Required - must be authenticated
   include_inactive?: boolean; // Whether to include revoked/inactive keys
   others?: Record<string, any>;
 };
 
 export const listApiKeysValidation = type({
-  token: 'string',
+  token: tokenType,
   include_inactive: 'boolean?',
   others: 'object?',
 });
@@ -54,6 +60,7 @@ export const listApiKeysStep: AuthStep<
       }).array(), // Contains array of ApiKeyMetadata
     }),
     'others?': 'object',
+    'token?': tokenType,
   }),
 
   async run(input, ctx) {
@@ -97,23 +104,31 @@ export const listApiKeysStep: AuthStep<
       // Sanitize the results (remove hashes and format dates)
       const sanitizedKeys = apiKeys.map(sanitizeApiKeyMetadata);
 
-      return {
-        success: true,
-        message: `Found ${sanitizedKeys.length} API key(s)`,
-        status: 'su',
-        data: {
-          api_keys: sanitizedKeys,
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: `Found ${sanitizedKeys.length} API key(s)`,
+          status: 'su',
+          data: {
+            api_keys: sanitizedKeys,
+          },
+          others,
         },
-        others,
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to retrieve API keys',
-        status: 'ic',
-        error: String(error),
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to retrieve API keys',
+          status: 'ic',
+          error: String(error),
+          others,
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

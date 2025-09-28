@@ -1,5 +1,6 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 import type { EmailPasswordConfig } from '../types';
 import { haveIbeenPawned, hashPassword } from '../../../lib/password';
 import { passwordSchema } from '../../shared/validation';
@@ -31,7 +32,7 @@ export const registerStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       email: 'string',
@@ -68,14 +69,16 @@ export const registerStep: AuthStep<
         verified: true,
         profile: tu?.profile,
       };
-      return {
+
+      const baseResult = {
         success: true,
         message: 'Register successful (test user)',
         status: 'su',
-        token,
         subject: outSubject,
         others,
-      };
+      } as const;
+
+      return attachNewTokenIfDifferent(baseResult, undefined, token);
     }
 
     if (ctx.config?.verifyEmail && !ctx.config.sendCode) {
@@ -150,13 +153,15 @@ export const registerStep: AuthStep<
       provider: 'email',
       verified: false,
     };
-    return {
+
+    const baseResult = {
       success: true,
       message: 'Register successful',
       status: 'su',
-      token,
       subject: outSubject,
       others,
-    };
+    } as const;
+
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
   },
 };

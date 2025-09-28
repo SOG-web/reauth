@@ -1,3 +1,5 @@
+import { Token } from '../../types';
+
 export interface OrganizationConfig {
   // Organization limits
   maxOrganizationsPerUser?: number; // Limit orgs per user
@@ -62,7 +64,7 @@ export interface InviteMemberOutput {
 
 export interface AcceptInvitationInput {
   invitation_token: string; // Invitation token
-  token: string; // Authentication required
+  token: Token; // Authentication required
 }
 
 export interface AcceptInvitationOutput {
@@ -74,10 +76,11 @@ export interface AcceptInvitationOutput {
     organization_id: string;
     role: string;
   };
+  token?: Token;
 }
 
 export interface ListOrganizationsInput {
-  token: string; // Authentication required
+  token: Token; // Authentication required
 }
 
 export interface ListOrganizationsOutput {
@@ -93,10 +96,11 @@ export interface ListOrganizationsOutput {
     settings?: Record<string, any>;
     metadata?: Record<string, any>;
   }>;
+  token?: Token;
 }
 
 export interface GetOrganizationInput {
-  token: string; // Authentication required
+  token: Token; // Authentication required
   organization_id: string;
 }
 
@@ -118,10 +122,11 @@ export interface GetOrganizationOutput {
       joined_at: string;
     }>;
   };
+  token?: Token;
 }
 
 export interface UpdateOrganizationInput {
-  token: string; // Authentication required
+  token: Token; // Authentication required
   organization_id: string;
   name?: string;
   slug?: string;
@@ -141,10 +146,11 @@ export interface UpdateOrganizationOutput {
     metadata?: Record<string, any>;
     updated_at: string;
   };
+  token?: Token;
 }
 
 export interface RemoveMemberInput {
-  token: string; // Authentication required
+  token: Token; // Authentication required
   organization_id: string;
   subject_id?: string;
   email?: string;
@@ -154,10 +160,11 @@ export interface RemoveMemberOutput {
   success: boolean;
   message: string;
   status: string;
+  token?: Token;
 }
 
 export interface ChangeMemberRoleInput {
-  token: string; // Authentication required
+  token: Token; // Authentication required
   organization_id: string;
   subject_id?: string;
   email?: string;
@@ -175,10 +182,11 @@ export interface ChangeMemberRoleOutput {
     role: string;
     updated_at: string;
   };
+  token?: Token;
 }
 
 export interface SetRolesPermissionsInput {
-  token: string; // Authentication required
+  token: Token; // Authentication required
   organization_id: string;
   subject_id?: string;
   email?: string;
@@ -200,10 +208,11 @@ export interface SetRolesPermissionsOutput {
     permissions: string[];
     updated_at: string;
   };
+  token?: Token;
 }
 
 export interface GetRolesPermissionsInput {
-  token: string; // Authentication required
+  token: Token; // Authentication required
   organization_id: string;
   subject_id?: string;
   email?: string;
@@ -222,4 +231,5 @@ export interface GetRolesPermissionsOutput {
     role: string; // The main role
     email: string;
   };
+  token?: Token;
 }

@@ -1,14 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   GetRolesPermissionsInput,
   GetRolesPermissionsOutput,
   OrganizationConfig,
 } from '../types';
 import { hasOrganizationPermission } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const getRolesPermissionsValidation = type({
-  token: 'string',
+  token: tokenType,
   organization_id: 'string',
   'subject_id?': 'string',
   'email?': 'string',
@@ -44,6 +45,7 @@ export const getRolesPermissionsStep: AuthStep<
       role: 'string',
       email: 'string',
     },
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, organization_id, subject_id, email } = input;
@@ -63,11 +65,15 @@ export const getRolesPermissionsStep: AuthStep<
 
     // Validate that either subject_id or email is provided
     if (!subject_id && !email) {
-      return {
-        success: false,
-        message: 'Either subject_id or email must be provided',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Either subject_id or email must be provided',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Get email if needed
@@ -81,11 +87,15 @@ export const getRolesPermissionsStep: AuthStep<
       try {
         targetEmail = await ctx.config.getEmail(email);
       } catch (error) {
-        return {
-          success: false,
-          message: 'Failed to retrieve email for subject',
-          status: 'ic',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Failed to retrieve email for subject',
+            status: 'ic',
+          },
+          token,
+          session.token,
+        );
       }
     }
 
@@ -96,11 +106,15 @@ export const getRolesPermissionsStep: AuthStep<
     });
 
     if (!organization) {
-      return {
-        success: false,
-        message: 'Organization not found',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization not found',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check admin permission
@@ -111,11 +125,15 @@ export const getRolesPermissionsStep: AuthStep<
       orm,
     );
     if (!hasPermission) {
-      return {
-        success: false,
-        message: 'Admin access required to view member roles and permissions',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Admin access required to view member roles and permissions',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Find the membership to retrieve
@@ -131,11 +149,15 @@ export const getRolesPermissionsStep: AuthStep<
     });
 
     if (!membership) {
-      return {
-        success: false,
-        message: 'User is not a member of this organization',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'User is not a member of this organization',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -151,26 +173,34 @@ export const getRolesPermissionsStep: AuthStep<
             .filter((p) => p.trim())
         : [];
 
-      return {
-        success: true,
-        message: 'Roles and permissions retrieved successfully',
-        status: 'su',
-        membership: {
-          id: membership.id as string,
-          subject_id: membership.subject_id as string,
-          organization_id: membership.organization_id as string,
-          roles,
-          permissions,
-          role: membership.role as string,
-          email: membership.email as string,
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Roles and permissions retrieved successfully',
+          status: 'su',
+          membership: {
+            id: membership.id as string,
+            subject_id: membership.subject_id as string,
+            organization_id: membership.organization_id as string,
+            roles,
+            permissions,
+            role: membership.role as string,
+            email: membership.email as string,
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to retrieve roles and permissions',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to retrieve roles and permissions',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

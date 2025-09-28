@@ -1,7 +1,8 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import type { ApiKeyConfig } from '../types';
 import { verifyApiKey, isValidApiKeyFormat, isApiKeyExpired } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type AuthenticateApiKeyInput = {
   api_key: string;
@@ -55,7 +56,7 @@ export const authenticateApiKeyStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       provider: 'string',
@@ -218,7 +219,7 @@ export const authenticateApiKeyStep: AuthStep<
       ? config.defaultTtlDays * 24 * 60 * 60
       : 3600;
     const token = await ctx.engine.createSessionFor(
-      'subject-api-key',
+      'subject',
       apiKeyRecord.subject_id,
       ttl,
     );
@@ -232,15 +233,17 @@ export const authenticateApiKeyStep: AuthStep<
       scopes: apiKeyRecord.scopes,
     };
 
-    return {
+    const baseResult = {
       success: true,
       message: 'API key authentication successful',
       status: 'su',
-      token,
       subject,
       api_key_id: apiKeyRecord.id,
       others,
     };
+
+    // Attach session token if session/token changed
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
   },
 };
 

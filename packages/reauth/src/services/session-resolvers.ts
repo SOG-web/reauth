@@ -1,4 +1,4 @@
-import type { SessionResolvers, SubjectResolver } from './types';
+import type { SessionResolvers, SubjectResolver } from '../types';
 
 export class InMemorySessionResolvers implements SessionResolvers {
   private resolvers = new Map<string, SubjectResolver>();

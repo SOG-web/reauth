@@ -1,9 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  tokenType,
+  Token,
+} from '../../../types';
 import type { AnonymousConfig } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ConvertGuestInput = {
-  token: string;
+  token: Token;
   conversionData: Record<string, any>; // Data needed for conversion (email, phone, etc.)
   targetPlugin: string; // The plugin to convert to (e.g., 'email-password')
   preserveMetadata?: boolean; // Whether to preserve guest metadata
@@ -11,7 +17,7 @@ export type ConvertGuestInput = {
 };
 
 export const convertGuestValidation = type({
-  token: 'string',
+  token: tokenType,
   conversionData: 'object',
   targetPlugin: 'string',
   preserveMetadata: 'boolean?',
@@ -46,7 +52,7 @@ export const convertGuestStep: AuthStep<
     message: 'string',
     status: 'string',
     'error?': 'string | object',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       type: 'string',
@@ -95,34 +101,46 @@ export const convertGuestStep: AuthStep<
     });
 
     if (!anonymousSession) {
-      return {
-        success: false,
-        message: 'Session is not a guest session',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Session is not a guest session',
+          status: 'ic',
+          others,
+        },
+        token,
+        sessionCheck.token,
+      );
     }
 
     // Check if session has not already expired
     if (new Date() > new Date(anonymousSession.expires_at as string)) {
-      return {
-        success: false,
-        message: 'Session has already expired',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Session has already expired',
+          status: 'ip',
+          others,
+        },
+        token,
+        sessionCheck.token,
+      );
     }
 
     try {
       // Validate target plugin against allowed list (if configured)
       const allowed = ctx.config?.allowedConversionPlugins;
       if (Array.isArray(allowed) && !allowed.includes(targetPlugin)) {
-        return {
-          success: false,
-          message: `Target plugin '${targetPlugin}' is not allowed for conversion`,
-          status: 'ic',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `Target plugin '${targetPlugin}' is not allowed for conversion`,
+            status: 'ic',
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
 
       // Ensure target plugin is registered
@@ -130,12 +148,16 @@ export const convertGuestStep: AuthStep<
         ? ctx.engine.getPlugin(targetPlugin)
         : undefined;
       if (!plugin) {
-        return {
-          success: false,
-          message: `Target plugin '${targetPlugin}' is not available`,
-          status: 'unf',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `Target plugin '${targetPlugin}' is not available`,
+            status: 'unf',
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
 
       // Prepare metadata for preservation
@@ -151,12 +173,16 @@ export const convertGuestStep: AuthStep<
       const configTargets = ctx.config?.conversionTargets;
       const targetDef = configTargets ? configTargets[targetPlugin] : undefined;
       if (!targetDef || !targetDef.step) {
-        return {
-          success: false,
-          message: `No conversion target config provided for plugin '${targetPlugin}'`,
-          status: 'ic',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `No conversion target config provided for plugin '${targetPlugin}'`,
+            status: 'ic',
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
 
       // Validate incoming conversionData if a schema is provided
@@ -164,12 +190,16 @@ export const convertGuestStep: AuthStep<
         try {
           targetDef.inputValidation.assert(conversionData as unknown);
         } catch (e) {
-          return {
-            success: false,
-            message: `Invalid conversion data: ${String(e)}`,
-            status: 'ic',
-            others,
-          };
+          return attachNewTokenIfDifferent(
+            {
+              success: false,
+              message: `Invalid conversion data: ${String(e)}`,
+              status: 'ic',
+              others,
+            },
+            token,
+            sessionCheck.token,
+          );
         }
       }
 
@@ -180,12 +210,16 @@ export const convertGuestStep: AuthStep<
           (s) => s && typeof s === 'object' && s.name === targetDef.step,
         );
       if (!stepExists) {
-        return {
-          success: false,
-          message: `Configured step '${targetDef.step}' not found on plugin '${targetPlugin}'`,
-          status: 'unf',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `Configured step '${targetDef.step}' not found on plugin '${targetPlugin}'`,
+            status: 'unf',
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
 
       // Map input for the target step
@@ -199,12 +233,16 @@ export const convertGuestStep: AuthStep<
             })
           : { ...(conversionData || {}), others };
       } catch (error) {
-        return {
-          success: false,
-          message: `Failed to map input for conversion: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          status: 'ic',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `Failed to map input for conversion: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            status: 'ic',
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
 
       let regOut;
@@ -215,40 +253,53 @@ export const convertGuestStep: AuthStep<
           mappedInput,
         );
       } catch (error) {
-        return {
-          success: false,
-          message: `Target step execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          status: 'ic',
-          error:
-            error instanceof Error
-              ? { message: error.message, stack: error.stack }
-              : error,
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `Target step execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            status: 'ic',
+            error:
+              error instanceof Error
+                ? { message: error.message, stack: error.stack }
+                : error,
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
       // Expect conventional shape; fallback to generic failure
       if (!regOut || regOut.success !== true) {
-        return {
-          success: false,
-          message:
-            regOut?.message ||
-            `Conversion failed in target plugin '${targetPlugin}' via '${targetDef.step}'`,
-          status: regOut?.status || 'ic',
-          error: regOut?.error,
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message:
+              regOut?.message ||
+              `Conversion failed in target plugin '${targetPlugin}' via '${targetDef.step}'`,
+            status: regOut?.status || 'ic',
+            error: regOut?.error,
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
 
       const newSubjectId: string | undefined = targetDef.extract?.subjectId
         ? targetDef.extract.subjectId(regOut)
         : (regOut.subject?.id ?? regOut.subjectId);
       if (!newSubjectId) {
-        return {
-          success: false,
-          message: 'Conversion failed: target step did not return a subject id',
-          status: 'ic',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message:
+              'Conversion failed: target step did not return a subject id',
+            status: 'ic',
+            others,
+          },
+          token,
+          sessionCheck.token,
+        );
       }
 
       // Clean up the anonymous session for the old guest subject
@@ -281,25 +332,30 @@ export const convertGuestStep: AuthStep<
         metadata: preserveMetadata ? metadata : undefined,
       };
 
-      return {
+      const base = {
         success: true,
         message:
           regOut.message ||
           `Guest successfully converted to ${targetPlugin} user via '${targetDef.step}'`,
         status: regOut.status || 'su',
-        token: newToken,
         subject: convertedSubject,
         convertedTo: targetPlugin,
         preservedMetadata: preserveMetadata ? metadata : undefined,
         others: { ...others, from: 'anonymous-convert', target: targetPlugin },
-      };
+      } as const;
+
+      return attachNewTokenIfDifferent(base, token, newToken);
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to convert guest session',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to convert guest session',
+          status: 'ic',
+          others,
+        },
+        token,
+        sessionCheck.token,
+      );
     }
   },
 };

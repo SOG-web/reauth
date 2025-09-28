@@ -1,5 +1,5 @@
 {
-  "name": "@re-auth/reauth",
+  "name": "@re-auth/reauth-old",
   "version": "0.1.0-alpha.19",
   "description": "Runtime, framework, and protocol-independent authentication engine for TypeScript/JavaScript applications with plugin-based architecture",
   "type": "module",

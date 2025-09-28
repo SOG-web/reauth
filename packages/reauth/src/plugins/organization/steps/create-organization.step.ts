@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   CreateOrganizationInput,
   CreateOrganizationOutput,
@@ -11,9 +11,10 @@ import {
   canCreateOrganization,
   isValidRole,
 } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const createOrganizationValidation = type({
-  token: 'string',
+  token: tokenType,
   name: 'string',
   'slug?': 'string',
   'parent_id?': 'string',
@@ -50,6 +51,7 @@ export const createOrganizationStep: AuthStep<
       'metadata?': 'object',
       created_at: 'string',
     },
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, name, slug, parent_id, settings, metadata } = input;
@@ -70,11 +72,15 @@ export const createOrganizationStep: AuthStep<
     // Check if user can create more organizations
     const canCreate = await canCreateOrganization(subjectId, orm, ctx.config);
     if (!canCreate) {
-      return {
-        success: false,
-        message: `Maximum organization limit reached (${ctx.config?.maxOrganizationsPerUser || 'unlimited'})`,
-        status: 'eq',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: `Maximum organization limit reached (${ctx.config?.maxOrganizationsPerUser || 'unlimited'})`,
+          status: 'eq',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Validate hierarchy permission if parent_id provided
@@ -84,11 +90,15 @@ export const createOrganizationStep: AuthStep<
       });
 
       if (!parentOrg) {
-        return {
-          success: false,
-          message: 'Parent organization not found',
-          status: 'unf',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Parent organization not found',
+            status: 'unf',
+          },
+          token,
+          session.token,
+        );
       }
 
       // Check if user has admin access to parent organization
@@ -103,18 +113,26 @@ export const createOrganizationStep: AuthStep<
       });
 
       if (!parentMembership) {
-        return {
-          success: false,
-          message: 'Admin access required for parent organization',
-          status: 'unf',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Admin access required for parent organization',
+            status: 'unf',
+          },
+          token,
+          session.token,
+        );
       }
     } else if (parent_id && ctx.config?.allowHierarchy === false) {
-      return {
-        success: false,
-        message: 'Hierarchical organizations are not enabled',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Hierarchical organizations are not enabled',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Generate or validate slug
@@ -124,23 +142,31 @@ export const createOrganizationStep: AuthStep<
     } else {
       // Validate slug format
       if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(finalSlug)) {
-        return {
-          success: false,
-          message:
-            'Invalid slug format. Use lowercase letters, numbers, and hyphens only',
-          status: 'ic',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message:
+              'Invalid slug format. Use lowercase letters, numbers, and hyphens only',
+            status: 'ic',
+          },
+          token,
+          session.token,
+        );
       }
     }
 
     // Check slug availability
     const slugAvailable = await isSlugAvailable(finalSlug, undefined, orm);
     if (!slugAvailable) {
-      return {
-        success: false,
-        message: 'Organization slug already exists',
-        status: 'eq',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization slug already exists',
+          status: 'eq',
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -172,26 +198,34 @@ export const createOrganizationStep: AuthStep<
         updated_at: now,
       });
 
-      return {
-        success: true,
-        message: 'Organization created successfully',
-        status: 'su',
-        organization: {
-          id: organization.id as string,
-          name,
-          slug: finalSlug,
-          parent_id: parent_id,
-          settings: settings,
-          metadata: metadata,
-          created_at: now.toISOString(),
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Organization created successfully',
+          status: 'su',
+          organization: {
+            id: organization.id as string,
+            name,
+            slug: finalSlug,
+            parent_id: parent_id,
+            settings: settings,
+            metadata: metadata,
+            created_at: now.toISOString(),
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to create organization',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to create organization',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

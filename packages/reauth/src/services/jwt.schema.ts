@@ -1,5 +1,5 @@
 import { column, idColumn, table } from 'fumadb/schema';
-import type { ReauthSchemaPlugin } from './types';
+import type { ReauthSchemaPlugin } from '../types';
 
 // OAuth-style client registration
 export const reauthClients = table('reauth_clients', {

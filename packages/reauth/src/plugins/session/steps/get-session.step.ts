@@ -1,20 +1,26 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput, SessionService } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { SessionConfig } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type GetSessionInput = {
-  token: string;
+  token: Token;
   others?: Record<string, any>;
 };
 
 export const getSessionValidation = type({
-  token: 'string',
+  token: tokenType,
   others: 'object?',
 });
 
 type Session = {
   sessionId: string;
-  token: string;
+  token: Token;
   subject: any;
   createdAt: string;
   expiresAt?: string;
@@ -54,7 +60,7 @@ export const getSessionStep: AuthStep<
     status: 'string',
     'session?': type({
       sessionId: 'string',
-      token: 'string',
+      token: tokenType,
       subject: 'object',
       createdAt: 'string',
       expiresAt: 'string?',
@@ -72,44 +78,48 @@ export const getSessionStep: AuthStep<
   async run(input, ctx) {
     const { token, others } = input;
 
+    // Verify the session and get subject
+    const ses = await ctx.engine.checkSession(token);
+
+    if (!ses.subject) {
+      return {
+        success: false,
+        message: 'Authentication required',
+        status: 'unf',
+        error: 'Invalid or expired session',
+        others,
+      };
+    }
+
     try {
-      // Verify the session and get subject
-      const { subject } = await ctx.engine.checkSession(token);
-
-      if (!subject) {
-        return {
-          success: false,
-          message: 'Authentication required',
-          status: 'unf',
-          error: 'Invalid or expired session',
-          others,
-        };
-      }
-
       // Get the session service via DI container (type-safe)
       const sessionService = ctx.engine.getSessionService();
 
       if (!sessionService) {
-        return {
-          success: false,
-          message: 'Session service not available',
-          status: 'ic',
-          error: 'Session management not configured',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Session service not available',
+            status: 'ic',
+            error: 'Session management not configured',
+            others,
+          },
+          token,
+          ses.token,
+        );
       }
 
       // Try to get enhanced session information if available
       let sessionInfo: any = {
         sessionId: 'current-session',
         token: '*current*',
-        subject,
+        subject: ses.subject,
         createdAt: new Date().toISOString(),
       };
 
       if (sessionService.listSessionsForSubject) {
-        const subjectType = subject.type || 'subject';
-        const subjectId = subject.id;
+        const subjectType = ses.subject.type || 'subject';
+        const subjectId = ses.subject.id;
 
         const sessions = await sessionService.listSessionsForSubject(
           subjectType,
@@ -123,7 +133,7 @@ export const getSessionStep: AuthStep<
           sessionInfo = {
             sessionId: currentSession.sessionId,
             token: '*current*', // Don't expose full token for security
-            subject,
+            subject: ses.subject,
             createdAt: currentSession.createdAt,
             expiresAt: currentSession.expiresAt,
             deviceInfo: currentSession.deviceInfo,
@@ -132,21 +142,29 @@ export const getSessionStep: AuthStep<
         }
       }
 
-      return {
-        success: true,
-        message: 'Current session information retrieved',
-        status: 'su',
-        session: sessionInfo,
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Current session information retrieved',
+          status: 'su',
+          session: sessionInfo,
+          others,
+        },
+        token,
+        ses.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to get session information',
-        status: 'ic',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to get session information',
+          status: 'ic',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          others,
+        },
+        token,
+        ses.token,
+      );
     }
   },
 };

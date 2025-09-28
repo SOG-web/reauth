@@ -4,11 +4,12 @@ import {
   jwtVerify,
   importJWK,
   exportJWK,
+  JWK,
 } from 'jose';
 import { randomBytes, createHash } from 'node:crypto';
-import type { FumaClient } from './types';
+import type { FumaClient } from '../types';
 import type {
-  EnhancedJWKSService as JWTServiceType,
+  EnhancedJWKSServiceType as JWTServiceType,
   JWKSKey,
   ReAuthJWTPayload,
   RotationReason,
@@ -17,12 +18,16 @@ import type {
   RefreshTokenRevocationReason,
   RefreshTokenValidationResult,
   TokenPair,
+  ReAuthClient,
+  ClientType,
 } from './jwt.types';
+import { generateApiKey } from '../plugins/api-key';
+import { hashPassword } from '../lib';
 
 export class EnhancedJWKSService implements JWTServiceType {
   private keyCache = new Map<string, JWKSKey>();
   private activeKeyCache: JWKSKey | null = null;
-  private publicJWKSCache: { keys: any[] } | null = null;
+  private publicJWKSCache: { keys: JWK[] } | null = null;
   private cacheExpiry = 0;
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -167,7 +172,11 @@ export class EnhancedJWKSService implements JWTServiceType {
     return newKey;
   }
 
-  async signJWT(payload: ReAuthJWTPayload, keyId?: string, ttlSeconds?: number): Promise<string> {
+  async signJWT(
+    payload: ReAuthJWTPayload,
+    keyId?: string,
+    ttlSeconds?: number,
+  ): Promise<string> {
     const key = keyId
       ? await this.getKeyById(keyId)
       : await this.getActiveKey();
@@ -219,14 +228,14 @@ export class EnhancedJWKSService implements JWTServiceType {
     return payload as ReAuthJWTPayload;
   }
 
-  async getPublicJWKS(): Promise<{ keys: any[] }> {
+  async getPublicJWKS(): Promise<{ keys: JWK[] }> {
     // Check cache first
     if (this.publicJWKSCache && Date.now() < this.cacheExpiry) {
       return this.publicJWKSCache;
     }
 
     const activeKeys = await this.getAllActiveKeys();
-    const keys = [];
+    const keys: JWK[] = [];
 
     for (const key of activeKeys) {
       const publicJWK = await exportJWK(key.publicKey);
@@ -242,6 +251,17 @@ export class EnhancedJWKSService implements JWTServiceType {
     this.cacheExpiry = Date.now() + this.CACHE_TTL;
 
     return this.publicJWKSCache;
+  }
+
+  async getPublicJWK(): Promise<JWK> {
+    const key = await this.getActiveKey();
+    const publicJWK = await exportJWK(key.publicKey);
+    return {
+      ...publicJWK,
+      kid: key.keyId,
+      alg: key.algorithm,
+      use: 'sig',
+    };
   }
 
   async blacklistToken(token: string, reason: BlacklistReason): Promise<void> {
@@ -307,23 +327,30 @@ export class EnhancedJWKSService implements JWTServiceType {
   }
 
   // Token pair operations
-  async createTokenPair(payload: ReAuthJWTPayload, deviceInfo?: {
-    fingerprint?: string;
-    ipAddress?: string;
-    userAgent?: string;
-  }): Promise<TokenPair> {
-    // Generate access token
-    const accessToken = await this.signJWT(payload);
-    
+  async createTokenPair(
+    payload: ReAuthJWTPayload,
+    deviceInfo?: {
+      fingerprint?: string;
+      ipAddress?: string;
+      userAgent?: string;
+    },
+    ttlSeconds?: number,
+  ): Promise<TokenPair> {
+    // Generate access token with custom TTL if provided
+    const accessToken = await this.signJWT(payload, undefined, ttlSeconds);
+
     // Generate refresh token
     const refreshToken = await this.generateRefreshToken(
       payload.subject_type,
       payload.sub,
-      deviceInfo
+      deviceInfo,
     );
 
-    const accessTokenExpiresAt = new Date(Date.now() + this.defaultAccessTokenTtlSeconds * 1000);
-    const refreshTokenExpiresAt = new Date(Date.now() + this.defaultRefreshTokenTtlSeconds * 1000);
+    const effectiveTtl = ttlSeconds || this.defaultAccessTokenTtlSeconds;
+    const accessTokenExpiresAt = new Date(Date.now() + effectiveTtl * 1000);
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + this.defaultRefreshTokenTtlSeconds * 1000,
+    );
 
     return {
       accessToken,
@@ -335,11 +362,15 @@ export class EnhancedJWKSService implements JWTServiceType {
   }
 
   // Refresh token operations
-  async generateRefreshToken(subjectType: string, subjectId: string, deviceInfo?: {
-    fingerprint?: string;
-    ipAddress?: string;
-    userAgent?: string;
-  }): Promise<string> {
+  async generateRefreshToken(
+    subjectType: string,
+    subjectId: string,
+    deviceInfo?: {
+      fingerprint?: string;
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ): Promise<string> {
     const version = await this.dbClient.version();
     const orm = this.dbClient.orm(version);
 
@@ -348,7 +379,9 @@ export class EnhancedJWKSService implements JWTServiceType {
     const tokenId = randomBytes(16).toString('hex');
     const tokenHash = createHash('sha256').update(token).digest('hex');
 
-    const expiresAt = new Date(Date.now() + this.defaultRefreshTokenTtlSeconds * 1000);
+    const expiresAt = new Date(
+      Date.now() + this.defaultRefreshTokenTtlSeconds * 1000,
+    );
 
     await orm.create('refresh_tokens', {
       token_id: tokenId,
@@ -364,7 +397,9 @@ export class EnhancedJWKSService implements JWTServiceType {
     return token;
   }
 
-  async validateRefreshToken(token: string): Promise<RefreshTokenValidationResult> {
+  async validateRefreshToken(
+    token: string,
+  ): Promise<RefreshTokenValidationResult> {
     const version = await this.dbClient.version();
     const orm = this.dbClient.orm(version);
 
@@ -376,7 +411,7 @@ export class EnhancedJWKSService implements JWTServiceType {
         b.and(
           b('token_hash', '=', tokenHash),
           b('is_revoked', '=', false),
-          b('expires_at', '>', now)
+          b('expires_at', '>', now),
         ),
     });
 
@@ -395,11 +430,19 @@ export class EnhancedJWKSService implements JWTServiceType {
       tokenHash: refreshTokenRecord.token_hash as string,
       expiresAt: new Date(refreshTokenRecord.expires_at as string),
       createdAt: new Date(refreshTokenRecord.created_at as string),
-      lastUsedAt: refreshTokenRecord.last_used_at ? new Date(refreshTokenRecord.last_used_at as string) : undefined,
+      lastUsedAt: refreshTokenRecord.last_used_at
+        ? new Date(refreshTokenRecord.last_used_at as string)
+        : undefined,
       isRevoked: refreshTokenRecord.is_revoked as boolean,
-      revokedAt: refreshTokenRecord.revoked_at ? new Date(refreshTokenRecord.revoked_at as string) : undefined,
-      revocationReason: refreshTokenRecord.revocation_reason as RefreshTokenRevocationReason | undefined,
-      deviceFingerprint: refreshTokenRecord.device_fingerprint as string | undefined,
+      revokedAt: refreshTokenRecord.revoked_at
+        ? new Date(refreshTokenRecord.revoked_at as string)
+        : undefined,
+      revocationReason: refreshTokenRecord.revocation_reason as
+        | RefreshTokenRevocationReason
+        | undefined,
+      deviceFingerprint: refreshTokenRecord.device_fingerprint as
+        | string
+        | undefined,
       ipAddress: refreshTokenRecord.ip_address as string | undefined,
       userAgent: refreshTokenRecord.user_agent as string | undefined,
     };
@@ -412,7 +455,7 @@ export class EnhancedJWKSService implements JWTServiceType {
 
   async refreshAccessToken(refreshToken: string): Promise<TokenPair> {
     const validation = await this.validateRefreshToken(refreshToken);
-    
+
     if (!validation.isValid || !validation.token) {
       throw new Error(validation.error || 'Invalid refresh token');
     }
@@ -433,7 +476,9 @@ export class EnhancedJWKSService implements JWTServiceType {
     };
 
     const accessToken = await this.signJWT(payload);
-    const accessTokenExpiresAt = new Date(Date.now() + this.defaultAccessTokenTtlSeconds * 1000);
+    const accessTokenExpiresAt = new Date(
+      Date.now() + this.defaultAccessTokenTtlSeconds * 1000,
+    );
 
     let newRefreshToken = refreshToken;
     let refreshTokenExpiresAt = validation.token.expiresAt;
@@ -442,7 +487,7 @@ export class EnhancedJWKSService implements JWTServiceType {
     if (this.enableRefreshTokenRotation) {
       // Revoke old refresh token
       await this.revokeRefreshToken(refreshToken, 'rotation');
-      
+
       // Generate new refresh token
       newRefreshToken = await this.generateRefreshToken(
         validation.token.subjectType,
@@ -451,9 +496,11 @@ export class EnhancedJWKSService implements JWTServiceType {
           fingerprint: validation.token.deviceFingerprint,
           ipAddress: validation.token.ipAddress,
           userAgent: validation.token.userAgent,
-        }
+        },
       );
-      refreshTokenExpiresAt = new Date(Date.now() + this.defaultRefreshTokenTtlSeconds * 1000);
+      refreshTokenExpiresAt = new Date(
+        Date.now() + this.defaultRefreshTokenTtlSeconds * 1000,
+      );
     }
 
     return {
@@ -465,7 +512,10 @@ export class EnhancedJWKSService implements JWTServiceType {
     };
   }
 
-  async revokeRefreshToken(token: string, reason: RefreshTokenRevocationReason = 'logout'): Promise<void> {
+  async revokeRefreshToken(
+    token: string,
+    reason: RefreshTokenRevocationReason = 'logout',
+  ): Promise<void> {
     const version = await this.dbClient.version();
     const orm = this.dbClient.orm(version);
 
@@ -481,7 +531,11 @@ export class EnhancedJWKSService implements JWTServiceType {
     });
   }
 
-  async revokeAllRefreshTokens(subjectType: string, subjectId: string, reason: RefreshTokenRevocationReason = 'logout'): Promise<number> {
+  async revokeAllRefreshTokens(
+    subjectType: string,
+    subjectId: string,
+    reason: RefreshTokenRevocationReason = 'logout',
+  ): Promise<number> {
     const version = await this.dbClient.version();
     const orm = this.dbClient.orm(version);
 
@@ -490,7 +544,7 @@ export class EnhancedJWKSService implements JWTServiceType {
         b.and(
           b('subject_type', '=', subjectType),
           b('subject_id', '=', subjectId),
-          b('is_revoked', '=', false)
+          b('is_revoked', '=', false),
         ),
     });
 
@@ -499,7 +553,7 @@ export class EnhancedJWKSService implements JWTServiceType {
         b.and(
           b('subject_type', '=', subjectType),
           b('subject_id', '=', subjectId),
-          b('is_revoked', '=', false)
+          b('is_revoked', '=', false),
         ),
       set: {
         is_revoked: true,
@@ -525,6 +579,109 @@ export class EnhancedJWKSService implements JWTServiceType {
     });
 
     return count;
+  }
+
+  async registerClient(
+    client: ReAuthClient,
+  ): Promise<{ client: ReAuthClient; apiKey: string }> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    const apiKey = generateApiKey();
+
+    const hashedApiKey = await hashPassword(apiKey);
+
+    const clientRecord = await orm.create('reauth_clients', {
+      client_secret_hash: hashedApiKey,
+      client_type: client.clientType,
+      name: client.name,
+      description: client.description,
+      is_active: client.isActive,
+      created_at: client.createdAt,
+      updated_at: client.updatedAt,
+    });
+
+    return {
+      client: {
+        id: clientRecord.id as string,
+        clientSecretHash: '[REDACTED]',
+        clientType: client.clientType,
+        name: client.name,
+        description: client.description,
+        isActive: client.isActive,
+        createdAt: client.createdAt,
+        updatedAt: client.updatedAt,
+      },
+      apiKey,
+    };
+  }
+
+  async getClientById(id: string): Promise<ReAuthClient> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    const clientRecord = await orm.findFirst('reauth_clients', {
+      where: (b: any) => b('id', '=', id),
+    });
+
+    if (!clientRecord) {
+      throw new Error(`Client not found: ${id}`);
+    }
+
+    return {
+      id: clientRecord.id as string,
+      clientSecretHash: clientRecord.client_secret_hash as string,
+      clientType: clientRecord.client_type as ClientType,
+      name: clientRecord.name as string,
+      description: clientRecord.description as string,
+      isActive: clientRecord.is_active as boolean,
+      createdAt: clientRecord.created_at as Date,
+      updatedAt: clientRecord.updated_at as Date,
+    };
+  }
+
+  async getAllClients(): Promise<ReAuthClient[]> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    const clientRecords = await orm.findMany('reauth_clients');
+
+    return clientRecords.map((record) => ({
+      id: record.id as string,
+      clientSecretHash: record.client_secret_hash as string,
+      clientType: record.client_type as ClientType,
+      name: record.name as string,
+      description: record.description as string,
+      isActive: record.is_active as boolean,
+      createdAt: record.created_at as Date,
+      updatedAt: record.updated_at as Date,
+    }));
+  }
+
+  async getClientByApiKey(apiKey: string): Promise<ReAuthClient> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    const apiKeyHash = await hashPassword(apiKey);
+
+    const clientRecord = await orm.findFirst('reauth_clients', {
+      where: (b: any) => b('client_secret_hash', '=', apiKeyHash),
+    });
+
+    if (!clientRecord) {
+      throw new Error(`Client not found: ${apiKey}`);
+    }
+
+    return {
+      id: clientRecord.id as string,
+      clientSecretHash: clientRecord.client_secret_hash as string,
+      clientType: clientRecord.client_type as ClientType,
+      name: clientRecord.name as string,
+      description: clientRecord.description as string,
+      isActive: clientRecord.is_active as boolean,
+      createdAt: clientRecord.created_at as Date,
+      updatedAt: clientRecord.updated_at as Date,
+    };
   }
 
   // Private helper methods

@@ -3,75 +3,94 @@
   "version": "0.1.0-alpha.19",
   "description": "Runtime, framework, and protocol-independent authentication engine for TypeScript/JavaScript applications with plugin-based architecture",
   "type": "module",
-  "main": "./dist/cjs/src/index.js",
-  "module": "./dist/esm/src/index.js",
-  "types": "./dist/esm/src/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./plugins/anonymous": {
+      "types": "./dist/plugins/anonymous/index.d.ts",
+      "import": "./dist/plugins/anonymous/index.js",
+      "require": "./dist/plugins/anonymous/index.cjs"
+    },
+    "./plugins/email-password": {
+      "types": "./dist/plugins/email-password/index.d.ts",
+      "import": "./dist/plugins/email-password/index.js",
+      "require": "./dist/plugins/email-password/index.cjs"
+    },
+    "./plugins/email-or-username": {
+      "types": "./dist/plugins/email-or-username/index.d.ts",
+      "import": "./dist/plugins/email-or-username/index.js",
+      "require": "./dist/plugins/email-or-username/index.cjs"
+    },
+    "./plugins/jwt": {
+      "types": "./dist/plugins/jwt/index.d.ts",
+      "import": "./dist/plugins/jwt/index.js",
+      "require": "./dist/plugins/jwt/index.cjs"
+    },
+    "./plugins/phone": {
+      "types": "./dist/plugins/phone/index.d.ts",
+      "import": "./dist/plugins/phone/index.js",
+      "require": "./dist/plugins/phone/index.cjs"
+    },
+    "./plugins/api-key": {
+      "types": "./dist/plugins/api-key/index.d.ts",
+      "import": "./dist/plugins/api-key/index.js",
+      "require": "./dist/plugins/api-key/index.cjs"
+    },
+    "./plugins/organization": {
+      "types": "./dist/plugins/organization/index.d.ts",
+      "import": "./dist/plugins/organization/index.js",
+      "require": "./dist/plugins/organization/index.cjs"
+    },
+    "./plugins/passwordless": {
+      "types": "./dist/plugins/passwordless/index.d.ts",
+      "import": "./dist/plugins/passwordless/index.js",
+      "require": "./dist/plugins/passwordless/index.cjs"
+    },
+    "./plugins/session": {
+      "types": "./dist/plugins/session/index.d.ts",
+      "import": "./dist/plugins/session/index.js",
+      "require": "./dist/plugins/session/index.cjs"
+    },
+    "./plugins/username": {
+      "types": "./dist/plugins/username/index.d.ts",
+      "import": "./dist/plugins/username/index.js",
+      "require": "./dist/plugins/username/index.cjs"
+    },
+    "./services": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js",
+      "require": "./dist/services/index.cjs"
+    }
+  },
   "scripts": {
     "clean": "rm -rf dist",
-    "build:esm": "tsc -p tsconfig.esm.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build": "pnpm clean && pnpm build:esm && pnpm build:cjs",
+    "build": "pnpm clean && tsup",
+    "build:esm": "tsup --format esm --outdir dist/esm",
+    "build:cjs": "tsup --format cjs --outdir dist/cjs",
     "dev": "pnpm build:esm --watch",
     "lint": "tsc --noEmit",
     "test": "vitest",
-    "test:watch": "vitest --watch"
-  },
-  "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "types": "./dist/esm/src/index.d.ts",
-      "import": "./dist/esm/src/index.js",
-      "require": "./dist/cjs/src/index.js"
-    },
-    "./lib": {
-      "types": "./dist/esm/src/lib/index.d.ts",
-      "import": "./dist/esm/src/lib/index.js",
-      "require": "./dist/cjs/src/lib/index.js"
-    },
-    "./plugins/utils": {
-      "types": "./dist/esm/src/plugins/utils/index.d.ts",
-      "import": "./dist/esm/src/plugins/utils/index.js",
-      "require": "./dist/cjs/src/plugins/utils/index.js"
-    },
-    "./plugins": {
-      "types": "./dist/esm/src/plugins/index.d.ts",
-      "import": "./dist/esm/src/plugins/index.js",
-      "require": "./dist/cjs/src/plugins/index.js"
-    },
-    "./services": {
-      "types": "./dist/esm/src/services/index.d.ts",
-      "import": "./dist/esm/src/services/index.js",
-      "require": "./dist/cjs/src/services/index.js"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      ".": [
-        "./dist/esm/src/index.d.ts"
-      ],
-      "lib": [
-        "./dist/esm/src/lib/index.d.ts"
-      ],
-      "plugins/utils": [
-        "./dist/esm/src/plugins/utils/index.d.ts"
-      ],
-      "plugins": [
-        "./dist/esm/src/plugins/index.d.ts"
-      ],
-      "services": [
-        "./dist/esm/src/services/index.d.ts"
-      ]
-    }
+    "test:watch": "vitest --watch",
+    "lint:package": "publint"
   },
   "files": [
     "dist",
-    "!**/*.tsbuildinfo",
-    "package.json",
     "README.md"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/SOG-web/reauth"
+    "url": "git+https://github.com/SOG-web/reauth.git"
   },
   "publishConfig": {
     "access": "public"
@@ -82,7 +101,9 @@
     "@types/deno": "^2.2.0",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.15.21",
+    "publint": "^0.3.13",
     "tslib": "^2.8.1",
+    "tsup": "^8.5.0",
     "vitest": "^3.1.4"
   },
   "dependencies": {

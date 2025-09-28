@@ -1,9 +1,10 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import { findTestUser, genCode } from '../utils';
 import type { PhonePasswordConfig } from '../types';
 import { passwordSchema, phoneSchema } from '../../shared/validation';
 import { verifyPasswordHash, hashPassword } from '../../../lib/password';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type LoginInput = {
   phone: string;
@@ -34,7 +35,7 @@ export const loginStep: AuthStep<PhonePasswordConfig, LoginInput, AuthOutput> =
       message: 'string',
       'error?': 'string | object',
       status: 'string',
-      'token?': 'string',
+      'token?': tokenType,
       'subject?': type({
         id: 'string',
         phone: 'string',
@@ -69,14 +70,15 @@ export const loginStep: AuthStep<PhonePasswordConfig, LoginInput, AuthOutput> =
           profile: tu?.profile,
         };
 
-        return {
+        const baseResult = {
           success: true,
           message: 'Login successful (test user)',
           status: 'su',
-          token,
           subject,
           others,
         };
+
+        return attachNewTokenIfDifferent(baseResult, undefined as any, token);
       }
 
       // Find identity by provider/phone
@@ -180,13 +182,14 @@ export const loginStep: AuthStep<PhonePasswordConfig, LoginInput, AuthOutput> =
         provider: 'phone',
         verified: identity.verified,
       };
-      return {
+      const baseResult = {
         success: true,
         message: 'Login successful',
         status: 'su',
-        token,
         subject,
         others,
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined, token);
     },
   };

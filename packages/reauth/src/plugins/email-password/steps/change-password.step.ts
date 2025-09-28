@@ -1,5 +1,10 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { EmailPasswordConfig } from '../types';
 import {
   verifyPasswordHash,
@@ -7,15 +12,16 @@ import {
   haveIbeenPawned,
 } from '../../../lib/password';
 import { passwordSchema } from '../../../plugins/shared/validation';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ChangePasswordInput = {
-  token: string;
+  token: Token;
   oldPassword: string;
   newPassword: string;
   others?: Record<string, any>;
 };
 export const changePasswordValidation = type({
-  token: 'string',
+  token: tokenType,
   oldPassword: passwordSchema,
   newPassword: passwordSchema,
   others: 'object?',
@@ -38,6 +44,7 @@ export const changePasswordStep: AuthStep<
     message: 'string',
     status: 'string',
     'others?': 'object',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, oldPassword, newPassword, others } = input;
@@ -68,23 +75,38 @@ export const changePasswordStep: AuthStep<
     );
 
     if (!ok)
-      return {
-        success: false,
-        message: 'Invalid credentials',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Invalid credentials',
+          status: 'ip',
+          others,
+        },
+        token,
+        check.token,
+      );
 
-    const safePassword = await haveIbeenPawned(newPassword);
+    let safePassword = false;
+
+    try {
+      safePassword = await haveIbeenPawned(newPassword);
+    } catch (e) {
+      console.error(e);
+      safePassword = true;
+    }
 
     if (!safePassword)
-      return {
-        success: false,
-        message:
-          'The password has been used before in a data breach. Please choose a different one.',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message:
+            'The password has been used before in a data breach. Please choose a different one.',
+          status: 'ip',
+          others,
+        },
+        token,
+        check.token,
+      );
 
     const hashed = await hashPassword(newPassword);
     await (orm as any).updateMany('credentials', {
@@ -92,6 +114,15 @@ export const changePasswordStep: AuthStep<
       set: { password_hash: hashed, password_updated_at: new Date() },
     });
 
-    return { success: true, message: 'Password changed', status: 'su', others };
+    return attachNewTokenIfDifferent(
+      {
+        success: true,
+        message: 'Password changed',
+        status: 'su',
+        others,
+      },
+      token,
+      check.token,
+    );
   },
 };

@@ -1,6 +1,6 @@
 import { schema, table, column, idColumn } from 'fumadb/schema';
 import type { ReauthSchemaPlugin } from './types';
-import { sessions } from './session.schema';
+import { sessions, jwtPluginTables } from './services';
 
 /**
  * Build the  Fuma schema by combining:
@@ -62,6 +62,7 @@ export default function buildSchema(plugins: ReauthSchemaPlugin[] = []) {
     subjects,
     credentials,
     identities,
+    ...jwtPluginTables,
     ...pluginTables,
   } as Record<string, any>;
 

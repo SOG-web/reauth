@@ -1,5 +1,11 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
+import {
+  type AuthStep,
+  type AuthOutput,
+  tokenType,
+  Token,
+} from '../../../types';
 import type { PasswordlessConfig } from '../types';
 import {
   hashMagicLinkToken,
@@ -8,12 +14,12 @@ import {
 } from '../utils';
 
 export type VerifyMagicLinkInput = {
-  token: string;
   others?: Record<string, any>;
+  magic_token: string;
 };
 
 export const verifyMagicLinkValidation = type({
-  token: 'string',
+  magic_token: 'string',
   others: 'object?',
 });
 
@@ -31,13 +37,13 @@ export const verifyMagicLinkStep: AuthStep<
       codes: { su: 200, ic: 400, nf: 404, ex: 410 },
     },
   },
-  inputs: ['token', 'others'],
+  inputs: ['magic_token', 'others'],
   outputs: type({
     success: 'boolean',
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       'email?': 'string',
@@ -46,7 +52,7 @@ export const verifyMagicLinkStep: AuthStep<
     'others?': 'object',
   }),
   async run(input, ctx) {
-    const { token, others } = input;
+    const { magic_token, others } = input;
     const orm = await ctx.engine.getOrm();
 
     // Validate config requires magic links
@@ -64,7 +70,7 @@ export const verifyMagicLinkStep: AuthStep<
       await cleanupExpiredMagicLinks(orm);
 
       // Hash the provided token
-      const tokenHash = hashMagicLinkToken(token);
+      const tokenHash = hashMagicLinkToken(magic_token);
 
       // Find magic link by token hash
       const magicLink = await orm.findFirst('magic_links', {
@@ -123,11 +129,10 @@ export const verifyMagicLinkStep: AuthStep<
         ctx.config.sessionTtlSeconds || 3600,
       );
 
-      return {
+      const baseResult = {
         success: true,
         message: 'Authentication successful',
         status: 'su',
-        token: sessionToken,
         subject,
         others: {
           email: magicLink.email,
@@ -135,6 +140,8 @@ export const verifyMagicLinkStep: AuthStep<
           ...others,
         },
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined, sessionToken);
     } catch (error) {
       return {
         success: false,

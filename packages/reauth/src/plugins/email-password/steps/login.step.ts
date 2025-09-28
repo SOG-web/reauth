@@ -1,9 +1,10 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import { findTestUser, genCode } from '../utils';
 import type { EmailPasswordConfig } from '../types';
 import { passwordSchema } from '../../shared/validation';
 import { verifyPasswordHash, hashPassword } from '../../../lib/password';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type LoginInput = {
   email: string;
@@ -34,7 +35,7 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
       message: 'string',
       'error?': 'string | object',
       status: 'string',
-      'token?': 'string',
+      'token?': tokenType,
       'subject?': type({
         id: 'string',
         email: 'string',
@@ -70,14 +71,15 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
           profile: tu.profile,
         };
 
-        return {
+        const baseResult = {
           success: true,
           message: 'Login successful (test user)',
           status: 'su',
-          token,
           subject,
           others,
         };
+
+        return attachNewTokenIfDifferent(baseResult, undefined, token);
       }
 
       // Find identity by provider/email
@@ -181,13 +183,14 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
         provider: 'email',
         verified: identity.verified,
       };
-      return {
+      const baseResult = {
         success: true,
         message: 'Login successful',
         status: 'su',
-        token,
         subject,
         others,
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined, token);
     },
   };

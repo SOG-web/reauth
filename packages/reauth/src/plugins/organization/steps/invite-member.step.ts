@@ -1,5 +1,5 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   InviteMemberInput,
   InviteMemberOutput,
@@ -11,9 +11,10 @@ import {
   hasOrganizationPermission,
   isValidRole,
 } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const inviteMemberValidation = type({
-  token: 'string',
+  token: tokenType,
   organization_id: 'string',
   email: 'string.email',
   role: 'string',
@@ -44,6 +45,7 @@ export const inviteMemberStep: AuthStep<
       token: 'string',
       expires_at: 'string',
     },
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, organization_id, email, role } = input;
@@ -63,11 +65,15 @@ export const inviteMemberStep: AuthStep<
 
     // Validate role
     if (!isValidRole(role, ctx.config)) {
-      return {
-        success: false,
-        message: `Invalid role. Available roles: ${ctx.config?.availableRoles?.join(', ') || 'admin, member, viewer'}`,
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: `Invalid role. Available roles: ${ctx.config?.availableRoles?.join(', ') || 'admin, member, viewer'}`,
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check if organization exists
@@ -77,11 +83,15 @@ export const inviteMemberStep: AuthStep<
     });
 
     if (!organization) {
-      return {
-        success: false,
-        message: 'Organization not found',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization not found',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check admin permission
@@ -92,11 +102,15 @@ export const inviteMemberStep: AuthStep<
       orm,
     );
     if (!hasPermission) {
-      return {
-        success: false,
-        message: 'Admin access required to invite members',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Admin access required to invite members',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check if user is already a member
@@ -110,11 +124,15 @@ export const inviteMemberStep: AuthStep<
     });
 
     if (existingMembership) {
-      return {
-        success: false,
-        message: 'User is already a member of this organization',
-        status: 'eq',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'User is already a member of this organization',
+          status: 'eq',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check if there's already a pending invitation
@@ -128,11 +146,15 @@ export const inviteMemberStep: AuthStep<
     });
 
     if (existingInvitation) {
-      return {
-        success: false,
-        message: 'Invitation already sent to this email',
-        status: 'eq',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Invitation already sent to this email',
+          status: 'eq',
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -155,22 +177,30 @@ export const inviteMemberStep: AuthStep<
         updated_at: now,
       });
 
-      return {
-        success: true,
-        message: 'Invitation sent successfully',
-        status: 'su',
-        invitation: {
-          id: invitation.id as string,
-          token: invitationToken,
-          expires_at: expiresAt.toISOString(),
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Invitation sent successfully',
+          status: 'su',
+          invitation: {
+            id: invitation.id as string,
+            token: invitationToken,
+            expires_at: expiresAt.toISOString(),
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to send invitation',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to send invitation',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

@@ -1,9 +1,10 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import { findTestUser } from '../utils';
 import type { UsernamePasswordConfig } from '../types';
 import { passwordSchema, usernameSchema } from '../../shared/validation';
 import { verifyPasswordHash } from '../../../lib/password';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type LoginInput = {
   username: string;
@@ -37,7 +38,7 @@ export const loginStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       username: 'string',
@@ -72,14 +73,15 @@ export const loginStep: AuthStep<
         profile: tu.profile,
       };
 
-      return {
+      const baseResult = {
         success: true,
         message: 'Login successful (test user)',
         status: 'su',
-        token,
         subject,
         others,
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined as any, token);
     }
 
     // Find identity by provider/username
@@ -137,13 +139,14 @@ export const loginStep: AuthStep<
       provider: 'username',
       verified: true, // Username is always verified (no verification flow)
     };
-    return {
+    const baseResult = {
       success: true,
       message: 'Login successful',
       status: 'su',
-      token,
       subject,
       others,
     };
+
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
   },
 };

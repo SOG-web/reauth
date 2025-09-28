@@ -8,9 +8,7 @@ export interface StepOverride<Cfg> {
 export interface PluginFactoryConfig<Cfg> {
   config?: Partial<Cfg>;
   stepOverrides?: StepOverride<Cfg>[];
-  initialConfig?: Partial<Cfg>;
   validateConfig?: (config: Partial<Cfg>) => string[] | null;
-  requiredDependencies?: string[]; // kept for parity, not used by  engine directly
 }
 
 /**
@@ -20,12 +18,7 @@ export function createAuthPlugin<Cfg>(
   basePlugin: AuthPlugin<Cfg>,
   factoryConfig: PluginFactoryConfig<Cfg> = {},
 ): AuthPlugin<Cfg> {
-  const {
-    config = {},
-    stepOverrides = [],
-    initialConfig = {},
-    validateConfig,
-  } = factoryConfig;
+  const { config = {}, stepOverrides = [], validateConfig } = factoryConfig;
 
   if (!basePlugin) throw new Error('basePlugin is required');
   if (!Array.isArray(basePlugin.steps))
@@ -53,7 +46,6 @@ export function createAuthPlugin<Cfg>(
   const plugin: AuthPlugin<Cfg> = {
     ...basePlugin,
     config: {
-      ...initialConfig,
       ...basePlugin.config,
       ...(config as Cfg),
     },
@@ -63,22 +55,3 @@ export function createAuthPlugin<Cfg>(
 
   return plugin;
 }
-
-/**
- * Legacy-style helper for simple overrides compatible with V1-style signatures.
- */
-// export function createAuthPluginLegacy<Cfg>(
-//   config: Partial<Cfg>,
-//   plugin: AuthPlugin<Cfg>,
-//   overrideStep?: Array<{
-//     name: string;
-//     override: Partial<AuthStep<Cfg>>;
-//   }>,
-//   initialConfig?: Partial<Cfg>,
-// ): AuthPlugin<Cfg> {
-//   return createAuthPlugin<Cfg>(plugin, {
-//     config,
-//     stepOverrides: overrideStep,
-//     initialConfig,
-//   });
-// }

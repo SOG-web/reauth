@@ -1,16 +1,22 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { ApiKeyConfig } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type RevokeApiKeyInput = {
-  token: string; // Required - must be authenticated
+  token: Token; // Required - must be authenticated
   api_key_id?: string; // Either api_key_id or name is required
   name?: string; // Either api_key_id or name is required
   others?: Record<string, any>;
 };
 
 export const revokeApiKeyValidation = type({
-  token: 'string',
+  token: tokenType,
   api_key_id: 'string?',
   name: 'string?',
   others: 'object?',
@@ -45,6 +51,7 @@ export const revokeApiKeyStep: AuthStep<
     status: 'string',
     'revoked_key_id?': 'string',
     'others?': 'object',
+    'token?': tokenType,
   }),
 
   async run(input, ctx) {
@@ -66,12 +73,16 @@ export const revokeApiKeyStep: AuthStep<
 
     // Must provide either api_key_id or name
     if (!api_key_id && !name) {
-      return {
-        success: false,
-        message: 'Either api_key_id or name is required',
-        status: 'invalid',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Either api_key_id or name is required',
+          status: 'invalid',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -97,14 +108,18 @@ export const revokeApiKeyStep: AuthStep<
       });
 
       if (!apiKey) {
-        return {
-          success: false,
-          message: api_key_id
-            ? `API key with ID '${api_key_id}' not found or already inactive`
-            : `API key with name '${name}' not found or already inactive`,
-          status: 'notfound',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: api_key_id
+              ? `API key with ID '${api_key_id}' not found or already inactive`
+              : `API key with name '${name}' not found or already inactive`,
+            status: 'notfound',
+            others,
+          },
+          token,
+          session.token,
+        );
       }
 
       // Revoke the API key (mark as inactive)
@@ -116,21 +131,29 @@ export const revokeApiKeyStep: AuthStep<
         },
       });
 
-      return {
-        success: true,
-        message: `API key '${apiKey.name}' has been revoked`,
-        status: 'su',
-        revoked_key_id: apiKey.id,
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: `API key '${apiKey.name}' has been revoked`,
+          status: 'su',
+          revoked_key_id: apiKey.id,
+          others,
+        },
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to revoke API key',
-        status: 'ic',
-        error: String(error),
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to revoke API key',
+          status: 'ic',
+          error: String(error),
+          others,
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

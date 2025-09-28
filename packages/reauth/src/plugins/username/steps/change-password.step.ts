@@ -1,5 +1,10 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { UsernamePasswordConfig } from '../types';
 import { passwordSchema } from '../../shared/validation';
 import {
@@ -7,19 +12,20 @@ import {
   hashPassword,
   haveIbeenPawned,
 } from '../../../lib/password';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ChangePasswordInput = {
   currentPassword: string;
   newPassword: string;
   others?: Record<string, any>;
-  token: string;
+  token: Token;
 };
 
 export const changePasswordValidation = type({
   currentPassword: passwordSchema,
   newPassword: passwordSchema,
   others: 'object?',
-  token: 'string',
+  token: tokenType,
 });
 
 export const changePasswordStep: AuthStep<
@@ -44,10 +50,20 @@ export const changePasswordStep: AuthStep<
     'error?': 'string | object',
     status: 'string',
     'others?': 'object',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { currentPassword, newPassword, others, token } = input;
     const orm = await ctx.engine.getOrm();
+
+    if (!token) {
+      return {
+        success: false,
+        message: 'Authentication token is required',
+        status: 'unauth',
+        others,
+      };
+    }
 
     // This step requires authentication - get subject from session
     const session = await ctx.engine.checkSession(token || '');
@@ -61,15 +77,26 @@ export const changePasswordStep: AuthStep<
     }
 
     // Check password safety (HaveIBeenPwned)
-    const isSafe = await haveIbeenPawned(newPassword);
+    let isSafe = false;
+    try {
+      isSafe = await haveIbeenPawned(newPassword);
+    } catch (err) {
+      console.log('haveIbeenPawned check failed', { err });
+      // Decide: fail-open vs fail-closed per policy.
+      isSafe = true;
+    }
     if (!isSafe) {
-      return {
-        success: false,
-        message:
-          'Password has been found in data breaches. Please choose a stronger password.',
-        status: 'pwr',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message:
+            'Password has been found in data breaches. Please choose a stronger password.',
+          status: 'pwr',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Load current credentials
@@ -78,12 +105,16 @@ export const changePasswordStep: AuthStep<
     });
 
     if (!creds?.password_hash) {
-      return {
-        success: false,
-        message: 'Current password not found',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current password not found',
+          status: 'ip',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Verify current password
@@ -93,12 +124,16 @@ export const changePasswordStep: AuthStep<
     );
 
     if (!isCurrentPasswordValid) {
-      return {
-        success: false,
-        message: 'Current password is incorrect',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current password is incorrect',
+          status: 'ip',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Hash new password and update credentials
@@ -111,11 +146,15 @@ export const changePasswordStep: AuthStep<
       },
     });
 
-    return {
+    // Prepare success result
+    const baseResult = {
       success: true,
       message: 'Password changed successfully',
       status: 'su',
       others,
-    };
+    } as const;
+
+    // Attach session.token when it differs from the original token
+    return attachNewTokenIfDifferent(baseResult, token, session.token);
   },
 };

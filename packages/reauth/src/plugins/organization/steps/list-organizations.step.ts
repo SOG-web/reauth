@@ -1,13 +1,14 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   ListOrganizationsInput,
   ListOrganizationsOutput,
   OrganizationConfig,
 } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const listOrganizationsValidation = type({
-  token: 'string',
+  token: tokenType,
 });
 
 export const listOrganizationsStep: AuthStep<
@@ -48,6 +49,7 @@ export const listOrganizationsStep: AuthStep<
         'metadata?': 'object',
       },
     ],
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token } = input;
@@ -73,12 +75,16 @@ export const listOrganizationsStep: AuthStep<
       });
 
       if (!memberships || memberships.length === 0) {
-        return {
-          success: true,
-          message: 'No organizations found',
-          status: 'su',
-          organizations: [],
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: true,
+            message: 'No organizations found',
+            status: 'su',
+            organizations: [],
+          },
+          token,
+          session.token,
+        );
       }
 
       // Get organization details for each membership
@@ -90,12 +96,16 @@ export const listOrganizationsStep: AuthStep<
       });
 
       if (!organizations) {
-        return {
-          success: true,
-          message: 'No active organizations found',
-          status: 'su',
-          organizations: [],
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: true,
+            message: 'No active organizations found',
+            status: 'su',
+            organizations: [],
+          },
+          token,
+          session.token,
+        );
       }
 
       //TODO: improve security of data returned based on user's role
@@ -104,36 +114,48 @@ export const listOrganizationsStep: AuthStep<
         const membership = memberships.find(
           (m: any) => m.organization_id === org.id,
         );
-        return {
-          id: org.id,
-          name: org.name,
-          slug: org.slug,
-          role: (membership?.role as string) || 'unknown',
-          email: (membership?.email as string) || 'unknown',
-          roles: (membership?.roles as string).split(',') || [],
-          permissions: (membership?.permissions as string).split(',') || [],
-          status: membership?.status || 'unknown',
-          invited_by: (membership?.invited_by as string) || 'unknown',
-          joined_at: (membership?.joined_at as string) || 'unknown',
-          expires_at: (membership?.expires_at as string) || 'unknown',
-          parent_id: (org.parent_id as string) || undefined,
-          settings: org.settings || {},
-          metadata: org.metadata || {},
-        };
+        return attachNewTokenIfDifferent(
+          {
+            id: org.id,
+            name: org.name,
+            slug: org.slug,
+            role: (membership?.role as string) || 'unknown',
+            email: (membership?.email as string) || 'unknown',
+            roles: (membership?.roles as string).split(',') || [],
+            permissions: (membership?.permissions as string).split(',') || [],
+            status: membership?.status || 'unknown',
+            invited_by: (membership?.invited_by as string) || 'unknown',
+            joined_at: (membership?.joined_at as string) || 'unknown',
+            expires_at: (membership?.expires_at as string) || 'unknown',
+            parent_id: (org.parent_id as string) || undefined,
+            settings: org.settings || {},
+            metadata: org.metadata || {},
+          },
+          token,
+          session.token,
+        );
       });
 
-      return {
-        success: true,
-        message: `Found ${result.length} organization${result.length === 1 ? '' : 's'}`,
-        status: 'su',
-        organizations: result,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: `Found ${result.length} organization${result.length === 1 ? '' : 's'}`,
+          status: 'su',
+          organizations: result,
+        },
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to list organizations',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to list organizations',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

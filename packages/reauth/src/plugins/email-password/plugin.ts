@@ -1,4 +1,4 @@
-import type { AuthPlugin, OrmLike } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike } from '../../types';
 import type { EmailPasswordConfig } from './types';
 export type { EmailPasswordConfig } from './types';
 import { loginStep } from './steps/login.step';
@@ -143,9 +143,17 @@ export const baseEmailPasswordPlugin: AuthPlugin<EmailPasswordConfig> = {
   // Background cleanup now handles expired code removal via SimpleCleanupScheduler
 };
 
-// Export a configured plugin creator that validates config at construction time.
-const emailPasswordPlugin: AuthPlugin<EmailPasswordConfig> =
+// Export a factory function that creates a configured plugin
+const emailPasswordPlugin = (
+  config: Partial<EmailPasswordConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<EmailPasswordConfig>>;
+  }>,
+): AuthPlugin<EmailPasswordConfig> =>
   createAuthPlugin<EmailPasswordConfig>(baseEmailPasswordPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
       if (

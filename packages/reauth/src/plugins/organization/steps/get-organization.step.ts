@@ -1,14 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   GetOrganizationInput,
   GetOrganizationOutput,
   OrganizationConfig,
 } from '../types';
 import { hasOrganizationPermission } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const getOrganizationValidation = type({
-  token: 'string',
+  token: tokenType,
   organization_id: 'string',
 });
 
@@ -32,6 +33,7 @@ export const getOrganizationStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
+    'token?': tokenType,
     'organization?': {
       id: 'string',
       name: 'string',
@@ -72,11 +74,15 @@ export const getOrganizationStep: AuthStep<
     });
 
     if (!organization) {
-      return {
-        success: false,
-        message: 'Organization not found',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization not found',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check if user is a member
@@ -90,11 +96,15 @@ export const getOrganizationStep: AuthStep<
     });
 
     if (!membership) {
-      return {
-        success: false,
-        message: 'Access denied - not a member of this organization',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Access denied - not a member of this organization',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     try {
@@ -117,27 +127,35 @@ export const getOrganizationStep: AuthStep<
         }));
       }
 
-      return {
-        success: true,
-        message: 'Organization details retrieved successfully',
-        status: 'su',
-        organization: {
-          id: organization.id as string,
-          name: organization.name as string,
-          slug: organization.slug as string,
-          parent_id: (organization.parent_id as string) || undefined,
-          settings: organization.settings || {},
-          metadata: organization.metadata || {},
-          role: membership.role as string,
-          members,
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Organization details retrieved successfully',
+          status: 'su',
+          organization: {
+            id: organization.id as string,
+            name: organization.name as string,
+            slug: organization.slug as string,
+            parent_id: (organization.parent_id as string) || undefined,
+            settings: organization.settings || {},
+            metadata: organization.metadata || {},
+            role: membership.role as string,
+            members,
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to retrieve organization details',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to retrieve organization details',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

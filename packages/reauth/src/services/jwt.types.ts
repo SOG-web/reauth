@@ -1,11 +1,14 @@
-import type { JWTPayload } from 'jose';
-import type { Subject } from './types';
+import type { JWK, JWTPayload } from 'jose';
 
 // Client Types
 export type ClientType = 'public' | 'confidential';
 export type RotationReason = 'scheduled' | 'manual' | 'compromise';
 export type BlacklistReason = 'logout' | 'revocation' | 'security';
-export type RefreshTokenRevocationReason = 'logout' | 'rotation' | 'security' | 'expired';
+export type RefreshTokenRevocationReason =
+  | 'logout'
+  | 'rotation'
+  | 'security'
+  | 'expired';
 
 // Simple Client
 export interface ReAuthClient {
@@ -23,6 +26,7 @@ export interface ReAuthClient {
 export interface ReAuthJWTPayload extends JWTPayload {
   sub: string; // subject_id
   subject_type: string; // Custom claim for subject type (e.g., 'user', 'guest')
+  userData?: Record<string, any>; // Additional user data
 }
 
 // JWKS Key Management
@@ -108,7 +112,7 @@ export interface JWTServiceConfig {
 }
 
 // Enhanced JWKS Service Interface
-export interface EnhancedJWKSService {
+export interface EnhancedJWKSServiceType {
   // Key management
   generateKeyPair(algorithm?: string): Promise<JWKSKey>;
   getActiveKey(): Promise<JWKSKey>;
@@ -120,22 +124,36 @@ export interface EnhancedJWKSService {
   verifyJWT(token: string): Promise<ReAuthJWTPayload>;
 
   // Token pair operations
-  createTokenPair(payload: ReAuthJWTPayload, deviceInfo?: {
-    fingerprint?: string;
-    ipAddress?: string;
-    userAgent?: string;
-  }): Promise<TokenPair>;
+  createTokenPair(
+    payload: ReAuthJWTPayload,
+    deviceInfo?: {
+      fingerprint?: string;
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ): Promise<TokenPair>;
 
   // Refresh token operations
-  generateRefreshToken(subjectType: string, subjectId: string, deviceInfo?: {
-    fingerprint?: string;
-    ipAddress?: string;
-    userAgent?: string;
-  }): Promise<string>;
+  generateRefreshToken(
+    subjectType: string,
+    subjectId: string,
+    deviceInfo?: {
+      fingerprint?: string;
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ): Promise<string>;
   validateRefreshToken(token: string): Promise<RefreshTokenValidationResult>;
   refreshAccessToken(refreshToken: string): Promise<TokenPair>;
-  revokeRefreshToken(token: string, reason?: RefreshTokenRevocationReason): Promise<void>;
-  revokeAllRefreshTokens(subjectType: string, subjectId: string, reason?: RefreshTokenRevocationReason): Promise<number>;
+  revokeRefreshToken(
+    token: string,
+    reason?: RefreshTokenRevocationReason,
+  ): Promise<void>;
+  revokeAllRefreshTokens(
+    subjectType: string,
+    subjectId: string,
+    reason?: RefreshTokenRevocationReason,
+  ): Promise<number>;
 
   // JWKS endpoint
   getPublicJWKS(): Promise<{ keys: any[] }>;
@@ -148,6 +166,13 @@ export interface EnhancedJWKSService {
   cleanupExpiredKeys(): Promise<number>;
   cleanupBlacklistedTokens(): Promise<number>;
   cleanupExpiredRefreshTokens(): Promise<number>;
+  registerClient(
+    client: ReAuthClient,
+  ): Promise<{ client: ReAuthClient; apiKey: string }>;
+  getClientById(id: string): Promise<ReAuthClient>;
+  getAllClients(): Promise<ReAuthClient[]>;
+  getClientByApiKey(apiKey: string): Promise<ReAuthClient>;
+  getPublicJWK(): Promise<JWK>;
 }
 
 // JWT Plugin Configuration

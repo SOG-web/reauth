@@ -1,20 +1,26 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  tokenType,
+  Token,
+} from '../../../types';
 import type { EmailOrUsernameConfig } from '../types';
 import { passwordSchema } from '../../shared/validation';
 import { hashPassword, verifyPasswordHash } from '../../../lib/password';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ChangePasswordInput = {
   currentPassword: string;
   newPassword: string;
-  token?: string;
+  token: Token;
   others?: Record<string, any>;
 };
 
 export const changePasswordValidation = type({
   currentPassword: passwordSchema,
   newPassword: passwordSchema,
-  token: 'string?',
+  token: tokenType,
   others: 'object?',
 });
 
@@ -44,7 +50,7 @@ export const changePasswordStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
     }),
@@ -55,7 +61,7 @@ export const changePasswordStep: AuthStep<
     const orm = await ctx.engine.getOrm();
 
     // Check session to get current user
-    const session = await ctx.engine.checkSession(token || '');
+    const session = await ctx.engine.checkSession(token);
     if (!session.valid || !session.subject) {
       return {
         success: false,
@@ -73,12 +79,16 @@ export const changePasswordStep: AuthStep<
     });
 
     if (!creds?.password_hash) {
-      return {
-        success: false,
-        message: 'No password set for this user',
-        status: 'unf',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'No password set for this user',
+          status: 'unf',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Verify current password
@@ -89,12 +99,16 @@ export const changePasswordStep: AuthStep<
     );
 
     if (!currentPasswordValid) {
-      return {
-        success: false,
-        message: 'Current password is incorrect',
-        status: 'ip',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Current password is incorrect',
+          status: 'ip',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Hash new password and update
@@ -111,13 +125,14 @@ export const changePasswordStep: AuthStep<
       id: session.subject.id,
     };
 
-    return {
+    const baseResult = {
       success: true,
       message: 'Password changed successfully',
       status: 'su',
-      token,
       subject: outSubject,
       others,
-    };
+    } as const;
+
+    return attachNewTokenIfDifferent(baseResult, token, session.token);
   },
 };

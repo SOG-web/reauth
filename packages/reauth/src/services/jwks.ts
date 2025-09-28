@@ -5,7 +5,7 @@ import {
   exportJWK,
   JWTPayload,
 } from 'jose';
-import { FumaClient, JWKSKeys } from './types';
+import { FumaClient, JWKSKeys } from '../types';
 
 export async function getJWKS(db: FumaClient, id: string): Promise<JWKSKeys> {
   const version = await db.version();

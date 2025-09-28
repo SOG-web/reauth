@@ -1,14 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
+import { tokenType, type AuthStep } from '../../../types';
 import type {
   RemoveMemberInput,
   RemoveMemberOutput,
   OrganizationConfig,
 } from '../types';
 import { hasOrganizationPermission } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const removeMemberValidation = type({
-  token: 'string',
+  token: tokenType,
   organization_id: 'string',
   'subject_id?': 'string',
   'email?': 'string',
@@ -34,6 +35,7 @@ export const removeMemberStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, organization_id, subject_id, email } = input;
@@ -62,11 +64,15 @@ export const removeMemberStep: AuthStep<
     });
 
     if (!organization) {
-      return {
-        success: false,
-        message: 'Organization not found',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization not found',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check admin permission
@@ -77,20 +83,28 @@ export const removeMemberStep: AuthStep<
       orm,
     );
     if (!hasPermission) {
-      return {
-        success: false,
-        message: 'Admin access required to remove members',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Admin access required to remove members',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Prevent self-removal if user is the only admin
     if (requestorId === subject_id) {
-      return {
-        success: false,
-        message: 'Cannot remove yourself from the organization',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Cannot remove yourself from the organization',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check if target user is a member
@@ -105,11 +119,15 @@ export const removeMemberStep: AuthStep<
     });
 
     if (!membership) {
-      return {
-        success: false,
-        message: 'User is not a member of this organization',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'User is not a member of this organization',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     if (!subject_id && ctx.config.useEmailPlugin) {
@@ -120,11 +138,15 @@ export const removeMemberStep: AuthStep<
       });
 
       if (identity?.subject_id === requestorId) {
-        return {
-          success: false,
-          message: 'Cannot remove yourself from the organization',
-          status: 'ic',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Cannot remove yourself from the organization',
+            status: 'ic',
+          },
+          token,
+          session.token,
+        );
       }
     }
 
@@ -138,17 +160,25 @@ export const removeMemberStep: AuthStep<
           ),
       });
 
-      return {
-        success: true,
-        message: 'Member removed successfully',
-        status: 'su',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Member removed successfully',
+          status: 'su',
+        },
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to remove member',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to remove member',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

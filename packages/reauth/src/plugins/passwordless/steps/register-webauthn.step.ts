@@ -1,10 +1,16 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { PasswordlessConfig } from '../types';
 import { isValidCredentialId, generateCredentialName } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type RegisterWebAuthnInput = {
-  token: string;
+  token: Token;
   credential_id: string;
   public_key: string;
   counter?: number;
@@ -14,7 +20,7 @@ export type RegisterWebAuthnInput = {
 };
 
 export const registerWebAuthnValidation = type({
-  token: 'string',
+  token: tokenType,
   credential_id: 'string',
   public_key: 'string',
   counter: 'number?',
@@ -60,6 +66,7 @@ export const registerWebAuthnStep: AuthStep<
       transports: 'string[]',
     }),
     'others?': 'object',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const {
@@ -73,10 +80,8 @@ export const registerWebAuthnStep: AuthStep<
     } = input;
     const orm = await ctx.engine.getOrm();
 
-    let t;
-    try {
-      t = await ctx.engine.checkSession(token);
-    } catch (error) {
+    const t = await ctx.engine.checkSession(token);
+    if (!t || !t.subject || !t.subject.id) {
       return {
         success: false,
         message: 'Invalid or expired session token',
@@ -86,22 +91,30 @@ export const registerWebAuthnStep: AuthStep<
     }
     // Validate config requires WebAuthn
     if (!ctx.config?.webauthn) {
-      return {
-        success: false,
-        message: 'WebAuthn authentication is not configured',
-        status: 'ic',
-        error: 'WebAuthn authentication is not enabled',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'WebAuthn authentication is not configured',
+          status: 'ic',
+          error: 'WebAuthn authentication is not enabled',
+        },
+        token,
+        t.token,
+      );
     }
 
     try {
       // Validate credential ID format
       if (!isValidCredentialId(credential_id)) {
-        return {
-          success: false,
-          message: 'Invalid credential ID format',
-          status: 'ic',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Invalid credential ID format',
+            status: 'ic',
+          },
+          token,
+          t.token,
+        );
       }
 
       // Check if subject exists
@@ -110,11 +123,15 @@ export const registerWebAuthnStep: AuthStep<
       });
 
       if (!subject) {
-        return {
-          success: false,
-          message: 'Subject not found',
-          status: 'nf',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Subject not found',
+            status: 'nf',
+          },
+          token,
+          t.token,
+        );
       }
 
       // Check if credential already exists
@@ -123,11 +140,15 @@ export const registerWebAuthnStep: AuthStep<
       });
 
       if (existingCredential) {
-        return {
-          success: false,
-          message: 'Credential already registered',
-          status: 'cf',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Credential already registered',
+            status: 'cf',
+          },
+          token,
+          t.token,
+        );
       }
 
       // Create credential name if not provided
@@ -145,30 +166,38 @@ export const registerWebAuthnStep: AuthStep<
         last_used_at: null,
       });
 
-      return {
-        success: true,
-        message: 'WebAuthn credential registered successfully',
-        status: 'su',
-        credential: {
-          id: credential.id,
-          name: credential.name,
-          created_at: credential.created_at,
-          transports: credential.transports,
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'WebAuthn credential registered successfully',
+          status: 'su',
+          credential: {
+            id: credential.id,
+            name: credential.name,
+            created_at: credential.created_at,
+            transports: credential.transports,
+          },
+          others: {
+            subject_id: t.subject.id,
+            credential_id,
+            authentication_method: 'webauthn_registration',
+            ...others,
+          },
         },
-        others: {
-          subject_id: t.subject.id,
-          credential_id,
-          authentication_method: 'webauthn_registration',
-          ...others,
-        },
-      };
+        token,
+        t.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to register WebAuthn credential',
-        status: 'ic',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to register WebAuthn credential',
+          status: 'ic',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        token,
+        t.token,
+      );
     }
   },
 };

@@ -1,13 +1,24 @@
 {
-  "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
     "rootDir": "./",
     "jsx": "react-jsx",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "noImplicitAny": false,
-    "composite": true,
-    "strict": true
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "lib": ["es2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "incremental": false,
+    "strictNullChecks": true
   },
   "include": ["src"],
   "exclude": [

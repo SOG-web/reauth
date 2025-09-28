@@ -1,4 +1,4 @@
-import type { AuthPlugin, OrmLike, Subject } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike, Subject } from '../../types';
 import type { OrganizationConfig } from './types';
 import { createOrganizationStep } from './steps/create-organization.step';
 import { inviteMemberStep } from './steps/invite-member.step';
@@ -179,9 +179,17 @@ export const baseOrganizationPlugin: AuthPlugin<OrganizationConfig> = {
   },
 };
 
-// Export a configured plugin creator that validates config at construction time
-const organizationPlugin: AuthPlugin<OrganizationConfig> =
+// Export a factory function that creates a configured plugin
+const organizationPlugin = (
+  config: Partial<OrganizationConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<OrganizationConfig>>;
+  }>,
+): AuthPlugin<OrganizationConfig> =>
   createAuthPlugin<OrganizationConfig>(baseOrganizationPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
 

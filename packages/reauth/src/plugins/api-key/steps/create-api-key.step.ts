@@ -1,5 +1,10 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type {
   ApiKeyConfig,
   CreateApiKeyInput,
@@ -13,14 +18,15 @@ import {
   checkApiKeyLimit,
   sanitizeApiKeyMetadata,
 } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type CreateApiKeyStepInput = CreateApiKeyInput & {
-  token: string; // Required - must be authenticated
+  token: Token; // Required - must be authenticated
   others?: Record<string, any>;
 };
 
 export const createApiKeyValidation = type({
-  token: 'string',
+  token: tokenType,
   name: 'string',
   permissions: 'string[]?',
   scopes: 'string[]?',
@@ -70,6 +76,7 @@ export const createApiKeyStep: AuthStep<
       metadata: 'object',
     }), // Contains CreateApiKeyOutput
     'others?': 'object',
+    'token?': tokenType,
   }),
 
   async run(input, ctx) {
@@ -95,33 +102,45 @@ export const createApiKeyStep: AuthStep<
     if (scopes) {
       const scopeErrors = validateScopes(scopes, config.allowedScopes);
       if (scopeErrors.length > 0) {
-        return {
-          success: false,
-          message: `Invalid scopes: ${scopeErrors.join(', ')}`,
-          status: 'invalid',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `Invalid scopes: ${scopeErrors.join(', ')}`,
+            status: 'invalid',
+            others,
+          },
+          token,
+          session.token,
+        );
       }
     }
 
     // Check if scopes are required but not provided
     if (config.requireScopes && (!scopes || scopes.length === 0)) {
-      return {
-        success: false,
-        message: 'Scopes are required',
-        status: 'invalid',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Scopes are required',
+          status: 'invalid',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check API key limit
     if (await checkApiKeyLimit(orm, subjectId, config.maxKeysPerUser)) {
-      return {
-        success: false,
-        message: `Maximum number of API keys reached (${config.maxKeysPerUser})`,
-        status: 'limit',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: `Maximum number of API keys reached (${config.maxKeysPerUser})`,
+          status: 'limit',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check for name conflicts
@@ -136,20 +155,28 @@ export const createApiKeyStep: AuthStep<
       });
 
       if (existingKey) {
-        return {
-          success: false,
-          message: 'API key name already exists',
-          status: 'conflict',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'API key name already exists',
+            status: 'conflict',
+            others,
+          },
+          token,
+          session.token,
+        );
       }
     } catch (error) {
-      return {
-        success: false,
-        message: 'Database error checking name conflicts',
-        status: 'ic',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Database error checking name conflicts',
+          status: 'ic',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Generate and hash the API key
@@ -185,21 +212,29 @@ export const createApiKeyStep: AuthStep<
         metadata,
       };
 
-      return {
-        success: true,
-        message: 'API key created successfully',
-        status: 'su',
-        data: createOutput,
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'API key created successfully',
+          status: 'su',
+          data: createOutput,
+          others,
+        },
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to create API key',
-        status: 'ic',
-        error: String(error),
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to create API key',
+          status: 'ic',
+          error: String(error),
+          others,
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

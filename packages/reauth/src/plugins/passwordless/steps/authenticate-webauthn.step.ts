@@ -1,6 +1,7 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import { type AuthStep, type AuthOutput, tokenType } from '../../../types';
 import type { PasswordlessConfig } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type AuthenticateWebAuthnInput = {
   credential_id: string;
@@ -36,7 +37,7 @@ export const authenticateWebAuthnStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'token?': 'string',
+    'token?': tokenType,
     'subject?': type({
       id: 'string',
       name: 'string',
@@ -128,11 +129,10 @@ export const authenticateWebAuthnStep: AuthStep<
         ctx.config.sessionTtlSeconds || 3600,
       );
 
-      return {
+      const baseResult = {
         success: true,
         message: 'Authentication successful',
         status: 'su',
-        token: sessionToken,
         subject,
         others: {
           credential_name: credential.name,
@@ -140,6 +140,8 @@ export const authenticateWebAuthnStep: AuthStep<
           ...others,
         },
       };
+
+      return attachNewTokenIfDifferent(baseResult, undefined, sessionToken);
     } catch (error) {
       return {
         success: false,

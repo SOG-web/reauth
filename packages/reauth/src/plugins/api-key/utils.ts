@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { hashPassword, verifyPasswordHash } from '../../../lib/password';
+import { hashPassword, verifyPasswordHash } from '../../lib/password';
 import type { ApiKeyConfig } from './types';
 
 /**

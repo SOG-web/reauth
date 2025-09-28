@@ -1,4 +1,9 @@
-import type { AuthPlugin, OrmLike, SessionService } from '../../types';
+import type {
+  AuthPlugin,
+  AuthStep,
+  OrmLike,
+  SessionService,
+} from '../../types';
 import type { SessionConfig } from './types';
 export type { SessionConfig } from './types';
 export { sessionSchema } from './schema';
@@ -155,9 +160,17 @@ export const baseSessionPlugin: AuthPlugin<SessionConfig> = {
   },
 };
 
-// Export a configured plugin creator that validates config at construction time.
-const sessionPlugin: AuthPlugin<SessionConfig> =
+// Export a factory function that creates a configured plugin
+const sessionPlugin = (
+  config: Partial<SessionConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<SessionConfig>>;
+  }>,
+): AuthPlugin<SessionConfig> =>
   createAuthPlugin<SessionConfig>(baseSessionPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       return validateSessionConfig(config);
     },

@@ -1,4 +1,4 @@
-import type { AuthPlugin, OrmLike, Subject } from '../../types';
+import type { AuthPlugin, AuthStep, OrmLike, Subject } from '../../types';
 import type { UsernamePasswordConfig } from './types';
 export type { UsernamePasswordConfig } from './types';
 import { loginStep } from './steps/login.step';
@@ -105,9 +105,17 @@ export const baseUsernamePasswordPlugin: AuthPlugin<UsernamePasswordConfig> = {
   // Background cleanup now handles expired reset codes via SimpleCleanupScheduler
 };
 
-// Export a configured plugin creator with minimal validation (no complex config validation needed)
-const usernamePasswordPlugin: AuthPlugin<UsernamePasswordConfig> =
+// Export a factory function that creates a configured plugin
+const usernamePasswordPlugin = (
+  config: Partial<UsernamePasswordConfig>,
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<UsernamePasswordConfig>>;
+  }>,
+): AuthPlugin<UsernamePasswordConfig> =>
   createAuthPlugin<UsernamePasswordConfig>(baseUsernamePasswordPlugin, {
+    config,
+    stepOverrides: overrideStep,
     validateConfig: (config) => {
       const errs: string[] = [];
 

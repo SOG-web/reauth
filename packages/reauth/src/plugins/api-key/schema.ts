@@ -1,5 +1,5 @@
 import { column, idColumn, table } from 'fumadb/schema';
-import type { ReauthSchemaPlugin } from '../../../types';
+import type { ReauthSchemaPlugin } from '../../types';
 
 // API key table for storing hashed keys and metadata
 export const apiKeys = table('api_keys', {

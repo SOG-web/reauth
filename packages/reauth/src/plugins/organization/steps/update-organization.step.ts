@@ -1,14 +1,15 @@
 import { type } from 'arktype';
-import type { AuthStep } from '../../../types';
-import type {
+import { type AuthStep, tokenType } from '../../../types';
+import {
   UpdateOrganizationInput,
   UpdateOrganizationOutput,
   OrganizationConfig,
 } from '../types';
 import { hasOrganizationPermission, isSlugAvailable } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export const updateOrganizationValidation = type({
-  token: 'string',
+  token: tokenType,
   organization_id: 'string',
   'name?': 'string',
   'slug?': 'string',
@@ -44,6 +45,7 @@ export const updateOrganizationStep: AuthStep<
       'metadata?': 'object',
       updated_at: 'string',
     },
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, organization_id, name, slug, settings, metadata } = input;
@@ -68,11 +70,15 @@ export const updateOrganizationStep: AuthStep<
     });
 
     if (!organization) {
-      return {
-        success: false,
-        message: 'Organization not found',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Organization not found',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Check admin permission
@@ -83,32 +89,44 @@ export const updateOrganizationStep: AuthStep<
       orm,
     );
     if (!hasPermission) {
-      return {
-        success: false,
-        message: 'Admin access required to update organization',
-        status: 'unf',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Admin access required to update organization',
+          status: 'unf',
+        },
+        token,
+        session.token,
+      );
     }
 
     // Validate slug if provided
     if (slug) {
       if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(slug)) {
-        return {
-          success: false,
-          message:
-            'Invalid slug format. Use lowercase letters, numbers, and hyphens only',
-          status: 'ic',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message:
+              'Invalid slug format. Use lowercase letters, numbers, and hyphens only',
+            status: 'ic',
+          },
+          token,
+          session.token,
+        );
       }
 
       // Check slug availability (excluding current organization)
       const slugAvailable = await isSlugAvailable(slug, organization_id, orm);
       if (!slugAvailable) {
-        return {
-          success: false,
-          message: 'Slug already exists',
-          status: 'eq',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Slug already exists',
+            status: 'eq',
+          },
+          token,
+          session.token,
+        );
       }
     }
 
@@ -134,25 +152,33 @@ export const updateOrganizationStep: AuthStep<
         where: (b: any) => b('id', '=', organization_id),
       });
 
-      return {
-        success: true,
-        message: 'Organization updated successfully',
-        status: 'su',
-        organization: {
-          id: updatedOrg!.id as string,
-          name: updatedOrg!.name as string,
-          slug: updatedOrg!.slug as string,
-          settings: updatedOrg!.settings as any,
-          metadata: updatedOrg!.metadata as any,
-          updated_at: now.toISOString(),
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: 'Organization updated successfully',
+          status: 'su',
+          organization: {
+            id: updatedOrg!.id as string,
+            name: updatedOrg!.name as string,
+            slug: updatedOrg!.slug as string,
+            settings: updatedOrg!.settings as any,
+            metadata: updatedOrg!.metadata as any,
+            updated_at: now.toISOString(),
+          },
         },
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to update organization',
-        status: 'ic',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to update organization',
+          status: 'ic',
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

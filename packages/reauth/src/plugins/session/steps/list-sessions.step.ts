@@ -1,14 +1,20 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput, SessionService } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  Token,
+  tokenType,
+} from '../../../types';
 import type { SessionConfig } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ListSessionsInput = {
-  token: string;
+  token: Token;
   others?: Record<string, any>;
 };
 
 export const listSessionsValidation = type({
-  token: 'string',
+  token: tokenType,
   others: 'object?',
 });
 
@@ -33,6 +39,7 @@ export const listSessionsStep: AuthStep<
     http: {
       method: 'GET',
       codes: { unf: 401, su: 200, ic: 400 },
+      auth: true,
     },
   },
   inputs: ['token', 'others'],
@@ -44,7 +51,7 @@ export const listSessionsStep: AuthStep<
     'sessions?': [
       type({
         sessionId: 'string',
-        token: 'string',
+        token: tokenType,
         createdAt: 'string',
         expiresAt: 'string',
         isCurrent: 'boolean',
@@ -54,24 +61,23 @@ export const listSessionsStep: AuthStep<
     ],
     'totalSessions?': 'number',
     'others?': 'object',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, others } = input;
+    const ses = await ctx.engine.checkSession(token);
+
+    if (!ses.subject) {
+      return {
+        success: false,
+        message: 'Authentication required',
+        status: 'unf',
+        error: 'Invalid or expired session',
+        others,
+      };
+    }
 
     try {
-      // Verify the session to get user info
-      const { subject } = await ctx.engine.checkSession(token);
-
-      if (!subject) {
-        return {
-          success: false,
-          message: 'Authentication required',
-          status: 'unf',
-          error: 'Invalid or expired session',
-          others,
-        };
-      }
-
       // Get the enhanced session service via DI container (type-safe)
       const sessionService = ctx.engine.getSessionService();
 
@@ -85,8 +91,8 @@ export const listSessionsStep: AuthStep<
 
       if (sessionService.listSessionsForSubject) {
         // Extract subject type and ID - this assumes a standard format
-        const subjectType = subject.type || 'subject';
-        const subjectId = subject.id;
+        const subjectType = ses.subject.type || 'subject';
+        const subjectId = ses.subject.id;
 
         const enhancedSessions = await sessionService.listSessionsForSubject(
           subjectType,
@@ -122,22 +128,30 @@ export const listSessionsStep: AuthStep<
         totalSessions = 1;
       }
 
-      return {
-        success: true,
-        message: `Found ${totalSessions} active sessions`,
-        status: 'su',
-        sessions,
-        totalSessions,
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: `Found ${totalSessions} active sessions`,
+          status: 'su',
+          sessions,
+          totalSessions,
+          others,
+        },
+        token,
+        ses.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to list sessions',
-        status: 'ic',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to list sessions',
+          status: 'ic',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          others,
+        },
+        token,
+        ses.token,
+      );
     }
   },
 };

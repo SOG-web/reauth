@@ -1,10 +1,16 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { ApiKeyConfig, ApiKeyMetadata } from '../types';
 import { validateScopes, sanitizeApiKeyMetadata } from '../utils';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type UpdateApiKeyInput = {
-  token: string; // Required - must be authenticated
+  token: Token; // Required - must be authenticated
   api_key_id?: string; // Either api_key_id or name is required to identify the key
   name?: string; // Either api_key_id or name is required to identify the key
   new_name?: string; // Optional new name
@@ -15,7 +21,7 @@ export type UpdateApiKeyInput = {
 };
 
 export const updateApiKeyValidation = type({
-  token: 'string',
+  token: tokenType,
   api_key_id: 'string?',
   name: 'string?',
   new_name: 'string?',
@@ -77,6 +83,7 @@ export const updateApiKeyStep: AuthStep<
       }),
     }), // Contains updated ApiKeyMetadata
     'others?': 'object',
+    'token?': tokenType,
   }),
 
   async run(input, ctx) {
@@ -108,34 +115,46 @@ export const updateApiKeyStep: AuthStep<
 
     // Must provide either api_key_id or name
     if (!api_key_id && !name) {
-      return {
-        success: false,
-        message: 'Either api_key_id or name is required',
-        status: 'invalid',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Either api_key_id or name is required',
+          status: 'invalid',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Must provide at least one field to update
     if (!new_name && !permissions && !scopes && expires_at === undefined) {
-      return {
-        success: false,
-        message: 'At least one field to update must be provided',
-        status: 'invalid',
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'At least one field to update must be provided',
+          status: 'invalid',
+          others,
+        },
+        token,
+        session.token,
+      );
     }
 
     // Validate scopes if provided
     if (scopes) {
       const scopeErrors = validateScopes(scopes, config.allowedScopes);
       if (scopeErrors.length > 0) {
-        return {
-          success: false,
-          message: `Invalid scopes: ${scopeErrors.join(', ')}`,
-          status: 'invalid',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: `Invalid scopes: ${scopeErrors.join(', ')}`,
+            status: 'invalid',
+            others,
+          },
+          token,
+          session.token,
+        );
       }
     }
 
@@ -162,14 +181,18 @@ export const updateApiKeyStep: AuthStep<
       });
 
       if (!apiKey) {
-        return {
-          success: false,
-          message: api_key_id
-            ? `API key with ID '${api_key_id}' not found or inactive`
-            : `API key with name '${name}' not found or inactive`,
-          status: 'notfound',
-          others,
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: api_key_id
+              ? `API key with ID '${api_key_id}' not found or inactive`
+              : `API key with name '${name}' not found or inactive`,
+            status: 'notfound',
+            others,
+          },
+          token,
+          session.token,
+        );
       }
 
       // Check for name conflicts if new_name is provided
@@ -185,12 +208,16 @@ export const updateApiKeyStep: AuthStep<
         });
 
         if (existingKey) {
-          return {
-            success: false,
-            message: 'API key name already exists',
-            status: 'conflict',
-            others,
-          };
+          return attachNewTokenIfDifferent(
+            {
+              success: false,
+              message: 'API key name already exists',
+              status: 'conflict',
+              others,
+            },
+            token,
+            session.token,
+          );
         }
       }
 
@@ -229,23 +256,31 @@ export const updateApiKeyStep: AuthStep<
 
       const metadata = sanitizeApiKeyMetadata(freshKey);
 
-      return {
-        success: true,
-        message: `API key '${metadata.name}' updated successfully`,
-        status: 'su',
-        data: {
-          api_key: metadata,
+      return attachNewTokenIfDifferent(
+        {
+          success: true,
+          message: `API key '${metadata.name}' updated successfully`,
+          status: 'su',
+          data: {
+            api_key: metadata,
+          },
+          others,
         },
-        others,
-      };
+        token,
+        session.token,
+      );
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to update API key',
-        status: 'ic',
-        error: String(error),
-        others,
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to update API key',
+          status: 'ic',
+          error: String(error),
+          others,
+        },
+        token,
+        session.token,
+      );
     }
   },
 };

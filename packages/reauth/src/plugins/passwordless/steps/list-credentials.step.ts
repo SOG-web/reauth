@@ -1,15 +1,21 @@
 import { type } from 'arktype';
-import type { AuthStep, AuthOutput } from '../../../types';
+import {
+  type AuthStep,
+  type AuthOutput,
+  type Token,
+  tokenType,
+} from '../../../types';
 import type { PasswordlessConfig } from '../types';
+import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type ListCredentialsInput = {
-  token: string;
+  token: Token;
   include_inactive?: boolean;
   others?: Record<string, any>;
 };
 
 export const listCredentialsValidation = type({
-  token: 'string',
+  token: tokenType,
   include_inactive: 'boolean?',
   others: 'object?',
 });
@@ -35,6 +41,7 @@ export const listCredentialsStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
+    'token?': tokenType,
     'credentials?': [
       type({
         id: 'string',
@@ -68,11 +75,15 @@ export const listCredentialsStep: AuthStep<
       });
 
       if (!subject) {
-        return {
-          success: false,
-          message: 'Subject not found',
-          status: 'nf',
-        };
+        return attachNewTokenIfDifferent(
+          {
+            success: false,
+            message: 'Subject not found',
+            status: 'nf',
+          },
+          token,
+          t.token,
+        );
       }
 
       const subject_id = subject.id;
@@ -160,14 +171,18 @@ export const listCredentialsStep: AuthStep<
         });
       }
 
-      return result;
+      return attachNewTokenIfDifferent(result, token, t.token);
     } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to retrieve credentials',
-        status: 'ic',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return attachNewTokenIfDifferent(
+        {
+          success: false,
+          message: 'Failed to retrieve credentials',
+          status: 'ic',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        token,
+        t.token,
+      );
     }
   },
 };

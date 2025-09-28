@@ -4,18 +4,16 @@ import {
   asValue,
   type AwilixContainer,
 } from 'awilix';
-import { InMemorySessionResolvers } from './session-resolvers';
-import { FumaSessionService } from './session-service';
+import { InMemorySessionResolvers, ReAuthJWTPayload } from './services';
+import { FumaSessionService } from './services/session-service';
 import { SimpleCleanupScheduler } from './cleanup-scheduler';
 import type {
   FumaClient,
   ReAuthCradle,
-  ReAuthCradleExtension,
   SessionResolvers,
   SessionService,
   SubjectResolver,
   AuthPlugin,
-  AuthStep,
   AuthHook,
   HooksType,
   OrmLike,
@@ -23,6 +21,7 @@ import type {
   AuthOutput,
   CleanupTask,
   CleanupScheduler,
+  Token,
 } from './types';
 
 export class ReAuthEngine {
@@ -34,6 +33,10 @@ export class ReAuthEngine {
   private pluginMap = new Map<string, AuthPlugin>();
   private authHooks: AuthHook[] = [];
   private sessionHooks: AuthHook[] = [];
+  private getUserData?: (
+    subjectId: string,
+    orm: OrmLike,
+  ) => Promise<Record<string, any>>;
 
   constructor(config: {
     dbClient: FumaClient;
@@ -42,18 +45,31 @@ export class ReAuthEngine {
     authHooks?: AuthHook[];
     sessionHooks?: AuthHook[];
     enableCleanupScheduler?: boolean; // Default true
+    getUserData?: (
+      subjectId: string,
+      orm: OrmLike,
+    ) => Promise<Record<string, any>>;
+    useJwks?: boolean; // Default false
   }) {
     this.container = createContainer({
       injectionMode: InjectionMode.CLASSIC,
       strict: true,
     });
 
+    if (config.useJwks && !config.getUserData) {
+      throw new Error(
+        'getUserData function must be provided when useJwks is enabled',
+      );
+    }
+
     this.sessionResolvers = new InMemorySessionResolvers();
     this.sessionService = new FumaSessionService(
       config.dbClient,
       this.sessionResolvers,
       config.tokenFactory,
+      config.getUserData,
     );
+    this.getUserData = config.getUserData;
     this.cleanupScheduler = new SimpleCleanupScheduler(() => this.getOrm());
 
     this.container.register({
@@ -129,7 +145,7 @@ export class ReAuthEngine {
     subjectType: string,
     subjectId: string,
     ttlSeconds?: number,
-  ): Promise<string> {
+  ): Promise<Token> {
     await this.executeSessionHooks('before', {
       subjectType,
       subjectId,
@@ -158,19 +174,24 @@ export class ReAuthEngine {
     }
   }
 
-  async checkSession(token: string): Promise<{
+  async checkSession(token: Token): Promise<{
     subject: any | null;
-    token: string | null;
+    token: Token | null;
+    type?: 'jwt' | 'legacy';
+    payload?: ReAuthJWTPayload;
     valid: boolean;
   }> {
     await this.executeSessionHooks('before', { token });
-    const { subject, token: verified } =
-      await this.sessionService.verifySession(token);
-    await this.executeSessionHooks('after', { subject, token: verified });
+    const ses = await this.sessionService.verifySession(token);
+    await this.executeSessionHooks('after', {
+      subject: ses.subject,
+      token: ses.token,
+      type: ses.type,
+      payload: ses.payload,
+    });
     return {
-      subject,
-      token: verified,
-      valid: Boolean(subject && verified),
+      ...ses,
+      valid: Boolean(ses.subject && ses.token),
     };
   }
 
