@@ -140,8 +140,8 @@ export function createMinimalTestEngine(pluginNames: string[]): ReAuthEngine {
       testUsers: { enabled: true, environment: 'test', users: [], checkEnvironment: () => true },
       checkPasswordBreach: false,
     }),
-    'username': usernamePlugin({ minUsernameLength: 3 }),
-    'phone': phonePlugin({ testMode: { enabled: true, testCode: '123456' } }),
+    'username-password': usernamePlugin({ minUsernameLength: 3 }),
+    'phone-password': phonePlugin({ testMode: { enabled: true, testCode: '123456' } }),
     'email-or-username': emailOrUsernamePlugin({ allowEmail: true, allowUsername: true }),
     'jwt': jwtPlugin({ 
       issuer: 'test-issuer',
