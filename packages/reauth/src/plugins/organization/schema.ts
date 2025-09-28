@@ -1,27 +1,56 @@
 import { column, idColumn, table } from 'fumadb/schema';
 import type { ReauthSchemaPlugin } from '../../types';
 
-const organizations = table('organizations', {
-  id: idColumn('id', 'uuid').defaultTo$('uuid'),
+// Organizations table for multi-tenant structure
+export const organizations = table('organizations', {
+  id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
   name: column('name', 'varchar(255)'),
-  description: column('description', 'text').nullable(),
-  owner_id: column('owner_id', 'uuid'),
+  slug: column('slug', 'varchar(255)'),
+  parent_id: column('parent_id', 'varchar(255)').nullable(), // for hierarchy
+  settings: column('settings', 'json').nullable(), // JSON configuration
+  metadata: column('metadata', 'json').nullable(), // JSON metadata
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
-});
+  is_active: column('is_active', 'bool').defaultTo$(() => true),
+}).unique('org_slug_uk', ['slug']);
 
-const organization_members = table('organization_members', {
-  id: idColumn('id', 'uuid').defaultTo$('uuid'),
-  organization_id: column('organization_id', 'uuid'),
-  entity_id: column('entity_id', 'uuid'),
-  role: column('role', 'varchar(50)').defaultTo('member'),
-  permissions: column('permissions', 'json').nullable(),
-  teams: column('teams', 'json').nullable(),
-  joined_at: column('joined_at', 'timestamp').defaultTo$('now'),
-});
+// Organization memberships table for user-organization relationships
+export const organizationMemberships = table('organization_memberships', {
+  id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
+  subject_id: column('subject_id', 'varchar(255)'),
+  email: column('email', 'varchar(255)'),
+  organization_id: column('organization_id', 'varchar(255)'),
+  role: column('role', 'varchar(255)'),
+  roles: column('roles', 'string').nullable(),
+  permissions: column('permissions', 'string').nullable(),
+  invited_by: column('invited_by', 'varchar(255)').nullable(),
+  joined_at: column('joined_at', 'timestamp').nullable(),
+  expires_at: column('expires_at', 'timestamp').nullable(),
+  status: column('status', 'string').defaultTo$(() => 'pending'), // pending, active, suspended
+  created_at: column('created_at', 'timestamp').defaultTo$('now'),
+  updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
+}).unique('org_membership_uk', ['subject_id', 'organization_id']);
 
-export const organizationSchema: ReauthSchemaPlugin = {
-  tables: { organizations, organization_members },
+// Organization invitations table for pending invitations
+export const organizationInvitations = table('organization_invitations', {
+  id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
+  organization_id: column('organization_id', 'varchar(255)'),
+  email: column('email', 'varchar(255)'),
+  role: column('role', 'varchar(255)'),
+  invited_by: column('invited_by', 'varchar(255)'),
+  token: column('token', 'varchar(255)'),
+  expires_at: column('expires_at', 'timestamp'),
+  accepted_at: column('accepted_at', 'timestamp').nullable(),
+  status: column('status', 'varchar(255)').defaultTo$(() => 'pending'), // pending, accepted, expired, revoked
+  created_at: column('created_at', 'timestamp').defaultTo$('now'),
+  updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
+}).unique('org_invitation_token_uk', ['token']);
+
+export const organizationSchemaV2: ReauthSchemaPlugin = {
+  tables: {
+    organizations: organizations,
+    organization_memberships: organizationMemberships,
+    organization_invitations: organizationInvitations,
+  },
+  relations: {},
 };
-
-export default organizationSchema;

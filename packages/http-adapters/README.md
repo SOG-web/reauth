@@ -1,480 +1,537 @@
-# 🌐 ReAuth HTTP Adapters - HTTP Protocol Implementation
+# @re-auth/http-adapters-v2
 
-ReAuth HTTP Adapters provide HTTP protocol implementation for the protocol-agnostic ReAuth Core engine. This package enables ReAuth to work with HTTP-based web frameworks through a unified adapter pattern, while the core authentication logic remains completely independent of the HTTP protocol.
+V2 HTTP protocol adapters for ReAuth - framework-agnostic integration with Express, Fastify, and Hono.
 
-## 🚀 Features
+## Features
 
-- **🔌 Protocol Adapter Pattern**: HTTP protocol implementation for the protocol-agnostic ReAuth Core
-- **🎯 Framework Universal**: Express.js, Fastify, and Hono framework adapters with unified interface
-- **📡 Auto-Introspection**: Automatic HTTP route generation from ReAuth plugin introspection
-- **🛠️ Route Customization**: Override auto-generated routes or add custom HTTP endpoints
-- **🍪 Context Management**: HTTP-specific cookie and header handling with configurable rules
-- **🔒 HTTP Middleware**: Authentication middleware and route protection for HTTP frameworks
-- **✅ Type Safety**: Full TypeScript support with comprehensive HTTP-specific interfaces
-- **🏭 Adapter Factory**: Generic pattern for creating custom HTTP framework adapters
+- 🚀 **Framework Agnostic**: Support for Express, Fastify, and Hono
+- 🔒 **Security First**: Built-in CORS, rate limiting, and security headers
+- 🛡️ **Type Safe**: Full TypeScript integration with V2 engine types
+- 🔌 **Plugin Aware**: Automatically discovers and exposes V2 plugin endpoints
+- 👤 **User Access**: Easy current user retrieval with middleware and utilities
+- 📊 **Introspection**: Built-in API documentation and health checks
+- ⚡ **Performance**: Optimized for high-throughput scenarios
 
-## 📦 Installation
+## Installation
 
 ```bash
-# Install both the core engine and HTTP adapters
-npm install @re-auth/reauth @re-auth/http-adapters
-
-# Or with your preferred package manager
-pnpm add @re-auth/reauth @re-auth/http-adapters
-yarn add @re-auth/reauth @re-auth/http-adapters
+npm install @re-auth/http-adapters-v2
+# or
+pnpm add @re-auth/http-adapters-v2
+# or
+yarn add @re-auth/http-adapters-v2
 ```
 
-## 🏗️ Architecture Overview
+## Quick Start
 
-ReAuth HTTP Adapters implement the HTTP protocol for the protocol-agnostic ReAuth Core engine:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ReAuth Core Engine                       │
-│              (Protocol-Agnostic)                           │
-│                                                             │
-│  • Plugin System (OAuth, Email/Password, etc.)             │
-│  • Session Management                                       │
-│  • Entity Services (Abstract)                              │
-│  • Authentication Logic                                     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                HTTP Protocol Adapters                      │
-│              (@re-auth/http-adapters)                      │
-│                                                             │
-│  • HTTP Adapter Factory                                     │
-│  • Auto-Route Generation                                    │
-│  • Context Rules (Cookies/Headers)                         │
-│  • Framework Abstraction Layer                             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                Framework Integrations                      │
-│                                                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ Express.js  │  │ Fastify     │  │ Hono                │ │
-│  │ Adapter     │  │ Adapter     │  │ Adapter             │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Principles
-
-- **Protocol Implementation**: HTTP adapters translate between HTTP requests/responses and the protocol-agnostic core engine
-- **Framework Abstraction**: Each framework adapter implements a common interface while handling framework-specific details
-- **Auto-Introspection**: HTTP routes are automatically generated from ReAuth plugin definitions
-- **Context Management**: HTTP-specific concerns (cookies, headers, sessions) are handled at the adapter level
-
-## 🎯 Supported Frameworks
-
-- **Express.js** - Full-featured Express middleware with route protection
-- **Fastify** - High-performance Fastify plugin with hooks integration
-- **Hono** - Modern edge-runtime compatible adapter for Hono framework
-
-## 🛠️ Getting Started
-
-### Basic HTTP Integration
-
-The HTTP adapters translate between HTTP requests/responses and the protocol-agnostic ReAuth Core engine:
-
-```typescript
-import { ReAuthEngine, emailPasswordAuth } from '@re-auth/reauth';
-import { MyEntityService, MySessionService } from './services';
-
-// 1. Set up the protocol-agnostic core engine
-const entityService = new MyEntityService();
-const sessionService = new MySessionService();
-
-const auth = new ReAuthEngine({
-  plugins: [
-    emailPasswordAuth({
-      /* config */
-    }),
-  ],
-  entity: entityService,
-  session: sessionService,
-});
-
-// 2. Use HTTP adapters to integrate with your framework
-// (See framework-specific examples below)
-```
-
-### Express.js Integration
+### Express.js
 
 ```typescript
 import express from 'express';
-import { createExpressAdapter } from '@re-auth/http-adapters';
+import { ReAuthEngineV2 } from '@re-auth/reauth';
+import { createExpressAdapter } from '@re-auth/http-adapters-v2';
 
 const app = express();
-app.use(express.json());
+const engine = new ReAuthEngineV2({ /* config */ });
 
-// Create Express HTTP adapter
-const expressAdapter = createExpressAdapter(auth, {
-  routes: { prefix: '/auth' },
-  cookieName: 'auth_token',
-  cookieOptions: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+const adapter = createExpressAdapter({
+  engine,
+  basePath: '/api/auth',
+  cors: {
+    origin: ['https://app.example.com'],
+    credentials: true
   },
+  rateLimit: {
+    windowMs: 15 * 60 * 1000,
+    max: 100
+  }
 });
 
-// Use the adapter router
-app.use(expressAdapter.getRouter());
+app.use('/api/auth', adapter.createRouter());
 
-// Add route protection
-app.get('/protected', expressAdapter.protect(), (req, res) => {
-  res.json({ message: 'Protected route', user: req.user });
-});
+// Enable user population on all requests (optional)
+app.use(adapter.createUserMiddleware());
 
-app.listen(3000, () => {
-  console.log('Server running on http://localhost:3000');
-});
+app.listen(3000);
 ```
 
-### Fastify Integration
+### Fastify
 
 ```typescript
 import Fastify from 'fastify';
-import { createFastifyAdapter } from '@re-auth/http-adapters';
+import { ReAuthEngineV2 } from '@re-auth/reauth';
+import { createFastifyAdapter } from '@re-auth/http-adapters-v2';
 
 const fastify = Fastify();
+const engine = new ReAuthEngineV2({ /* config */ });
 
-// Create Fastify HTTP adapter
-const fastifyAdapter = createFastifyAdapter(fastify, auth, {
-  prefix: '/auth',
-  cookieName: 'auth_token',
-  cookieOptions: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-  },
+const adapter = createFastifyAdapter({
+  engine,
+  basePath: '/api/auth'
 });
 
-// Add protected route
-fastify.get('/protected', {
-  preHandler: [fastifyAdapter.protect()],
-  handler: async (request, reply) => {
-    return { message: 'Protected route', user: request.user };
-  },
-});
+fastify.register(adapter.createPlugin());
 
-fastify.listen({ port: 3000 }, (err) => {
-  if (err) throw err;
-  console.log('Server running on http://localhost:3000');
-});
+// Enable user population on all requests (optional)
+fastify.register(adapter.createUserPlugin());
+
+fastify.listen({ port: 3000 });
 ```
 
-### Hono Integration
+### Hono
 
 ```typescript
 import { Hono } from 'hono';
-import { createHonoAdapter } from '@re-auth/http-adapters';
+import { ReAuthEngineV2 } from '@re-auth/reauth';
+import { createHonoAdapter } from '@re-auth/http-adapters-v2';
 
 const app = new Hono();
+const engine = new ReAuthEngineV2({ /* config */ });
 
-// Create Hono HTTP adapter
-const honoAdapter = createHonoAdapter(
-  auth,
-  {
-    routes: { prefix: '/auth' },
-    cookieName: 'auth_token',
-    cookieOptions: {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'Lax',
-    },
-  },
-  app,
-);
+const adapter = createHonoAdapter({
+  engine,
+  basePath: '/api/auth'
+});
 
-// Add protected route
-app.get('/protected', honoAdapter.protect(), (c) => {
-  return c.json({
-    message: 'Protected route',
-    user: c.get('entity'),
+adapter.registerRoutes(app, '/api/auth');
+
+// Enable user population on all requests (optional)
+app.use('*', adapter.createUserMiddleware());
+
+// or use a standalone app
+// const authApp = adapter.createApp();
+// app.route('/api/auth', authApp);
+```
+
+## Full Examples
+
+Complete examples with detailed configurations are available in the `examples/` directory:
+
+- **[Express Example](./examples/express-example.ts)** - Full Express.js integration with middleware, security, and error handling
+- **[Fastify Example](./examples/fastify-example.ts)** - High-performance Fastify setup with schema validation  
+- **[Hono Example](./examples/hono-example.ts)** - Edge-optimized Hono deployment for serverless environments
+
+## Getting Current User
+
+The V2 HTTP adapters provide multiple ways to access the current authenticated user in your route handlers.
+
+### Method 1: Using User Middleware (Recommended)
+
+Automatically populate user information on all requests:
+
+#### Express.js
+```typescript
+// Add user middleware globally
+app.use(adapter.createUserMiddleware());
+
+// Access user in any route handler
+app.get('/api/profile', (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  res.json({
+    message: 'Profile data',
+    user: req.user.subject,
+    sessionValid: req.user.valid,
   });
 });
-
-export default app;
 ```
 
-## 🔧 Advanced Configuration
-
-### Auto-Introspection and Route Generation
-
-HTTP adapters automatically generate routes based on ReAuth plugin introspection:
-
+#### Fastify
 ```typescript
-import { createHttpAdapter, createAutoIntrospectionConfig } from '@re-auth/http-adapters';
+// Register user plugin globally
+fastify.register(adapter.createUserPlugin());
 
-const httpAdapter = createHttpAdapter(frameworkAdapter)(auth, {
-  routes: { prefix: '/auth' },
-  introspection: createAutoIntrospectionConfig({
-    enabled: true,
-    endpoint: '/introspect',
-    includeSchemas: true,
-  }),
-});
-```
-
-### Context Rules for Cookies and Headers
-
-Configure HTTP-specific context extraction and response handling:
-
-```typescript
-import { createContextRule, OAuth2ContextRules } from '@re-auth/http-adapters';
-
-const contextRules = [
-  // Extract OAuth state from cookies
-  createContextRule({
-    pluginName: 'oauth',
-    stepName: 'callback',
-    extractCookies: ['oauth_state', 'oauth_verifier'],
-    setCookies: ['access_token', 'refresh_token'],
-  }),
-
-  // Use pre-built OAuth2 context rules
-  ...OAuth2ContextRules,
-];
-
-const adapter = createExpressAdapter(auth, {
-  contextRules,
-  cookieName: 'auth_token',
-});
-```
-
-### Route Overrides and Custom Routes
-
-Override auto-generated routes or add custom HTTP endpoints:
-
-```typescript
-import { createRouteOverride, createCustomRoute } from '@re-auth/http-adapters';
-
-const routeOverrides = [
-  createRouteOverride({
-    pluginName: 'email-password',
-    stepName: 'login',
-    handler: async (req, res) => {
-      // Custom login logic
-      const result = await auth.executeStep('email-password', 'login', req.body);
-      res.json(result);
-    },
-  }),
-];
-
-const customRoutes = [
-  createCustomRoute({
-    method: 'GET',
-    path: '/auth/status',
-    handler: async (req, res) => {
-      res.json({ authenticated: req.isAuthenticated() });
-    },
-  }),
-];
-
-const adapter = createExpressAdapter(auth, {
-  routeOverrides,
-  customRoutes,
-});
-```
-
-## 📚 API Reference
-
-### Core HTTP Adapter Factory
-
-```typescript
-import { createHttpAdapter, type FrameworkAdapter } from '@re-auth/http-adapters';
-
-// Generic HTTP adapter factory
-const httpAdapter = createHttpAdapter<TConfig>(frameworkAdapter: FrameworkAdapter<TConfig>);
-```
-
-### Express.js Adapter
-
-```typescript
-import { createExpressAdapter, type ExpressAdapterConfig } from '@re-auth/http-adapters';
-
-const expressAdapter = createExpressAdapter(
-  engine: ReAuthEngine,
-  config?: ExpressAdapterConfig
-);
-
-// Configuration options
-interface ExpressAdapterConfig extends BaseHttpConfig {
-  // Express-specific options
-}
-```
-
-### Fastify Adapter
-
-```typescript
-import { createFastifyAdapter, type FastifyAdapterConfig } from '@re-auth/http-adapters';
-
-const fastifyAdapter = createFastifyAdapter(
-  fastify: FastifyInstance,
-  engine: ReAuthEngine,
-  config?: FastifyAdapterConfig
-);
-
-// Configuration options
-interface FastifyAdapterConfig extends BaseHttpConfig {
-  prefix?: string;
-}
-```
-
-### Hono Adapter
-
-```typescript
-import { createHonoAdapter, type HonoAdapterConfig } from '@re-auth/http-adapters';
-
-const honoAdapter = createHonoAdapter(
-  engine: ReAuthEngine,
-  config?: HonoAdapterConfig,
-  app: Hono
-);
-
-// Configuration options
-interface HonoAdapterConfig extends BaseHttpConfig {
-  // Hono-specific options
-}
-```
-
-### Base HTTP Configuration
-
-```typescript
-interface BaseHttpConfig {
-  routes?: {
-    prefix?: string;
+// Access user in any route handler
+fastify.get('/api/profile', async (request, reply) => {
+  const user = (request as any).user;
+  
+  if (!user) {
+    return reply.status(401).send({ error: 'Authentication required' });
+  }
+  
+  return {
+    message: 'Profile data',
+    user: user.subject,
+    sessionValid: user.valid,
   };
-  cookieName?: string;
-  cookieOptions?: {
-    httpOnly?: boolean;
-    secure?: boolean;
-    sameSite?: 'strict' | 'lax' | 'none';
-    maxAge?: number;
-    domain?: string;
-    path?: string;
-  };
-  contextRules?: ContextExtractionRule[];
-  routeOverrides?: RouteOverride[];
-  customRoutes?: CustomRoute[];
-  introspection?: AutoIntrospectionConfig;
-  globalMiddleware?: any[];
-}
+});
 ```
 
-## 🛠️ Creating Custom HTTP Adapters
+#### Hono
+```typescript
+// Add user middleware globally
+app.use('*', adapter.createUserMiddleware());
 
-To create a custom HTTP adapter for a new framework, implement the `FrameworkAdapter` interface:
+// Access user in any route handler
+app.get('/api/profile', (c) => {
+  const user = c.get('user');
+  
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+  
+  return c.json({
+    message: 'Profile data',
+    user: user.subject,
+    sessionValid: user.valid,
+  });
+});
+```
+
+### Method 2: Manual User Lookup
+
+Check for current user when needed:
 
 ```typescript
-import { FrameworkAdapter, HttpAdapterContext, AuthOutput } from '@re-auth/http-adapters';
-
-class MyFrameworkAdapter implements FrameworkAdapter<MyConfig> {
-  setupMiddleware(context: HttpAdapterContext): void {
-    // Set up framework-specific middleware
+// Express
+app.get('/api/dashboard', async (req, res) => {
+  const user = await adapter.getCurrentUser(req);
+  
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
   }
+  
+  res.json({ user: user.subject });
+});
 
-  createRoute(method: string, path: string, handler: any, middleware?: any[]): void {
-    // Create routes in your framework
+// Fastify
+fastify.get('/api/dashboard', async (request, reply) => {
+  const user = await adapter.getCurrentUser(request);
+  
+  if (!user) {
+    return reply.status(401).send({ error: 'Authentication required' });
   }
+  
+  return { user: user.subject };
+});
 
-  async extractInputs(request: any, pluginName: string, stepName: string): Promise<Record<string, any>> {
-    // Extract inputs from framework request
+// Hono
+app.get('/api/dashboard', async (c) => {
+  const user = await adapter.getCurrentUser(c);
+  
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
   }
+  
+  return c.json({ user: user.subject });
+});
+```
 
-  handleStepResponse(request: any, response: any, result: AuthOutput, httpConfig: any): void {
-    // Handle framework response
-  }
+### Method 3: Optional Authentication
 
-  extractToken(request: any): string | null {
-    // Extract authentication token
-  }
+Handle routes that work with or without authentication:
 
-  requireAuth(): any {
-    // Return authentication middleware
-  }
+```typescript
+app.get('/api/content', async (req, res) => {
+  const user = await adapter.getCurrentUser(req);
+  
+  res.json({
+    message: 'Content data',
+    isAuthenticated: !!user,
+    user: user?.subject || null,
+    content: user ? 'Premium content' : 'Public content',
+  });
+});
+```
 
-  errorResponse(response: any, error: Error): void {
-    // Handle error responses
-  }
+### AuthenticatedUser Type
 
-  getAdapter(): any {
-    // Return framework instance
-  }
+The user object contains:
+
+```typescript
+interface AuthenticatedUser {
+  subject: any;           // The authenticated user data from the session
+  token: string;          // The session token
+  valid: boolean;         // Whether the session is valid
+  metadata?: {            // Optional session metadata
+    expiresAt?: string;
+    createdAt?: string;
+    lastAccessed?: string;
+    [key: string]: any;
+  };
 }
 ```
 
-## 🔍 HTTP Protocol Features
+### Session Token Sources
 
-### Automatic Route Generation
+The adapters automatically check for session tokens in:
 
-Routes are automatically generated based on plugin step definitions:
+1. **Authorization header**: `Bearer <token>`
+2. **Cookies**: `reauth-session=<token>`
+3. **Request body**: `{ "token": "<token>" }`
 
-- `POST /auth/{pluginName}/{stepName}` - Execute authentication step
-- `GET /auth/introspect` - Get plugin and step information (if enabled)
-- Custom routes based on plugin HTTP configuration
+## Configuration
+
+### Basic Configuration
+
+```typescript
+import { createHttpAdapterV2 } from '@re-auth/http-adapters-v2';
+
+const adapter = createHttpAdapterV2({
+  engine: reAuthEngine,
+  framework: 'express', // 'express' | 'fastify' | 'hono'
+  basePath: '/api/v2',
+  cors: {
+    origin: ['https://app.example.com'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+  },
+  rateLimit: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // requests per window
+    message: 'Too many requests, please try again later.'
+  },
+  security: {
+    helmet: true, // Enable security headers
+    csrf: false, // Disable CSRF (for API-only usage)
+    sanitizeInput: true,
+    sanitizeOutput: false
+  },
+  validation: {
+    validateInput: true,
+    maxPayloadSize: 1024 * 1024, // 1MB
+    allowedFields: [], // Empty = allow all
+    sanitizeFields: ['email', 'username', 'name']
+  }
+});
+```
+
+### Advanced Configuration
+
+```typescript
+const adapter = createExpressAdapter({
+  engine: reAuthEngine,
+  basePath: '/auth',
+  cors: {
+    origin: (origin, callback) => {
+      // Custom origin validation
+      const allowedOrigins = ['https://app.example.com', 'https://admin.example.com'];
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
+  },
+  rateLimit: {
+    windowMs: 15 * 60 * 1000,
+    max: (req) => req.user?.isPremium ? 1000 : 100, // Dynamic limits
+    keyGenerator: (req) => `${req.ip}:${req.headers['user-agent']}`,
+    skipSuccessfulRequests: true
+  },
+  security: {
+    helmet: {
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"]
+        }
+      }
+    }
+  }
+});
+```
+
+## API Endpoints
+
+### Authentication Steps
+
+Execute plugin-specific authentication steps:
+
+```
+POST /auth/:plugin/:step
+GET /auth/:plugin/:step
+PUT /auth/:plugin/:step
+PATCH /auth/:plugin/:step
+DELETE /auth/:plugin/:step
+```
+
+Example:
+```bash
+curl -X POST http://localhost:3000/api/auth/email-password/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "secret"}'
+```
 
 ### Session Management
 
-HTTP adapters handle session management through:
+```
+GET /session      # Check session validity
+POST /session     # Create new session
+DELETE /session   # Destroy current session
+```
 
-- **Cookies**: Secure HTTP-only cookies for session tokens
-- **Headers**: Authorization header support (`Bearer {token}`)
-- **Automatic cleanup**: Invalid tokens are automatically cleared
+### Plugin Introspection
 
-### Error Handling
+```
+GET /plugins           # List all plugins
+GET /plugins/:plugin   # Get plugin details
+```
 
-Comprehensive error handling with appropriate HTTP status codes:
+### System
 
-- `400` - Bad Request (validation errors, missing inputs)
-- `401` - Unauthorized (authentication required)
-- `403` - Forbidden (insufficient permissions)
-- `409` - Conflict (duplicate resources)
-- `500` - Internal Server Error
+```
+GET /introspection  # Full API introspection
+GET /health        # Health check
+```
 
-## 📝 License
+## Response Format
+
+All endpoints return a consistent response format:
+
+```typescript
+{
+  success: boolean;
+  data?: any;
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+  meta: {
+    timestamp: string;
+    requestId?: string;
+  };
+}
+```
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "subject": {
+      "id": "user123",
+      "email": "user@example.com"
+    }
+  },
+  "meta": {
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid email format",
+    "details": {
+      "field": "email",
+      "value": "invalid-email"
+    }
+  },
+  "meta": {
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+## Security Features
+
+### CORS
+
+```typescript
+cors: {
+  origin: ['https://app.example.com'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE']
+}
+```
+
+### Rate Limiting
+
+```typescript
+rateLimit: {
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // requests per window
+  keyGenerator: (req) => req.ip,
+  skipSuccessfulRequests: false
+}
+```
+
+### Security Headers
+
+```typescript
+security: {
+  helmet: true, // Enables:
+  // - X-Content-Type-Options: nosniff
+  // - X-Frame-Options: DENY
+  // - X-XSS-Protection: 1; mode=block
+  // - Referrer-Policy: strict-origin-when-cross-origin
+  // - Strict-Transport-Security (HTTPS only)
+}
+```
+
+### Input Validation
+
+```typescript
+validation: {
+  validateInput: true,
+  maxPayloadSize: 1024 * 1024, // 1MB
+  sanitizeFields: ['email', 'username', 'name'],
+  allowedFields: [] // Empty = allow all
+}
+```
+
+## Error Handling
+
+The adapter provides comprehensive error handling with specific error types:
+
+```typescript
+import {
+  HttpAdapterError,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  RateLimitError
+} from '@re-auth/http-adapters-v2';
+
+// Custom error handling
+app.use((err, req, res, next) => {
+  if (err instanceof ValidationError) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: err.code,
+        message: err.message,
+        details: err.details
+      }
+    });
+  }
+  // ... handle other error types
+});
+```
+
+## Migration from V1
+
+The V2 adapter is designed to work alongside V1 adapters. Key differences:
+
+1. **Engine Integration**: Uses `ReAuthEngineV2` instead of `ReAuthEngine`
+2. **Plugin Discovery**: Automatically discovers V2 plugins and their steps
+3. **Type Safety**: Enhanced TypeScript integration
+4. **Response Format**: Consistent JSON response format
+5. **Security**: Built-in security features
+
+### Migration Steps
+
+1. Install the V2 adapter package
+2. Update your engine to `ReAuthEngineV2`
+3. Replace V1 adapter imports with V2 equivalents
+4. Update configuration format
+5. Test endpoints and response formats
+
+## License
 
 MIT
-
-## Sequence Diagram
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant HonoAdapter
-    participant HttpAdapterFactory
-    participant HonoFrameworkAdapter
-    participant ReAuthEngine
-
-    User->>HonoAdapter: createHonoAdapter(engine, config)
-    note right of User: config contains contextRules
-
-    HonoAdapter->>HttpAdapterFactory: createHttpAdapter(frameworkAdapter)
-    HttpAdapterFactory->>HonoFrameworkAdapter: setupMiddleware(context)
-
-    User->>HonoApp: Request to /auth/{pluginName}/{stepName}
-    HonoApp->>HonoFrameworkAdapter: auto-generated step handler
-
-    HonoFrameworkAdapter->>HonoFrameworkAdapter: extractInputs(context, pluginName, stepName)
-
-    HonoFrameworkAdapter->>HonoFrameworkAdapter: addConfigurableContextInputs(context, inputs, pluginName, stepName, contextRules)
-    HonoFrameworkAdapter->>HttpAdapterFactory: findContextRules(pluginName, stepName, contextRules)
-    HttpAdapterFactory-->>HonoFrameworkAdapter: applicableRules
-    HonoFrameworkAdapter->>HonoFrameworkAdapter: Extract cookies/headers from request based on rules
-
-    HonoFrameworkAdapter->>ReAuthEngine: engine.executeStep(pluginName, stepName, inputs)
-    ReAuthEngine-->>HonoFrameworkAdapter: result: AuthOutput
-
-    HonoFrameworkAdapter->>HonoFrameworkAdapter: handleConfigurableContextOutputs(context, response, result, pluginName, stepName, contextRules)
-    HonoFrameworkAdapter->>HttpAdapterFactory: findContextRules(pluginName, stepName, contextRules)
-    HttpAdapterFactory-->>HonoFrameworkAdapter: applicableRules
-    HonoFrameworkAdapter->>HonoFrameworkAdapter: Set cookies/headers on response based on rules
-
-    HonoFrameworkAdapter->>HonoApp: handleStepResponse(context, response, result, httpConfig)
-    HonoApp-->>User: Response with data and cookies/headers
-```

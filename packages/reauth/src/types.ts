@@ -1,423 +1,247 @@
-import type { AwilixContainer } from "awilix";
-import type { ReAuthEngine } from "./auth-engine";
-import type { Type } from "arktype";
-import { column, idColumn, RelationBuilder, table } from "fumadb/schema";
+import type { AwilixContainer } from 'awilix';
+import type { Type } from 'arktype';
+import { InferAbstractQuery } from 'fumadb';
+import { JWTPayload } from 'jose';
+import { ReAuthEngine } from './engine';
+import { RelationBuilder, column, idColumn, table } from 'fumadb/schema';
 
-export interface ValidationResult {
-  isValid: boolean;
-  errors?: Record<string, string> | undefined;
+// Minimal Fuma client interface used by
+export interface FumaClient {
+  version(): Promise<string>;
+  orm(version: string): OrmLike;
 }
 
-export type ValidationRule<T = any> = (
-  value: T,
-  input: AuthInput,
-) => string | undefined;
+export type JWKSKeys =
+  | {
+      publicKey: CryptoKey;
+      privateKey: CryptoKey;
+      new: boolean;
+    }
+  | {
+      publicKey: CryptoKey | Uint8Array<ArrayBufferLike>;
+      privateKey: CryptoKey | Uint8Array<ArrayBufferLike>;
+      new?: undefined;
+    };
 
-export type ValidationSchema = Record<
-  string,
-  ValidationRule | ValidationRule[]
->;
-
-export type StepInputHook<T> = (
-  input: T,
-  container: AwilixContainer<ReAuthCradle>,
-) => T | Promise<T>;
-
-export type StepOutputHook<T> = (
-  output: T,
-  container: AwilixContainer<ReAuthCradle>,
-) => T | Promise<T>;
-
-export type StepErrorHook = (
-  error: Error,
-  input: AuthInput,
-  container: AwilixContainer<ReAuthCradle>,
-) => Promise<void> | void;
-
-export interface AuthStepHooks {
-  before?: StepInputHook<AuthInput>[];
-  after?: StepOutputHook<AuthOutput>[];
-  onError?: StepErrorHook[];
-}
-
-export type RootStepInputHook = (
-  input: AuthInput,
-  container: AwilixContainer<ReAuthCradle>,
-  step: AuthStep<AuthInput>,
-) => AuthInput | Promise<AuthInput>;
-
-export type RootStepOutputHook = (
-  output: AuthOutput,
-  container: AwilixContainer<ReAuthCradle>,
-  step: AuthStep<AuthOutput>,
-) => AuthOutput | Promise<AuthOutput>;
-
-export type RootStepErrorHook = (
-  error: Error,
-  input: AuthInput,
-  container: AwilixContainer<ReAuthCradle>,
-  step: AuthStep<AuthInput>,
-) => Promise<void> | void;
-
-export interface RootStepHooks {
-  before?: RootStepInputHook;
-  after?: RootStepOutputHook;
-  onError?: RootStepErrorHook;
-}
-
-export interface AuthHooks {
-  type: HooksType;
-  fn: (
-    data: AuthInput | AuthOutput,
-    container: AwilixContainer<ReAuthCradle>,
-    error?: Error,
-  ) => Promise<AuthOutput | AuthInput | void>;
-  pluginName: string;
-  steps: string[];
-  session?: boolean;
-  universal?: boolean;
-}
-
-export type PluginProp<T = any> = {
-  pluginName: string;
-  container: AwilixContainer<ReAuthCradle>;
-  config: T;
+export type JWKSTokenParams = {
+  payload: JWTPayload;
+  privateKey: CryptoKey | Uint8Array<ArrayBufferLike>;
+  issuer: string;
+  clientId: string;
+  expTime: string | number | Date;
 };
 
-export interface AuthStep<T> {
-  name: string;
-  description: string;
-  validationSchema?: Type<any>;
-  outputs?: Type<any>;
-  inputs: string[];
-  hooks?: AuthStepHooks;
-  registerHook?(
-    type: HooksType,
-    fn: (
-      data: AuthInput | AuthOutput,
-      container: AwilixContainer<ReAuthCradle>,
-      error?: Error,
-    ) => Promise<AuthOutput | AuthInput | void>,
-  ): void;
-  run(input: AuthInput, pluginProperties?: PluginProp<T>): Promise<AuthOutput>;
-  protocol: {
-    http?: {
-      method: string;
-      auth?: boolean;
-      [key: string]: any;
-    };
-    [key: string]: any;
-  };
-}
+export type Subject = { id: string; [key: string]: any };
 
+// Shared  input/output shapes (entity removed). Keep names the same for cross-package compatibility.
 export interface AuthInput {
-  entity?: Entity;
-  token?: AuthToken;
+  token?: string | null;
   [key: string]: any;
 }
 
-export type HooksType = 'before' | 'after' | 'onError';
-
-export interface SensitiveFields {
-  [pluginName: string]: string[];
-}
-
-export interface AuthPlugin<T = any> {
-  name: string;
-  steps: AuthStep<T>[];
-  container?: AwilixContainer<ReAuthCradle>;
-  /**
-   * Initialize the plugin with an optional DI container
-   * @param container Optional Awilix container for dependency injection
-   */
-  initialize(container: AwilixContainer<ReAuthCradle>): Promise<void> | void;
-
-  /**
-   * Returns an array of field names that should be considered sensitive
-   * and redacted during serialization
-   */
-  getSensitiveFields?(): string[];
-
-  migrationConfig?: PluginMigrationConfig;
-
-  config: Partial<T>;
-
-  dependsOn?: string[];
-
-  runStep?(
-    step: string,
-    input: AuthInput,
-    container: AwilixContainer<ReAuthCradle>,
-  ): Promise<AuthOutput>;
-
-  //TODO: fix the implementation
-  rootHooks?: RootStepHooks;
-}
-
 export interface AuthOutput {
-  entity?: Entity;
-  token?: AuthToken;
+  token?: string | null;
   redirect?: string;
   success: boolean;
   message: string;
   status: string;
+  subject?: any;
+  others?: Record<string, any>;
   [key: string]: any;
 }
 
-export interface BaseReAuthCradle {
-  entityService: EntityService;
-  sessionService: SessionService;
+export type SubjectResolver = {
+  getById: (id: string, orm: OrmLike) => Promise<Subject | null>;
+  sanitize?: (subject: Subject) => any;
+};
+
+export interface SessionResolvers {
+  register(subjectType: string, resolver: SubjectResolver): void;
+  get(subjectType: string): SubjectResolver | undefined;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-// biome-ignore lint/suspicious/noEmptyInterface: <explanation>
-export interface ReAuthCradleExtension {}
-
-export interface ReAuthCradle extends BaseReAuthCradle, ReAuthCradleExtension {
-  sensitiveFields: SensitiveFields;
-  serializeEntity: <T extends Entity>(entity: T) => T;
-  reAuthEngine: ReAuthEngine;
-}
-
-// type CradleService<T extends keyof ReAuthCradle> = ReAuthCradle[T];
-
-export interface ColumnDefinition {
-  type:
-    | 'string'
-    | 'integer'
-    | 'boolean'
-    | 'datetime'
-    | 'timestamp'
-    | 'text'
-    | 'json'
-    | 'decimal'
-    | 'uuid';
-  length?: number;
-  nullable?: boolean;
-  defaultValue?: any;
-  unique?: boolean;
-  index?: boolean;
-  primary?: boolean;
-  references?: {
-    table: string;
-    column: string;
-    onDelete?: 'CASCADE' | 'SET NULL' | 'RESTRICT';
-    onUpdate?: 'CASCADE' | 'SET NULL' | 'RESTRICT';
+// Additional session metadata for enhanced session management
+export interface SessionMetadata {
+  deviceInfo?: {
+    fingerprint?: string;
+    userAgent?: string;
+    ipAddress?: string;
+    isTrusted?: boolean;
+    deviceName?: string;
   };
+  metadata?: Record<string, any>;
 }
 
-export interface TableSchema {
-  tableName: string;
-  columns: Record<string, ColumnDefinition>;
-  timestamps?: boolean;
-  indexes?: Array<{
-    columns: string[];
-    name?: string;
-    unique?: boolean;
-  }>;
+// Enhanced session creation options
+export interface CreateSessionOptions {
+  ttlSeconds?: number;
+  deviceInfo?: SessionMetadata['deviceInfo'];
+  metadata?: Record<string, any>;
 }
 
-export interface PluginMigrationConfig {
-  pluginName: string;
-  tables?: TableSchema[];
-  extendTables?: Array<{
-    tableName: string;
-    columns: Record<string, ColumnDefinition>;
-    indexes?: Array<{
-      columns: string[];
-      name?: string;
-      unique?: boolean;
-    }>;
-  }>;
-}
-
-export interface MigrationConfig {
-  migrationName: string;
-  outputDir: string;
-  plugins: PluginMigrationConfig[];
-  baseTables?: TableSchema[];
-}
-
-export class ConfigError extends Error {
-  constructor(
-    message: string,
-    public pluginName: string,
-    public data?: any,
-  ) {
-    super(message);
-    this.name = 'ConfigError';
-  }
-}
-
-export class AuthInputError extends Error {
-  constructor(
-    message: string,
-    public pluginName: string,
-    public stepName: string,
-    public data?: any,
-  ) {
-    super(message);
-    this.name = 'AuthInputError';
-  }
-}
-
-export class StepNotFound extends Error {
-  constructor(
-    step: string,
-    public pluginName: string,
-  ) {
-    super(`Step ${step} not found for plugin ${pluginName}`);
-    this.name = 'StepNotFound';
-  }
-}
-
-export class ValidationError extends Error {
-  constructor(
-    message: string,
-    public pluginName: string,
-    public stepName: string,
-    public hookType?: HooksType,
-    public data?: any,
-  ) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
-
-export class PluginNotFound extends Error {
-  constructor(plugin: string) {
-    super(`Plugin ${plugin} not found`);
-    this.name = 'PluginNotFound';
-  }
-}
-
-export class HooksError extends Error {
-  data?: any;
-
-  constructor(
-    message: string,
-    public pluginName: string,
-    public stepName: string,
-    public hookType: HooksType,
-    data?: any,
-  ) {
-    super(message);
-    this.name = 'HooksError';
-    this.data = data;
-  }
-}
-
-export class InitializationError extends Error {
-  constructor(
-    message: string,
-    public pluginName: string,
-    public data?: any,
-  ) {
-    super(message);
-    this.name = 'InitializationError';
-  }
-}
-
-export type BaseEntity = {
-  id: string;
-  role: string;
-  created_at: Date;
-  updated_at: Date;
-};
-
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-// biome-ignore lint/suspicious/noEmptyInterface: <explanation>
-export interface EntityExtension {}
-
-// Generic type for custom user fields
-export type Entity = BaseEntity & EntityExtension;
-
-export interface BaseSession {
-  id: string;
-  entity_id: string;
-  token: string;
-  expires_at: Date;
-  created_at: Date;
-  updated_at: Date;
-}
-
-// biome-ignore lint/suspicious/noEmptyInterface: <explanation>
-export interface SessionExtension {}
-
-export interface Session extends BaseSession, SessionExtension {}
-
-export type AuthToken = string | null;
-
-export type EntityService = {
-  findEntity(id: string, filed: string): Promise<Entity | null>;
-  createEntity(entity: Partial<Entity>): Promise<Entity>;
-  updateEntity(
-    id: string,
-    filed: string,
-    entity: Partial<Entity>,
-  ): Promise<Entity>;
-  deleteEntity(id: string, filed: string): Promise<void>;
-};
-
-export type SessionService = {
-  createSession(entityId: string | number): Promise<AuthToken>;
+export interface SessionService {
+  enableEnhancedFeatures(): void;
+  createSession(
+    subjectType: string,
+    subjectId: string,
+    ttlSeconds?: number,
+  ): Promise<string>;
+  // Enhanced version for advanced session features
+  createSessionWithMetadata?(
+    subjectType: string,
+    subjectId: string,
+    options: CreateSessionOptions,
+  ): Promise<string>;
   verifySession(
     token: string,
-  ): Promise<{ entity: Entity | null; token: AuthToken }>;
+  ): Promise<{ subject: any | null; token: string | null }>;
   destroySession(token: string): Promise<void>;
-  destroyAllSessions(entityId: string | number): Promise<void>;
-};
-
-/**
- * SDK Generation and Introspection Types
- */
-
-export interface FieldSchema {
-  type: string;
-  format?: string;
-  required: boolean;
-  description: string;
+  destroyAllSessions(subjectType: string, subjectId: string): Promise<void>;
+  // Enhanced session listing
+  listSessionsForSubject?(
+    subjectType: string,
+    subjectId: string,
+  ): Promise<
+    Array<{
+      sessionId: string;
+      token: string;
+      createdAt: Date;
+      expiresAt: Date | null;
+      deviceInfo?: SessionMetadata['deviceInfo'];
+      metadata?: Record<string, any>;
+    }>
+  >;
 }
 
-export interface EntitySchema {
-  type: 'object';
-  properties: Record<string, FieldSchema>;
-  required: string[];
+// ---------------- Step/Plugin Types () ----------------
+export type StepStatus = string; // e.g., 'su', 'ip', 'ic', 'unf', 'eq', 'ev'
+
+export interface StepProtocolHttp {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  codes: Record<string, number>; // map semantic status to HTTP code
+  auth?: boolean; // whether this step requires authentication
 }
 
-export interface IntrospectionStep {
+export interface StepProtocolMeta {
+  http?: StepProtocolHttp;
+  [key: string]: any;
+}
+
+export interface StepHooks<Cfg, I = AuthInput, O = AuthOutput> {
+  before?: (input: I, ctx: StepContext<Cfg>) => Promise<void> | void;
+  after?: (output: O, ctx: StepContext<Cfg>) => Promise<void> | void;
+  onError?: (error: unknown, ctx: StepContext<Cfg>) => Promise<void> | void;
+}
+
+export interface StepContext<Cfg> {
+  engine: ReAuthEngine;
+  config: Cfg;
+}
+
+export interface AuthStep<Cfg, I = AuthInput | any, O = AuthOutput | any> {
   name: string;
-  description: string;
-  inputs: Record<string, any>;
-  outputs: Record<string, any>;
-  protocol: {
-    http?: {
-      method: string;
-      auth?: boolean;
-      [key: string]: any;
-    };
-    [key: string]: any;
-  };
-  requiresAuth: boolean;
+  description?: string;
+  validationSchema?: Type<any>; // arktype runtime (assert/toJsonSchema)
+  outputs?: Type<any>; // arktype runtime for outputs (optional)
+  run: (input: I, ctx: StepContext<Cfg>) => Promise<O> | AuthOutput;
+  hooks?: StepHooks<Cfg>;
+  inputs?: string[];
+  protocol?: StepProtocolMeta;
 }
 
-export interface IntrospectionPlugin {
+export interface RootStepHooks<Cfg> {
+  before?: (
+    input: AuthInput,
+    ctx: StepContext<Cfg>,
+    step: AuthStep<Cfg>,
+  ) => Promise<AuthInput> | AuthInput;
+  after?: (
+    output: AuthOutput,
+    ctx: StepContext<Cfg>,
+    step: AuthStep<Cfg>,
+  ) => Promise<AuthOutput> | AuthOutput;
+  onError?: (
+    error: unknown,
+    input: AuthInput,
+    ctx: StepContext<Cfg>,
+    step: AuthStep<Cfg>,
+  ) => Promise<void> | void;
+}
+
+// Context passed to plugin-level utility functions (non-HTTP, non-step)
+export interface PluginProfileContext {
+  engine: ReAuthEngine;
+  config?: any;
+}
+
+export interface AuthPlugin<Cfg = any> {
   name: string;
-  description: string;
-  steps: IntrospectionStep[];
+  initialize?: (engine: ReAuthEngine, config: Cfg) => Promise<void> | void;
+  steps?: Array<AuthStep<Cfg>>;
+  getSensitiveFields?: () => string[];
+  config: Cfg;
+  rootHooks?: RootStepHooks<Cfg>;
+  getProfile?: (
+    subjectId: string,
+    ctx: PluginProfileContext,
+  ) => Promise<any> | any;
 }
 
-export interface IntrospectionResult {
-  entity: EntitySchema;
-  plugins: IntrospectionPlugin[];
-  generatedAt: string;
-  version: string;
+// ---------------- Hook Types () ----------------
+export type HooksType = 'before' | 'after' | 'onError';
+
+export interface AuthHook {
+  type: HooksType;
+  pluginName?: string; // if provided, limits to a specific plugin
+  steps?: string[]; // if provided, limits to specific steps
+  session?: boolean; // marks this as a session-level hook
+  universal?: boolean; // applies to all plugins/steps
+  fn: (
+    data: AuthInput | AuthOutput,
+    container: ReAuthCradle,
+    error?: unknown,
+  ) => Promise<AuthInput | AuthOutput | void> | AuthInput | AuthOutput | void;
 }
 
+export interface ReAuthCradleExtension {
+  dbClient: FumaClient;
+  sessionService: SessionService;
+  sessionResolvers: SessionResolvers;
+  engine: ReAuthEngine;
+}
+
+export type ReAuthCradle = AwilixContainer<ReAuthCradleExtension>;
+
+// Use the precise FumaDB abstract query type for our ORM alias.
+export type OrmLike = InferAbstractQuery<any, any>;
+
+// ---------------- Background Cleanup Scheduler Types ----------------
+export interface CleanupTask {
+  name: string;
+  pluginName: string;
+  intervalMs: number; // How often to run the cleanup (in milliseconds)
+  enabled: boolean;
+  runner: (
+    orm: OrmLike,
+    config?: any,
+  ) => Promise<{ cleaned: number; errors?: string[] }>;
+}
+
+export interface CleanupScheduler {
+  registerTask(task: CleanupTask): void;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  isRunning(): boolean;
+  getRegisteredTasks(): CleanupTask[];
+  setPluginConfig(pluginName: string, config: any): void;
+}
 
 export type ReauthSchemaPlugin = {
-	tables?: Record<string, ReturnType<typeof table>>;
-	relations?: Record<string, (builder: RelationBuilder<any>) => Record<string, unknown>>;
+  tables?: Record<string, ReturnType<typeof table>>;
+  relations?: Record<
+    string,
+    (builder: RelationBuilder<any>) => Record<string, unknown>
+  >;
   /**
    * Extend columns of existing tables by name. Keys are table names, values are maps of new columns.
    * These columns will be merged into core table column maps before creating the final tables.
@@ -426,4 +250,4 @@ export type ReauthSchemaPlugin = {
     string,
     Record<string, ReturnType<typeof column> | ReturnType<typeof idColumn>>
   >;
-  };
+};

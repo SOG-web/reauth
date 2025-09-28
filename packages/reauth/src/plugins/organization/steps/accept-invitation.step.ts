@@ -1,0 +1,188 @@
+import { type } from 'arktype';
+import type { AuthStep } from '../../../types';
+import type {
+  AcceptInvitationInput,
+  AcceptInvitationOutput,
+  OrganizationConfig,
+} from '../types';
+
+export const acceptInvitationValidation = type({
+  'invitation_token?': 'string', // invitation
+  'token?': 'string', // authentication
+});
+
+export const acceptInvitationStep: AuthStep<
+  OrganizationConfig,
+  AcceptInvitationInput,
+  AcceptInvitationOutput
+> = {
+  name: 'accept-invitation',
+  description: 'Accept organization invitation',
+  validationSchema: acceptInvitationValidation,
+  protocol: {
+    http: {
+      method: 'POST',
+      codes: { su: 200, ip: 401, ic: 400, unf: 404, eq: 409 },
+      auth: true,
+    },
+  },
+  inputs: ['invitation_token', 'token'],
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    status: 'string',
+    'membership?': {
+      id: 'string',
+      organization_id: 'string',
+      role: 'string',
+    },
+  }),
+  async run(input, ctx) {
+    const { invitation_token, token } = input;
+    const orm = await ctx.engine.getOrm();
+
+    // Find the invitation
+    const invitation = await orm.findFirst('organization_invitations', {
+      where: (b: any) => b('token', '=', invitation_token),
+    });
+
+    if (!invitation) {
+      return {
+        success: false,
+        message: 'Invalid invitation token',
+        status: 'unf',
+      };
+    }
+
+    // Check if invitation is still valid
+    if (invitation.status !== 'pending') {
+      return {
+        success: false,
+        message: `Invitation is ${invitation.status}`,
+        status: 'ic',
+      };
+    }
+
+    // Check if invitation has expired
+    const now = new Date();
+    if (new Date(invitation.expires_at as any) < now) {
+      // Update invitation status to expired
+      await orm.updateMany('organization_invitations', {
+        where: (b: any) => b('id', '=', invitation.id),
+        set: {
+          status: 'expired',
+          updated_at: now,
+        },
+      });
+
+      return {
+        success: false,
+        message: 'Invitation has expired',
+        status: 'ic',
+      };
+    }
+
+    // Check if organization still exists and is active
+    const organization = await orm.findFirst('organizations', {
+      where: (b: any) =>
+        b.and(
+          b('id', '=', invitation.organization_id),
+          b('is_active', '=', true),
+        ),
+    });
+
+    if (!organization) {
+      return {
+        success: false,
+        message: 'Organization no longer exists',
+        status: 'unf',
+      };
+    }
+
+    let subjectId: string | null = null;
+
+    const session = await ctx.engine.checkSession(token);
+    if (!session.valid || !session.subject) {
+      return {
+        success: false,
+        message: 'Authentication required',
+        status: 'ip',
+      };
+    }
+
+    subjectId = session.subject.id as string;
+
+    if (!subjectId) {
+      return {
+        success: false,
+        message:
+          'User account not found. Please register or authenticate first.',
+        status: 'ip',
+      };
+    }
+
+    // Check if user is already a member
+    const existingMembership = await orm.findFirst('organization_memberships', {
+      where: (b: any) =>
+        b.and(
+          b('subject_id', '=', subjectId),
+          b('organization_id', '=', invitation.organization_id),
+          b('email', '=', invitation.email),
+          b('status', 'in', ['active', 'pending']),
+        ),
+    });
+
+    if (existingMembership) {
+      return {
+        success: false,
+        message: 'User is already a member of this organization',
+        status: 'eq',
+      };
+    }
+
+    try {
+      // Create membership
+      const membership = await orm.create('organization_memberships', {
+        subject_id: subjectId,
+        organization_id: invitation.organization_id,
+        role: invitation.role,
+        roles: '',
+        permissions: '',
+        email: invitation.email,
+        invited_by: invitation.invited_by,
+        joined_at: now,
+        expires_at: null,
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+      });
+
+      // Update invitation status
+      await orm.updateMany('organization_invitations', {
+        where: (b: any) => b('id', '=', invitation.id),
+        set: {
+          status: 'accepted',
+          accepted_at: now,
+          updated_at: now,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Successfully joined organization',
+        status: 'su',
+        membership: {
+          id: membership.id as string,
+          organization_id: invitation.organization_id as string,
+          role: invitation.role as string,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to accept invitation',
+        status: 'ic',
+      };
+    }
+  },
+};

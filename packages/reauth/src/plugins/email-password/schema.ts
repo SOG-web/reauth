@@ -1,26 +1,27 @@
-import { column } from 'fumadb/schema';
+import { column, idColumn, table } from 'fumadb/schema';
 import type { ReauthSchemaPlugin } from '../../types';
 
-export const emailPasswordSchema: ReauthSchemaPlugin = {
-  extendTables: {
-    entities: {
-      email: column('email', 'varchar(255)').unique(),
-      email_verified: column('email_verified', 'bool').nullable(),
-      password_hash: column('password_hash', 'varchar(255)').nullable(),
-      email_verification_code: column(
-        'email_verification_code',
-        'varchar(255)',
-      ).nullable(),
-      reset_password_code: column(
-        'reset_password_code',
-        'varchar(255)',
-      ).nullable(),
-      reset_password_code_expires_at: column(
-        'reset_password_code_expires_at',
-        'timestamp',
-      ).nullable(),
-    },
-  },
-};
+// Email-specific metadata attached to an identity via identity_id
+export const emailIdentities = table('email_identities', {
+  id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
+  identity_id: column('identity_id', 'varchar(255)'),
+  verification_code: column('verification_code', 'varchar(255)').nullable(),
+  verification_code_expires_at: column(
+    'verification_code_expires_at',
+    'timestamp',
+  ).nullable(),
+  reset_code: column('reset_code', 'varchar(255)').nullable(),
+  reset_code_expires_at: column(
+    'reset_code_expires_at',
+    'timestamp',
+  ).nullable(),
+  created_at: column('created_at', 'timestamp').defaultTo$('now'),
+  updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
+}).unique('email_identity_uk', ['identity_id']);
 
-export default emailPasswordSchema;
+export const emailPasswordSchema: ReauthSchemaPlugin = {
+  tables: {
+    email_identities: emailIdentities,
+  },
+  relations: {},
+};
