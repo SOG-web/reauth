@@ -1,34 +1,16 @@
 // Core exports
-export { ReAuthHttpAdapterV2 } from './base-adapter.js';
-
-// Import types for use in this file
-import type {
-  ReAuthEngineV2,
-  CorsConfig,
-  RateLimitConfig,
-  SecurityConfig,
-  ValidationConfig,
-} from './types.js';
-
-import { createExpressAdapter } from './adapters/express.js';
-import { createFastifyAdapter } from './adapters/fastify.js';
-import { createHonoAdapter } from './adapters/hono.js';
+export { ReAuthHttpAdapter } from './base-adapter';
 
 // Types
 export type {
-  ReAuthEngineV2,
-  AuthPluginV2,
-  AuthStepV2,
-  AuthInputV2,
-  AuthOutputV2,
-  HttpAdapterV2Config,
+  HttpAdapterConfig,
   CorsConfig,
   RateLimitConfig,
   SecurityConfig,
   ValidationConfig,
   HttpRequest,
   HttpResponse,
-  FrameworkAdapterV2,
+  FrameworkAdapter,
   RouteHandler,
   AuthStepRequest,
   SessionRequest,
@@ -40,7 +22,7 @@ export type {
   MiddlewareFunction,
   SecurityMiddleware,
   AuthenticatedUser,
-} from './types.js';
+} from './types';
 
 // Error classes
 export {
@@ -50,26 +32,16 @@ export {
   AuthorizationError,
   NotFoundError,
   RateLimitError,
-} from './types.js';
+} from './types';
 
 // Framework adapters
 export {
-  ExpressAdapterV2,
+  ExpressAdapter,
   createExpressAdapter,
   expressReAuth,
-} from './adapters/express.js';
+} from './adapters/express';
 
-export {
-  FastifyAdapterV2,
-  createFastifyAdapter,
-  fastifyReAuth,
-} from './adapters/fastify.js';
-
-export {
-  HonoAdapterV2,
-  createHonoAdapter,
-  honoReAuth,
-} from './adapters/hono.js';
+export { HonoAdapter, honoReAuth } from './adapters/hono';
 
 // Middleware
 export {
@@ -78,7 +50,7 @@ export {
   createSecurityMiddleware,
   createValidationMiddleware,
   createSecurityMiddlewares,
-} from './middleware/security.js';
+} from './middleware/security';
 
 // Utilities
 export {
@@ -87,34 +59,4 @@ export {
   getPluginNames,
   groupEndpointsByPlugin,
   validateConfig,
-} from './utils/factory.js';
-
-// Main factory function for easy setup
-export function createHttpAdapterV2(config: {
-  engine: ReAuthEngineV2;
-  framework: 'express' | 'fastify' | 'hono';
-  basePath?: string;
-  cors?: CorsConfig;
-  rateLimit?: RateLimitConfig;
-  security?: SecurityConfig;
-  validation?: ValidationConfig;
-}) {
-  const { framework, ...adapterConfig } = config;
-  
-  switch (framework) {
-    case 'express':
-      return createExpressAdapter(adapterConfig);
-    case 'fastify':
-      return createFastifyAdapter(adapterConfig);
-    case 'hono':
-      return createHonoAdapter(adapterConfig);
-    default:
-      throw new Error(`Unsupported framework: ${framework}`);
-  }
-}
-
-// Re-export types for convenience as aliases
-export type {
-  AuthInputV2 as AuthInput,
-  AuthOutputV2 as AuthOutput,
-} from './types.js';
+} from './utils/factory';

@@ -4,11 +4,10 @@ import type {
   HttpAdapterConfig,
   FrameworkAdapter,
   HttpRequest,
-  HttpResponse,
   MiddlewareFunction,
   AuthenticatedUser,
-} from '../types.js';
-import { ReAuthHttpAdapter } from '../base-adapter.js';
+} from '../types';
+import { ReAuthHttpAdapter } from '../base-adapter';
 
 export class ExpressAdapter
   implements FrameworkAdapter<Request, Response, NextFunction>

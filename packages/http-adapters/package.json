@@ -1,5 +1,5 @@
 {
-  "name": "@re-auth/http-adapters-v2",
+  "name": "@re-auth/http-adapters",
   "version": "1.0.0-alpha.1",
   "description": "V2 HTTP protocol adapters for ReAuth - framework-agnostic integration with Express, Fastify, and Hono",
   "type": "module",

@@ -13,13 +13,13 @@ import type {
   SessionResponse,
   PluginListResponse,
   AuthenticatedUser,
-} from './types.js';
+} from './types';
 import {
   HttpAdapterError,
   ValidationError,
   AuthenticationError,
   NotFoundError,
-} from './types.js';
+} from './types';
 
 export class ReAuthHttpAdapter {
   private engine: ReAuthEngine;

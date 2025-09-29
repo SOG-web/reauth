@@ -1,13 +1,11 @@
 import type {
   HttpAdapterConfig,
-  FrameworkAdapter,
   HttpRequest,
-  HttpResponse,
   AuthenticatedUser,
-} from '../types.js';
-import { ReAuthHttpAdapter } from '../base-adapter.js';
+} from '../types';
+import { ReAuthHttpAdapter } from '../base-adapter';
 import { Context, Hono } from 'hono';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { setCookie } from 'hono/cookie';
 
 export class HonoAdapter {
   public readonly name = 'hono';

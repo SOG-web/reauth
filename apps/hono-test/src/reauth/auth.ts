@@ -1,53 +1,36 @@
-import { createReAuthEngine } from '@re-auth/reauth';
-import {
-  emailPasswordAuth,
-  phonePasswordAuth,
-  sessionPlugin,
-} from '@re-auth/reauth/plugins';
-import {
-  KnexEntityService,
-  KnexSessionService,
-} from '@re-auth/reauth/services';
-import knex from 'knex';
+import createReAuthEngine, { reauthDb } from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import SQLite from 'better-sqlite3';
+import { Kysely, SqliteDialect } from 'kysely';
+import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
 
-export const db = knex({
-  client: 'better-sqlite3',
-  connection: {
-    filename: './test.db',
-  },
-  useNullAsDefault: true,
+export const kysely = new Kysely({
+  dialect: new SqliteDialect({
+    database: new SQLite('./db.sqlite'),
+  }),
 });
 
-const entity = new KnexEntityService(db, 'entities');
-const session = new KnexSessionService(db, 'sessions');
+const factory = reauthDb();
 
-const reAuth = createReAuthEngine({
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'sqlite',
+    db: kysely, // kysely instance
+  }),
+);
+
+export default createReAuthEngine({
+  dbClient: {
+    version: client.version,
+    orm: (version) => client,
+  },
   plugins: [
-    sessionPlugin({}),
-    emailPasswordAuth({
-      verifyEmail: true,
-      sendCode: async (entity, code, email, type) => {
-        console.log('sendCode', entity, code, email, type);
-      },
-      rootHooks: {
-        after: async (output, container, step) => {
-          console.log('after', output);
-          const { others, ...rest } = output;
-          if (others) {
-          }
-          return rest;
-        },
-      },
-    }),
-    phonePasswordAuth({
-      verifyPhone: true,
-      sendCode: async (entity, code, phone) => {
-        console.log('sendCode', entity, code, phone);
+    emailPasswordPlugin({
+      sendCode(subject, code, email, type) {
+        console.log(subject, code, email, type);
+        return Promise.resolve();
       },
     }),
   ],
-  entity,
-  session,
+  enableCleanupScheduler: true,
 });
-
-export default reAuth;

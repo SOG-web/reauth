@@ -44,7 +44,7 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
         verified: 'boolean',
         profile: 'object?',
       }),
-      'others?': 'object',
+      'others?': type('object').or(type('undefined')),
     }),
     async run(input, ctx) {
       const { email, password, others } = input;
@@ -65,6 +65,7 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
 
         const subject = {
           id: subjectRow.id,
+          name: email,
           email,
           provider: 'email',
           verified: true,
@@ -179,6 +180,7 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
 
       const subject = {
         id: identity.subject_id,
+        name: email,
         email,
         provider: 'email',
         verified: identity.verified,

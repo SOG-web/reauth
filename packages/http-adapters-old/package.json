@@ -1,5 +1,5 @@
 {
-  "name": "@re-auth/http-adapters",
+  "name": "@re-auth/http-adapters-old",
   "version": "1.0.0-alpha.17",
   "description": "HTTP protocol adapters for ReAuth - framework-agnostic integration with Express, Fastify, and Hono",
   "type": "module",

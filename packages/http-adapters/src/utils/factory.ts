@@ -1,6 +1,6 @@
-import type { HttpAdapterConfig, PluginEndpoint } from '../types.js';
-import { ReAuthHttpAdapter } from '../base-adapter.js';
-import { ReAuthEngine } from '@re-auth/reauth/.';
+import type { HttpAdapterConfig, PluginEndpoint } from '../types';
+import { ReAuthHttpAdapter } from '../base-adapter';
+import { ReAuthEngine } from '@re-auth/reauth';
 
 /**
  * Factory function to create HTTP adapter with default configuration

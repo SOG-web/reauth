@@ -4,12 +4,14 @@ import type {
   SecurityConfig,
   ValidationConfig,
   MiddlewareFunction,
-} from '../types.js';
+} from '../types';
 
 /**
  * CORS middleware factory
  */
-export function createCorsMiddleware(config: CorsConfig = {}): MiddlewareFunction {
+export function createCorsMiddleware(
+  config: CorsConfig = {},
+): MiddlewareFunction {
   const {
     origin = '*',
     credentials = false,
@@ -75,7 +77,9 @@ export function createCorsMiddleware(config: CorsConfig = {}): MiddlewareFunctio
 /**
  * Rate limiting middleware factory
  */
-export function createRateLimitMiddleware(config: RateLimitConfig = {}): MiddlewareFunction {
+export function createRateLimitMiddleware(
+  config: RateLimitConfig = {},
+): MiddlewareFunction {
   const {
     windowMs = 15 * 60 * 1000, // 15 minutes
     max = 100,
@@ -113,13 +117,19 @@ export function createRateLimitMiddleware(config: RateLimitConfig = {}): Middlew
       if (standardHeaders) {
         res.header('X-RateLimit-Limit', max.toString());
         res.header('X-RateLimit-Remaining', '0');
-        res.header('X-RateLimit-Reset', new Date(requestInfo.resetTime).toISOString());
+        res.header(
+          'X-RateLimit-Reset',
+          new Date(requestInfo.resetTime).toISOString(),
+        );
       }
 
       if (legacyHeaders) {
         res.header('X-Rate-Limit-Limit', max.toString());
         res.header('X-Rate-Limit-Remaining', '0');
-        res.header('X-Rate-Limit-Reset', new Date(requestInfo.resetTime).toISOString());
+        res.header(
+          'X-Rate-Limit-Reset',
+          new Date(requestInfo.resetTime).toISOString(),
+        );
       }
 
       return res.status(429).json({
@@ -141,13 +151,22 @@ export function createRateLimitMiddleware(config: RateLimitConfig = {}): Middlew
     if (standardHeaders) {
       res.header('X-RateLimit-Limit', max.toString());
       res.header('X-RateLimit-Remaining', (max - requestInfo.count).toString());
-      res.header('X-RateLimit-Reset', new Date(requestInfo.resetTime).toISOString());
+      res.header(
+        'X-RateLimit-Reset',
+        new Date(requestInfo.resetTime).toISOString(),
+      );
     }
 
     if (legacyHeaders) {
       res.header('X-Rate-Limit-Limit', max.toString());
-      res.header('X-Rate-Limit-Remaining', (max - requestInfo.count).toString());
-      res.header('X-Rate-Limit-Reset', new Date(requestInfo.resetTime).toISOString());
+      res.header(
+        'X-Rate-Limit-Remaining',
+        (max - requestInfo.count).toString(),
+      );
+      res.header(
+        'X-Rate-Limit-Reset',
+        new Date(requestInfo.resetTime).toISOString(),
+      );
     }
 
     next();
@@ -157,10 +176,10 @@ export function createRateLimitMiddleware(config: RateLimitConfig = {}): Middlew
 /**
  * Security headers middleware factory
  */
-export function createSecurityMiddleware(config: SecurityConfig = {}): MiddlewareFunction {
-  const {
-    helmet = true,
-  } = config;
+export function createSecurityMiddleware(
+  config: SecurityConfig = {},
+): MiddlewareFunction {
+  const { helmet = true } = config;
 
   return (req: any, res: any, next: any) => {
     if (helmet) {
@@ -169,11 +188,17 @@ export function createSecurityMiddleware(config: SecurityConfig = {}): Middlewar
       res.header('X-Frame-Options', 'DENY');
       res.header('X-XSS-Protection', '1; mode=block');
       res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-      res.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-      
+      res.header(
+        'Permissions-Policy',
+        'geolocation=(), microphone=(), camera=()',
+      );
+
       // HSTS for HTTPS
       if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
-        res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        res.header(
+          'Strict-Transport-Security',
+          'max-age=31536000; includeSubDomains',
+        );
       }
     }
 
@@ -184,7 +209,9 @@ export function createSecurityMiddleware(config: SecurityConfig = {}): Middlewar
 /**
  * Input validation middleware factory
  */
-export function createValidationMiddleware(config: ValidationConfig = {}): MiddlewareFunction {
+export function createValidationMiddleware(
+  config: ValidationConfig = {},
+): MiddlewareFunction {
   const {
     validateInput = true,
     maxPayloadSize = 1024 * 1024, // 1MB
@@ -217,9 +244,7 @@ export function createValidationMiddleware(config: ValidationConfig = {}): Middl
       for (const field of sanitizeFields) {
         if (req.body[field] && typeof req.body[field] === 'string') {
           // Basic sanitization - remove HTML tags and trim
-          req.body[field] = req.body[field]
-            .replace(/<[^>]*>/g, '')
-            .trim();
+          req.body[field] = req.body[field].replace(/<[^>]*>/g, '').trim();
         }
       }
 

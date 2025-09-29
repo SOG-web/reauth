@@ -24,6 +24,20 @@ import type {
   Token,
 } from './types';
 
+export type ReAuthConfig = {
+  dbClient: FumaClient;
+  plugins?: AuthPlugin[];
+  tokenFactory?: () => string;
+  authHooks?: AuthHook[];
+  sessionHooks?: AuthHook[];
+  enableCleanupScheduler?: boolean; // Default true
+  getUserData?: (
+    subjectId: string,
+    orm: OrmLike,
+  ) => Promise<Record<string, any>>;
+  useJwks?: boolean; // Default false
+};
+
 export class ReAuthEngine {
   private container: ReAuthCradle;
   private sessionResolvers: SessionResolvers;
@@ -38,19 +52,7 @@ export class ReAuthEngine {
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
 
-  constructor(config: {
-    dbClient: FumaClient;
-    plugins?: AuthPlugin[];
-    tokenFactory?: () => string;
-    authHooks?: AuthHook[];
-    sessionHooks?: AuthHook[];
-    enableCleanupScheduler?: boolean; // Default true
-    getUserData?: (
-      subjectId: string,
-      orm: OrmLike,
-    ) => Promise<Record<string, any>>;
-    useJwks?: boolean; // Default false
-  }) {
+  constructor(config: ReAuthConfig) {
     this.container = createContainer({
       injectionMode: InjectionMode.CLASSIC,
       strict: true,
@@ -457,4 +459,8 @@ export class ReAuthEngine {
       version: '1.0.0',
     };
   }
+}
+
+export default function createReAuthEngine(config: ReAuthConfig) {
+  return new ReAuthEngine(config);
 }

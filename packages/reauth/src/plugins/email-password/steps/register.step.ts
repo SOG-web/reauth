@@ -41,7 +41,7 @@ export const registerStep: AuthStep<
       verified: 'boolean',
       profile: 'object?',
     }),
-    'others?': 'object',
+    'others?': type('object').or(type('undefined')),
   }),
   async run(input, ctx) {
     const { email, password, others } = input;
@@ -64,6 +64,7 @@ export const registerStep: AuthStep<
         : undefined;
       const outSubject = {
         id: subject.id,
+        name: email,
         email,
         provider: 'email',
         verified: true,
@@ -149,6 +150,7 @@ export const registerStep: AuthStep<
 
     const outSubject = {
       id: subject.id,
+      name: email, // Use email as name for now
       email,
       provider: 'email',
       verified: false,
