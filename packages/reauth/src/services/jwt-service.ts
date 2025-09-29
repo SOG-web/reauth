@@ -42,7 +42,9 @@ export class EnhancedJWKSService implements JWTServiceType {
   ) {}
 
   async generateKeyPair(algorithm: string = 'RS256'): Promise<JWKSKey> {
-    const { publicKey, privateKey } = await generateKeyPair(algorithm);
+    const { publicKey, privateKey } = await generateKeyPair(algorithm, {
+      extractable: true,
+    });
     const keyId = this.generateKeyId();
 
     const publicJWK = JSON.stringify(await exportJWK(publicKey));
@@ -582,7 +584,7 @@ export class EnhancedJWKSService implements JWTServiceType {
   }
 
   async registerClient(
-    client: ReAuthClient,
+    client: Partial<ReAuthClient>,
   ): Promise<{ client: ReAuthClient; apiKey: string }> {
     const version = await this.dbClient.version();
     const orm = this.dbClient.orm(version);
@@ -605,12 +607,13 @@ export class EnhancedJWKSService implements JWTServiceType {
       client: {
         id: clientRecord.id as string,
         clientSecretHash: '[REDACTED]',
-        clientType: client.clientType,
-        name: client.name,
-        description: client.description,
-        isActive: client.isActive,
-        createdAt: client.createdAt,
-        updatedAt: client.updatedAt,
+        clientType: clientRecord.client_type as ClientType,
+        subjectId: clientRecord.subject_id as string,
+        name: clientRecord.name as string,
+        description: clientRecord.description as string,
+        isActive: clientRecord.is_active as boolean,
+        createdAt: clientRecord.created_at as Date,
+        updatedAt: clientRecord.updated_at as Date,
       },
       apiKey,
     };
@@ -633,6 +636,7 @@ export class EnhancedJWKSService implements JWTServiceType {
       clientSecretHash: clientRecord.client_secret_hash as string,
       clientType: clientRecord.client_type as ClientType,
       name: clientRecord.name as string,
+      subjectId: clientRecord.subject_id as string,
       description: clientRecord.description as string,
       isActive: clientRecord.is_active as boolean,
       createdAt: clientRecord.created_at as Date,
@@ -651,6 +655,7 @@ export class EnhancedJWKSService implements JWTServiceType {
       clientSecretHash: record.client_secret_hash as string,
       clientType: record.client_type as ClientType,
       name: record.name as string,
+      subjectId: record.subject_id as string,
       description: record.description as string,
       isActive: record.is_active as boolean,
       createdAt: record.created_at as Date,
@@ -677,6 +682,32 @@ export class EnhancedJWKSService implements JWTServiceType {
       clientSecretHash: clientRecord.client_secret_hash as string,
       clientType: clientRecord.client_type as ClientType,
       name: clientRecord.name as string,
+      subjectId: clientRecord.subject_id as string,
+      description: clientRecord.description as string,
+      isActive: clientRecord.is_active as boolean,
+      createdAt: clientRecord.created_at as Date,
+      updatedAt: clientRecord.updated_at as Date,
+    };
+  }
+
+  async getClientBySubjectId(subjectId: string): Promise<ReAuthClient> {
+    const version = await this.dbClient.version();
+    const orm = this.dbClient.orm(version);
+
+    const clientRecord = await orm.findFirst('reauth_clients', {
+      where: (b: any) => b('subject_id', '=', subjectId),
+    });
+
+    if (!clientRecord) {
+      throw new Error(`Client not found: ${subjectId}`);
+    }
+
+    return {
+      id: clientRecord.id as string,
+      clientSecretHash: clientRecord.client_secret_hash as string,
+      clientType: clientRecord.client_type as ClientType,
+      name: clientRecord.name as string,
+      subjectId: clientRecord.subject_id as string,
       description: clientRecord.description as string,
       isActive: clientRecord.is_active as boolean,
       createdAt: clientRecord.created_at as Date,
@@ -742,10 +773,18 @@ export class EnhancedJWKSService implements JWTServiceType {
     const version = await this.dbClient.version();
     const orm = this.dbClient.orm(version);
 
+    const keyRecord = await orm.findFirst('jwks_keys', {
+      where: (b: any) => b('key_id', '=', keyId),
+    });
+
+    if (!keyRecord) {
+      throw new Error(`Key not found: ${keyId}`);
+    }
+
     await orm.updateMany('jwks_keys', {
       where: (b: any) => b('key_id', '=', keyId),
       set: {
-        usage_count: (b: any) => b.increment('usage_count', 1),
+        usage_count: (keyRecord.usage_count as any) + 1,
         last_used_at: new Date(),
       },
     });

@@ -9,8 +9,8 @@ import { EnhancedJWKSService, ReAuthJWTPayload } from './services';
 // Minimal Fuma client interface used by
 // InferFumaDB<typeof ChatDB>
 export interface FumaClient {
-  version(): Promise<string>;
-  orm(version: string): OrmLike;
+  version(): Promise<any>;
+  orm(version: any): OrmLike;
 }
 
 export type JWKSKeys =

@@ -2,6 +2,7 @@ import type {
   HttpAdapterConfig,
   HttpRequest,
   AuthenticatedUser,
+  AuthStepRequest,
 } from '../types';
 import { ReAuthHttpAdapter } from '../base-adapter';
 import { Context, Hono } from 'hono';
@@ -127,20 +128,46 @@ export class HonoAdapter {
     app.get(`${basePath}/session`, this.createSessionCheckHandler());
 
     // Authentication step routes
-    app.post(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.get(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.put(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.patch(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.delete(`${basePath}/:plugin/:step`, this.createStepHandler());
+    const endpoints = this.adapter.getEndpoints();
+    for (const endpoint of endpoints) {
+      if (endpoint.method === 'POST') {
+        app.post(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'GET') {
+        app.get(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'PUT') {
+        app.put(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'PATCH') {
+        app.patch(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'DELETE') {
+        app.delete(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      }
+    }
   }
 
   /**
    * Create step execution handler
    */
-  private createStepHandler() {
+  private createStepHandler(pluginName: string, stepName: string) {
     return async (c: Context) => {
       try {
         const httpReq = this.extractRequest(c);
+
+        httpReq;
 
         // parse cookies
         const cookieHeader = c.req.header('cookie');
@@ -166,7 +193,15 @@ export class HonoAdapter {
           }
         }
 
-        const result = await this.adapter.executeAuthStep(httpReq as any);
+        const req: AuthStepRequest = {
+          ...httpReq,
+          plugin: {
+            name: pluginName,
+            step: stepName,
+          },
+        };
+
+        const result = await this.adapter.executeAuthStep(req);
 
         if (this.config.cookie) {
           const cookie = this.config.cookie;

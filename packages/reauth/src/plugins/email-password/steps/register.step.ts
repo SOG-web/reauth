@@ -39,9 +39,9 @@ export const registerStep: AuthStep<
       name: 'string',
       provider: 'string',
       verified: 'boolean',
-      profile: 'object?',
+      'profile?': 'object',
     }),
-    'others?': type('object').or(type('undefined')),
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { email, password, others } = input;
@@ -142,7 +142,7 @@ export const registerStep: AuthStep<
       }
     }
 
-    const loginOnRegister = ctx.config?.loginOnRegister ?? true;
+    const loginOnRegister = ctx.config?.loginOnRegister ?? false;
     const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
     const token = loginOnRegister
       ? await ctx.engine.createSessionFor('subject', subject.id as string, ttl)

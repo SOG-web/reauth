@@ -31,11 +31,10 @@ export type ReAuthConfig = {
   authHooks?: AuthHook[];
   sessionHooks?: AuthHook[];
   enableCleanupScheduler?: boolean; // Default true
-  getUserData?: (
+  getUserData: (
     subjectId: string,
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
-  useJwks?: boolean; // Default false
 };
 
 export class ReAuthEngine {
@@ -47,7 +46,7 @@ export class ReAuthEngine {
   private pluginMap = new Map<string, AuthPlugin>();
   private authHooks: AuthHook[] = [];
   private sessionHooks: AuthHook[] = [];
-  private getUserData?: (
+  private getUserData: (
     subjectId: string,
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
@@ -58,12 +57,6 @@ export class ReAuthEngine {
       strict: true,
     });
 
-    if (config.useJwks && !config.getUserData) {
-      throw new Error(
-        'getUserData function must be provided when useJwks is enabled',
-      );
-    }
-
     this.sessionResolvers = new InMemorySessionResolvers();
     this.sessionService = new FumaSessionService(
       config.dbClient,
@@ -71,6 +64,7 @@ export class ReAuthEngine {
       config.tokenFactory,
       config.getUserData,
     );
+
     this.getUserData = config.getUserData;
     this.cleanupScheduler = new SimpleCleanupScheduler(() => this.getOrm());
 
@@ -78,6 +72,7 @@ export class ReAuthEngine {
       dbClient: asValue(config.dbClient),
       sessionResolvers: asValue(this.sessionResolvers),
       sessionService: asValue(this.sessionService),
+      engine: asValue(this),
     });
 
     for (const plugin of config.plugins || []) this.registerPlugin(plugin);
@@ -437,27 +432,43 @@ export class ReAuthEngine {
     generatedAt: string;
     version: string;
   } {
-    return {
-      entity: {
-        type: 'object',
-        properties: {},
-        required: [],
-      },
-      plugins: this.plugins.map((p) => ({
-        name: p.name,
-        description: `${p.name} authentication plugin`,
-        steps: (p.steps || []).map((s) => ({
-          name: s.name,
-          description: s.description,
-          inputs: s.validationSchema?.toJsonSchema() || {},
-          outputs: s.outputs?.toJsonSchema() || {},
-          protocol: s.protocol || {},
-          requiresAuth: Boolean(s.protocol?.http?.auth || false),
+    try {
+      return {
+        entity: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+        plugins: this.plugins.map((p) => ({
+          name: p.name,
+          description: `${p.name} authentication plugin`,
+          steps: (p.steps || []).map((s) => {
+            return {
+              name: s.name,
+              description: s.description,
+              inputs: s.validationSchema?.toJsonSchema() || {},
+              outputs: s.outputs?.toJsonSchema() || {},
+              protocol: s.protocol || {},
+              requiresAuth: Boolean(s.protocol?.http?.auth || false),
+            };
+          }),
         })),
-      })),
-      generatedAt: new Date().toISOString(),
-      version: '1.0.0',
-    };
+        generatedAt: new Date().toISOString(),
+        version: '1.0.0',
+      };
+    } catch (error) {
+      console.error(error);
+      return {
+        entity: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+        plugins: [],
+        generatedAt: new Date().toISOString(),
+        version: '1.0.0',
+      };
+    }
   }
 }
 

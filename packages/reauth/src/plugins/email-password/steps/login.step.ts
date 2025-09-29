@@ -42,9 +42,9 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
         name: 'string',
         provider: 'string',
         verified: 'boolean',
-        profile: 'object?',
+        'profile?': 'object',
       }),
-      'others?': type('object').or(type('undefined')),
+      'others?': type('object'),
     }),
     async run(input, ctx) {
       const { email, password, others } = input;

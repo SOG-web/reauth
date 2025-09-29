@@ -9,8 +9,11 @@ import buildSchema from './base.schema';
  *   const factory = reauthDb([pluginSchemaA, pluginSchemaB])
  *   const client = factory.client(kyselyAdapter({ provider: 'postgres', db }))
  */
-export const reauthDb = (plugins: ReauthSchemaPlugin[] = []) => {
-  const schema = buildSchema(plugins);
+export const reauthDb = (
+  version: string,
+  plugins: ReauthSchemaPlugin[] = [],
+) => {
+  const schema = buildSchema(version, plugins);
   return fumadb({
     namespace: 'reauth',
     schemas: [schema],

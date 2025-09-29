@@ -186,8 +186,9 @@ export interface RouteHandler {
 }
 
 export interface AuthStepRequest extends HttpRequest {
-  params: {
-    plugin: string;
+  params: Record<string, string>;
+  plugin: {
+    name: string;
     step: string;
   };
 }

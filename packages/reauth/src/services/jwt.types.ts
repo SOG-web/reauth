@@ -15,6 +15,7 @@ export interface ReAuthClient {
   id: string;
   clientSecretHash?: string; // Only for confidential clients
   clientType: ClientType;
+  subjectId: string;
   name: string;
   description?: string;
   isActive: boolean;
@@ -170,6 +171,7 @@ export interface EnhancedJWKSServiceType {
     client: ReAuthClient,
   ): Promise<{ client: ReAuthClient; apiKey: string }>;
   getClientById(id: string): Promise<ReAuthClient>;
+  getClientBySubjectId(subjectId: string): Promise<ReAuthClient>;
   getAllClients(): Promise<ReAuthClient[]>;
   getClientByApiKey(apiKey: string): Promise<ReAuthClient>;
   getPublicJWK(): Promise<JWK>;

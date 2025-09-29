@@ -6,6 +6,7 @@ import type {
   HttpRequest,
   MiddlewareFunction,
   AuthenticatedUser,
+  AuthStepRequest,
 } from '../types';
 import { ReAuthHttpAdapter } from '../base-adapter';
 
@@ -138,11 +139,49 @@ export class ExpressAdapter
     router.get(`${basePath}/health`, this.createHealthHandler());
 
     // Authentication step routes
-    router.post(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.get(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.put(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.patch(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.delete(`${basePath}/:plugin/:step`, this.createStepHandler());
+    const endpoints = this.adapter.getEndpoints();
+    for (const endpoint of endpoints) {
+      if (endpoint.method === 'POST') {
+        router.post(endpoint.path, (req: Request, res: Response) =>
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'GET') {
+        router.get(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'PUT') {
+        router.put(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'PATCH') {
+        router.patch(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'DELETE') {
+        router.delete(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      }
+    }
 
     return router;
   }
@@ -150,11 +189,23 @@ export class ExpressAdapter
   /**
    * Create step execution handler
    */
-  private createStepHandler(): (req: Request, res: Response) => Promise<void> {
+  private createStepHandler(plugin: {
+    name: string;
+    step: string;
+  }): (req: Request, res: Response) => Promise<void> {
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
-        const result = await this.adapter.executeAuthStep(httpReq as any);
+
+        const request: AuthStepRequest = {
+          ...httpReq,
+          plugin: {
+            name: plugin.name,
+            step: plugin.step,
+          },
+        };
+
+        const result = await this.adapter.executeAuthStep(request);
         this.sendResponse(res, result, result.status);
       } catch (error) {
         this.handleError(res, error as Error);

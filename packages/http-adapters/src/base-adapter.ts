@@ -80,11 +80,11 @@ export class ReAuthHttpAdapter {
    * Execute authentication step
    */
   async executeAuthStep(req: AuthStepRequest): Promise<AuthStepResponse> {
-    const { plugin: pluginName, step: stepName } = req.params;
-
-    const endpoint = this.getEndpoint(pluginName, stepName);
+    const endpoint = this.getEndpoint(req.plugin.name, req.plugin.step);
     if (!endpoint) {
-      throw new NotFoundError(`Endpoint not found: ${pluginName}/${stepName}`);
+      throw new NotFoundError(
+        `Endpoint not found: ${req.plugin.name}/${req.plugin.step}`,
+      );
     }
 
     // Check authentication if required
@@ -100,11 +100,15 @@ export class ReAuthHttpAdapter {
 
     try {
       // Execute the step
-      const output = await this.engine.executeStep(pluginName, stepName, input);
+      const output = await this.engine.executeStep(
+        endpoint.pluginName,
+        endpoint.stepName,
+        input,
+      );
 
       // Return standardized response
-      const pl = this.engine.getPlugin(pluginName);
-      const step = pl?.steps?.find((s) => s.name === stepName);
+      const pl = this.engine.getPlugin(endpoint.pluginName);
+      const step = pl?.steps?.find((s) => s.name === endpoint.stepName);
 
       const status = step?.protocol?.http?.codes?.[output.status] || 200;
 
@@ -124,7 +128,7 @@ export class ReAuthHttpAdapter {
         `Step execution failed: ${error instanceof Error ? error.message : String(error)}`,
         500,
         'STEP_EXECUTION_ERROR',
-        { pluginName, stepName, error },
+        { pluginName: endpoint.pluginName, stepName: endpoint.stepName, error },
       );
     }
   }
@@ -429,6 +433,7 @@ export class ReAuthHttpAdapter {
     const input: AuthInput = {
       ...req.body,
       ...req.query,
+      ...req.params,
     };
 
     // Add session token if available
