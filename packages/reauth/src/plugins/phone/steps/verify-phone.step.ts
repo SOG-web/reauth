@@ -13,7 +13,7 @@ export type VerifyPhoneInput = {
 export const verifyPhoneValidation = type({
   phone: phoneSchema,
   code: 'string | number',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const verifyPhoneStep: AuthStep<
@@ -36,7 +36,7 @@ export const verifyPhoneStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { phone, code, others } = input;

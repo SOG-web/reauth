@@ -12,7 +12,7 @@ export type ResendVerifyPhoneInput = {
 
 export const resendVerifyPhoneValidation = type({
   phone: phoneSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const resendVerifyPhoneStep: AuthStep<
@@ -35,7 +35,7 @@ export const resendVerifyPhoneStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { phone, others } = input;

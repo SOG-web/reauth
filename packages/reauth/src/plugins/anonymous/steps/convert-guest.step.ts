@@ -21,7 +21,7 @@ export const convertGuestValidation = type({
   conversionData: 'object',
   targetPlugin: 'string',
   preserveMetadata: 'boolean?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const convertGuestStep: AuthStep<
@@ -70,7 +70,7 @@ export const convertGuestStep: AuthStep<
       temporary: 'boolean',
       metadata: 'object?',
     }),
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const {

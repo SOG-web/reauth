@@ -1,5 +1,9 @@
 import { type } from 'arktype';
-import type { AuthStepV2, AuthOutput, SessionServiceV2 } from '../../../types.v2';
+import type {
+  AuthStepV2,
+  AuthOutput,
+  SessionServiceV2,
+} from '../../../types.v2';
 import type { SessionConfigV2 } from '../types';
 
 export type LogoutInput = {
@@ -9,7 +13,7 @@ export type LogoutInput = {
 
 export const logoutValidation = type({
   token: 'string',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export type LogoutOutput = AuthOutput & {
@@ -37,7 +41,7 @@ export const logoutStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'sessionDestroyed?': 'boolean',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, others } = input;
@@ -45,7 +49,7 @@ export const logoutStep: AuthStepV2<
     try {
       // Verify the session exists and is valid
       const { subject } = await ctx.engine.checkSession(token);
-      
+
       if (!subject) {
         return {
           success: false,
@@ -57,8 +61,9 @@ export const logoutStep: AuthStepV2<
       }
 
       // Get the session service and destroy the session via DI container (type-safe)
-      const sessionService = ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
-      
+      const sessionService =
+        ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
+
       if (!sessionService) {
         return {
           success: false,

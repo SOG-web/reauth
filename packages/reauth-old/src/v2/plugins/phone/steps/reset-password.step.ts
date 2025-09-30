@@ -22,7 +22,7 @@ export const resetPasswordValidation = type({
   phone: phoneSchema,
   code: 'string | number',
   newPassword: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const resetPasswordStep: AuthStep<
@@ -45,7 +45,7 @@ export const resetPasswordStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { phone, code, newPassword, others } = input;

@@ -11,7 +11,7 @@ export type VerifyEmailInput = {
 export const verifyEmailValidation = type({
   email: 'string.email',
   code: 'string',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const verifyEmailStep: AuthStep<
@@ -34,7 +34,7 @@ export const verifyEmailStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    others: 'object?',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { email, code, others } = input;

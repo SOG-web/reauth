@@ -61,46 +61,45 @@ export default createReAuthEngine({
     }),
   ],
   authHooks: [
-    {
-      type: 'after',
-      universal: true,
-      fn: async (
-        data: AuthInput | AuthOutput,
-        container: ReAuthCradle,
-        error?: unknown,
-      ) => {
-        return {
-          ...data,
-          others: {
-            ...data.others,
-            test: 'test',
-          },
-        };
-      },
-    },
-    {
-      type: 'before',
-      universal: true,
-      fn: async (
-        data: AuthInput | AuthOutput,
-        container: ReAuthCradle,
-        error?: unknown,
-      ) => {
-        console.log(data);
-
-        const ses = await container
-          .resolve('engine')
-          .checkSession(data.token ?? '');
-        console.log(ses);
-        return {
-          ...data,
-          others: {
-            ...data.others,
-            test: 'test',
-          },
-        };
-      },
-    },
+    // {
+    //   type: 'after',
+    //   universal: true,
+    //   fn: async (
+    //     data: AuthInput | AuthOutput,
+    //     container: ReAuthCradle,
+    //     error?: unknown,
+    //   ) => {
+    //     return {
+    //       ...data,
+    //       others: {
+    //         ...data.others,
+    //         test: 'test',
+    //       },
+    //     };
+    //   },
+    // },
+    // {
+    //   type: 'before',
+    //   universal: true,
+    //   fn: async (
+    //     data: AuthInput | AuthOutput,
+    //     container: ReAuthCradle,
+    //     error?: unknown,
+    //   ) => {
+    //     console.log(data);
+    //     const ses = await container
+    //       .resolve('engine')
+    //       .checkSession(data.token ?? '');
+    //     console.log(ses);
+    //     return {
+    //       ...data,
+    //       others: {
+    //         ...data.others,
+    //         test: 'test',
+    //       },
+    //     };
+    //   },
+    // },
   ],
   enableCleanupScheduler: true,
   getUserData: async (subjectId, orm) => {

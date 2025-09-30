@@ -15,7 +15,7 @@ export type RegisterInput = {
 export const registerValidation = type({
   email: 'string.email',
   password: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const registerStep: AuthStep<
@@ -36,12 +36,11 @@ export const registerStep: AuthStep<
     'subject?': type({
       id: 'string',
       email: 'string',
-      name: 'string',
       provider: 'string',
       verified: 'boolean',
       'profile?': 'object',
     }),
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { email, password, others } = input;
@@ -64,7 +63,6 @@ export const registerStep: AuthStep<
         : undefined;
       const outSubject = {
         id: subject.id,
-        name: email,
         email,
         provider: 'email',
         verified: true,
@@ -125,6 +123,10 @@ export const registerStep: AuthStep<
       verified: false,
     });
 
+    await orm.create('email_identities', {
+      identity_id: identity.id,
+    });
+
     if (ctx.config?.verifyEmail) {
       const code = ctx.config?.generateCode
         ? await ctx.config.generateCode(email, { id: subject.id })
@@ -132,25 +134,31 @@ export const registerStep: AuthStep<
       const hashedCode = await hashPassword(String(code));
       const ms = ctx.config?.verificationCodeExpiresIn ?? 30 * 60 * 1000;
       const expiresAt = new Date(Date.now() + ms);
-      await orm.create('email_identities', {
-        identity_id: identity.id,
-        verification_code: hashedCode,
-        verification_code_expires_at: expiresAt,
+      await orm.upsert('email_identities', {
+        where: (b) => b('identity_id', '=', identity.id),
+        create: {
+          identity_id: identity.id,
+          verification_code: hashedCode,
+          verification_code_expires_at: expiresAt,
+        },
+        update: {
+          verification_code: hashedCode,
+          verification_code_expires_at: expiresAt,
+        },
       });
       if (ctx.config?.sendCode) {
         await ctx.config.sendCode({ id: subject.id }, code, email, 'verify');
       }
     }
 
-    const loginOnRegister = ctx.config?.loginOnRegister ?? false;
-    const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
+    const loginOnRegister = ctx.config?.loginOnRegister || false;
+    const ttl = ctx.config?.sessionTtlSeconds || 60 * 15;
     const token = loginOnRegister
       ? await ctx.engine.createSessionFor('subject', subject.id as string, ttl)
       : undefined;
 
     const outSubject = {
       id: subject.id,
-      name: email, // Use email as name for now
       email,
       provider: 'email',
       verified: false,

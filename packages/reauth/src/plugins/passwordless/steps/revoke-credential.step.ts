@@ -17,7 +17,7 @@ export type RevokeCredentialInput = {
 export const revokeCredentialValidation = type({
   token: tokenType,
   credential_id: 'string',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const revokeCredentialStep: AuthStep<
@@ -41,7 +41,7 @@ export const revokeCredentialStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
     'token?': tokenType,
   }),
   async run(input, ctx) {

@@ -10,7 +10,7 @@ export type ResendVerificationInput = {
 };
 export const resendVerificationValidation = type({
   email: 'string.email',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const resendVerificationStep: AuthStep<
@@ -33,7 +33,7 @@ export const resendVerificationStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { email, others } = input;

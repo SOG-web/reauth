@@ -12,7 +12,7 @@ export type CleanupExpiredInput = {
 export const cleanupExpiredValidation = type({
   force: 'boolean?',
   dryRun: 'boolean?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const cleanupExpiredStep: AuthStep<
@@ -41,7 +41,7 @@ export const cleanupExpiredStep: AuthStep<
     'retentionDays?': 'number',
     'subjectRetentionDays?': 'number',
     'dryRun?': 'boolean',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { force = false, dryRun = false, others } = input;

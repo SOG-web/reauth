@@ -19,7 +19,7 @@ export const authenticateApiKeyValidation = type({
   endpoint: 'string?',
   ip_address: 'string?',
   user_agent: 'string?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const authenticateApiKeyStep: AuthStep<
@@ -66,7 +66,7 @@ export const authenticateApiKeyStep: AuthStep<
       scopes: 'string[]',
     }),
     'api_key_id?': 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
 
   async run(input, ctx) {

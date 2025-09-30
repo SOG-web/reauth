@@ -26,7 +26,7 @@ export const createApiKeyValidation = type({
   scopes: 'string[]?',
   expires_at: 'Date?',
   ttl_days: 'number?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const createApiKeyStep: AuthStep<
@@ -69,7 +69,7 @@ export const createApiKeyStep: AuthStep<
       api_key: 'string',
       metadata: 'object',
     }), // Contains CreateApiKeyOutput
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
 
   async run(input, ctx) {

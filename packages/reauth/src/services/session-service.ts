@@ -301,7 +301,7 @@ export class FumaSessionService implements SessionService {
     const accessToken = typeof token === 'string' ? token : token.accessToken;
     const refreshToken = typeof token === 'string' ? null : token.refreshToken;
 
-    console.log('accessToken', token);
+    console.log('accessToken', accessToken);
 
     // Always check session table first for unified management
     let session = await orm.findFirst('sessions', {
@@ -475,6 +475,10 @@ export class FumaSessionService implements SessionService {
         };
       } catch (refreshError) {
         console.log('refresh failed', refreshError);
+        await orm.deleteMany('sessions', {
+          where: (b: any) => b('token', '=', accessToken),
+        });
+        await this.jwtService.revokeRefreshToken(refreshToken, 'security');
         // Refresh failed, return null (session invalid)
         return { subject: null, token: null };
       }
@@ -482,6 +486,10 @@ export class FumaSessionService implements SessionService {
 
     // Normal flow - session is valid and not expiring soon
     if (sessionExpired) {
+      // delete the expired session
+      await orm.deleteMany('sessions', {
+        where: (b: any) => b('token', '=', accessToken),
+      });
       return { subject: null, token: null };
     }
 

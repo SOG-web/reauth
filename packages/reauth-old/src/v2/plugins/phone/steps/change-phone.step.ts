@@ -19,7 +19,7 @@ export const changePhoneValidation = type({
   token: 'string',
   currentPassword: passwordSchema,
   newPhone: phoneSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const changePhoneStep: AuthStep<
@@ -43,7 +43,7 @@ export const changePhoneStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, currentPassword, newPhone, others } = input;

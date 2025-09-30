@@ -15,7 +15,7 @@ export type SendMagicLinkInput = {
 
 export const sendMagicLinkValidation = type({
   email: 'string.email',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const sendMagicLinkStep: AuthStep<
@@ -38,7 +38,7 @@ export const sendMagicLinkStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { email, others } = input;

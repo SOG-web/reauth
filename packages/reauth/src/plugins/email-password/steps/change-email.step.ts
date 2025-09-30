@@ -22,7 +22,7 @@ export const changeEmailValidation = type({
   token: tokenType,
   currentPassword: passwordSchema,
   newEmail: emailSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const changeEmailStep: AuthStep<
@@ -46,7 +46,7 @@ export const changeEmailStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
     'token?': tokenType,
   }),
   async run(input, ctx) {

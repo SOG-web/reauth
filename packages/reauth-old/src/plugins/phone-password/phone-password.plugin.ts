@@ -10,7 +10,7 @@ import { passwordSchema, phoneSchema } from '../shared/validation';
 const loginValidation = type({
   phone: phoneSchema,
   password: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 // Helper function to check if environment supports test users
@@ -343,7 +343,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       validationSchema: type({
         phone: phoneSchema,
         code: 'string',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async function (input, pluginProperties) {
         const { container } = pluginProperties!;
@@ -441,7 +441,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
       description: 'Send reset password code',
       validationSchema: type({
         phone: phoneSchema,
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       outputs: type({
         success: 'boolean',
@@ -525,7 +525,7 @@ const plugin: AuthPlugin<PhonePasswordConfig> = {
         phone: phoneSchema,
         code: 'string',
         password: passwordSchema,
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       outputs: type({
         success: 'boolean',
