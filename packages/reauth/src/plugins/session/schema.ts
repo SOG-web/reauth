@@ -5,14 +5,7 @@ import type { ReauthSchemaPlugin } from '../../types';
 export const sessionDevices = table('session_devices', {
   id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
   session_id: column('session_id', 'varchar(255)'),
-  fingerprint: column('fingerprint', 'varchar(500)').nullable(),
-  user_agent: column('user_agent', 'varchar(1000)').nullable(),
-  ip_address: column('ip_address', 'varchar(45)').nullable(),
-  location: column('location', 'varchar(255)').nullable(),
-  first_seen_at: column('first_seen_at', 'timestamp').defaultTo$('now'),
-  last_seen_at: column('last_seen_at', 'timestamp').defaultTo$('now'),
-  is_trusted: column('is_trusted', 'bool').defaultTo$(() => false),
-  device_name: column('device_name', 'varchar(255)').nullable(),
+  device_info: column('device_info', 'json'),
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
 });
