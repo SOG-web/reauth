@@ -28,6 +28,7 @@ export interface ReAuthJWTPayload extends JWTPayload {
   sub: string; // subject_id
   subject_type: string; // Custom claim for subject type (e.g., 'user', 'guest')
   userData?: Record<string, any>; // Additional user data
+  deviceInfo?: Record<string, any>; // Flexible device info
 }
 
 // JWKS Key Management
@@ -127,11 +128,7 @@ export interface EnhancedJWKSServiceType {
   // Token pair operations
   createTokenPair(
     payload: ReAuthJWTPayload,
-    deviceInfo?: {
-      fingerprint?: string;
-      ipAddress?: string;
-      userAgent?: string;
-    },
+    deviceInfo?: Record<string, any>,
   ): Promise<TokenPair>;
 
   // Refresh token operations

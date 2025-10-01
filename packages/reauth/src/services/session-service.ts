@@ -4,6 +4,7 @@ import type {
   OrmLike,
   SessionResolvers,
   SessionService,
+  SessionServiceOptions,
   Subject,
   Token,
 } from '../types';
@@ -25,6 +26,7 @@ export class FumaSessionService implements SessionService {
       subjectId: string,
       orm: OrmLike,
     ) => Promise<Record<string, any>>,
+    private options: SessionServiceOptions = {},
   ) {}
 
   // Enable JWKS functionality
@@ -59,13 +61,13 @@ export class FumaSessionService implements SessionService {
   }
 
   // Hybrid token verification - supports both JWT and legacy tokens
-  async verifyToken(token: Token): Promise<{
+  async verifyToken(token: Token, deviceInfo?: Record<string, any>): Promise<{
     subject: any | null;
     token: Token | null;
     type: 'jwt' | 'legacy';
     payload?: ReAuthJWTPayload;
   }> {
-    const result = await this.verifySession(token);
+    const result = await this.verifySession(token, deviceInfo);
     return {
       subject: result.subject,
       token: result.token,
@@ -174,17 +176,14 @@ export class FumaSessionService implements SessionService {
 
     // If enhanced mode is enabled and we have additional data, store it
     if (this.enhancedMode) {
-      const sessionId = session.id || token; // Use session ID or token as fallback
+      const sessionId = session.id; // Use session ID or token as fallback
 
       // Store device information if provided
       if (options.deviceInfo) {
         await orm.create('session_devices', {
           session_id: sessionId,
-          fingerprint: options.deviceInfo.fingerprint,
-          user_agent: options.deviceInfo.userAgent,
-          ip_address: options.deviceInfo.ipAddress,
-          is_trusted: options.deviceInfo.isTrusted || false,
-          device_name: options.deviceInfo.deviceName,
+          device_info: JSON.stringify(options.deviceInfo), // Store as JSON
+          // ... other fields can be removed or kept for compatibility
         });
       }
 
@@ -230,7 +229,7 @@ export class FumaSessionService implements SessionService {
 
     for (const session of sessions) {
       const sessionData: any = {
-        sessionId: session.id || session.token,
+        sessionId: session.id,
         token: session.token,
         createdAt: session.created_at,
         expiresAt: session.expires_at,
@@ -238,7 +237,7 @@ export class FumaSessionService implements SessionService {
 
       // If enhanced mode, fetch additional data
       if (this.enhancedMode) {
-        const sessionId = session.id || session.token;
+        const sessionId = session.id;
 
         // Get device info
         const deviceInfo = await orm.findFirst('session_devices', {
@@ -246,13 +245,11 @@ export class FumaSessionService implements SessionService {
         });
 
         if (deviceInfo) {
-          sessionData.deviceInfo = {
-            fingerprint: (deviceInfo as any).fingerprint,
-            userAgent: (deviceInfo as any).user_agent,
-            ipAddress: (deviceInfo as any).ip_address,
-            isTrusted: (deviceInfo as any).is_trusted,
-            deviceName: (deviceInfo as any).device_name,
-          };
+          try {
+            sessionData.deviceInfo = JSON.parse((deviceInfo as any).device_info);
+          } catch {
+            sessionData.deviceInfo = {}; // fallback if JSON invalid
+          }
         }
 
         // Get metadata
@@ -280,7 +277,7 @@ export class FumaSessionService implements SessionService {
     return result;
   }
 
-  async verifySession(token: Token): Promise<{
+  async verifySession(token: Token, deviceInfo?: Record<string, any>): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';
@@ -315,12 +312,13 @@ export class FumaSessionService implements SessionService {
     }
 
     // Check session expiration and if it's about to expire (within 1 minute)
+    const currentNow = new Date();
     const sessionExpiresAt = (session as any).expires_at;
     if (sessionExpiresAt) {
       const expirationDate = new Date(sessionExpiresAt);
-      const oneMinuteFromNow = new Date(now.getTime() + 1 * 60 * 1000);
+      const oneMinuteFromNow = new Date(currentNow.getTime() + 1 * 60 * 1000);
 
-      if (expirationDate <= now) {
+      if (expirationDate <= currentNow) {
         sessionExpired = true;
       } else if (expirationDate <= oneMinuteFromNow) {
         needsRefresh = true;
@@ -334,11 +332,19 @@ export class FumaSessionService implements SessionService {
       payload,
     });
 
-    // Try JWT verification if enabled
-    if ((!needsRefresh || !sessionExpired) && this.jwtService && accessToken) {
+    // Try JWT verification first (for optimization)
+    if (this.jwtService && accessToken) {
       try {
         payload = await this.jwtService.verifyJWT(accessToken);
         isJWT = true;
+        
+        // Device validation for JWT tokens
+        if (deviceInfo && payload.deviceInfo && this.options.deviceValidator) {
+          if (!this.options.deviceValidator(payload.deviceInfo, deviceInfo)) {
+            console.log('Device validation failed');
+            return { subject: null, token: null };
+          }
+        }
       } catch (jwtError: any) {
         // JWT verification failed, could be expired
         isJWT = false;
@@ -397,11 +403,7 @@ export class FumaSessionService implements SessionService {
 
             await orm.create('session_devices', {
               session_id: newSessionId,
-              fingerprint: (deviceInfo as any).fingerprint,
-              user_agent: (deviceInfo as any).user_agent,
-              ip_address: (deviceInfo as any).ip_address,
-              is_trusted: (deviceInfo as any).is_trusted,
-              device_name: (deviceInfo as any).device_name,
+              device_info: (deviceInfo as any).device_info, // Copy JSON as-is
             });
           }
 

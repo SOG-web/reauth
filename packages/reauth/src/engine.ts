@@ -35,6 +35,7 @@ export type ReAuthConfig = {
     subjectId: string,
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
+  deviceValidator?: (storedDeviceInfo: Record<string, any>, currentDeviceInfo: Record<string, any>) => boolean;
 };
 
 export class ReAuthEngine {
@@ -63,6 +64,7 @@ export class ReAuthEngine {
       this.sessionResolvers,
       config.tokenFactory,
       config.getUserData,
+      { deviceValidator: config.deviceValidator },
     );
 
     this.getUserData = config.getUserData;
@@ -142,49 +144,62 @@ export class ReAuthEngine {
     subjectType: string,
     subjectId: string,
     ttlSeconds?: number,
+    deviceInfo?: Record<string, any>,
   ): Promise<Token> {
     await this.executeSessionHooks('before', {
       subjectType,
       subjectId,
       ttlSeconds,
+      deviceInfo,
     });
     try {
-      const token = await this.sessionService.createSession(
-        subjectType,
-        subjectId,
-        ttlSeconds,
-      );
+      let token: Token;
+      if (this.sessionService.createSessionWithMetadata) {
+        token = await this.sessionService.createSessionWithMetadata(
+          subjectType,
+          subjectId,
+          { ttlSeconds, deviceInfo },
+        );
+      } else {
+        token = await this.sessionService.createSession(
+          subjectType,
+          subjectId,
+          ttlSeconds,
+        );
+      }
       await this.executeSessionHooks('after', {
         token,
         subjectType,
         subjectId,
         ttlSeconds,
+        deviceInfo,
       });
       return token;
     } catch (error) {
       await this.executeSessionHooks(
         'onError',
-        { subjectType, subjectId, ttlSeconds },
+        { subjectType, subjectId, ttlSeconds, deviceInfo },
         error,
       );
       throw error;
     }
   }
 
-  async checkSession(token: Token): Promise<{
+  async checkSession(token: Token, deviceInfo?: Record<string, any>): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';
     payload?: ReAuthJWTPayload;
     valid: boolean;
   }> {
-    await this.executeSessionHooks('before', { token });
-    const ses = await this.sessionService.verifySession(token);
+    await this.executeSessionHooks('before', { token, deviceInfo });
+    const ses = await this.sessionService.verifySession(token, deviceInfo);
     await this.executeSessionHooks('after', {
       subject: ses.subject,
       token: ses.token,
       type: ses.type,
       payload: ses.payload,
+      deviceInfo,
     });
     return {
       ...ses,

@@ -143,11 +143,15 @@ export class ReAuthHttpAdapter {
       throw new ValidationError('subjectType and subjectId are required');
     }
 
+    // Extract device info for session creation
+    const deviceInfo = this.config.deviceInfoExtractor?.(req);
+
     try {
       const token = await this.engine.createSessionFor(
         subjectType,
         subjectId,
         ttlSeconds,
+        deviceInfo,
       );
 
       return {
@@ -190,8 +194,11 @@ export class ReAuthHttpAdapter {
       };
     }
 
+    // Extract device info for validation
+    const deviceInfo = this.config.deviceInfoExtractor?.(req);
+
     try {
-      const result = await this.engine.checkSession(token);
+      const result = await this.engine.checkSession(token, deviceInfo);
 
       if (!result.subject) {
         return {
@@ -442,7 +449,12 @@ export class ReAuthHttpAdapter {
       input.token = token;
     }
 
-    // Add request metadata
+    // Extract device info using configurable extractor
+    if (this.config.deviceInfoExtractor) {
+      input.deviceInfo = this.config.deviceInfoExtractor(req);
+    }
+
+    // Add request metadata for backward compatibility
     if (req.ip) {
       input.ip = req.ip;
     }
@@ -463,8 +475,11 @@ export class ReAuthHttpAdapter {
       return null;
     }
 
+    // Extract device info for validation
+    const deviceInfo = this.config.deviceInfoExtractor?.(req);
+
     try {
-      const session = await this.engine.checkSession(token);
+      const session = await this.engine.checkSession(token, deviceInfo);
 
       if (!session.valid || !session.subject) {
         return null;

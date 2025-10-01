@@ -331,13 +331,14 @@ export class EnhancedJWKSService implements JWTServiceType {
   // Token pair operations
   async createTokenPair(
     payload: ReAuthJWTPayload,
-    deviceInfo?: {
-      fingerprint?: string;
-      ipAddress?: string;
-      userAgent?: string;
-    },
+    deviceInfo?: Record<string, any>,
     ttlSeconds?: number,
   ): Promise<TokenPair> {
+    // Embed device info in payload
+    if (deviceInfo) {
+      payload.deviceInfo = deviceInfo;
+    }
+
     // Generate access token with custom TTL if provided
     const accessToken = await this.signJWT(payload, undefined, ttlSeconds);
 
