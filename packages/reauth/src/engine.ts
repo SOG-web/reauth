@@ -35,7 +35,10 @@ export type ReAuthConfig = {
     subjectId: string,
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
-  deviceValidator?: (storedDeviceInfo: Record<string, any>, currentDeviceInfo: Record<string, any>) => boolean;
+  deviceValidator?: (
+    storedDeviceInfo: Record<string, any>,
+    currentDeviceInfo: Record<string, any>,
+  ) => boolean | Promise<boolean>;
 };
 
 export class ReAuthEngine {
@@ -185,7 +188,10 @@ export class ReAuthEngine {
     }
   }
 
-  async checkSession(token: Token, deviceInfo?: Record<string, any>): Promise<{
+  async checkSession(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';

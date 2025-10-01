@@ -15,12 +15,29 @@ export class ExpressAdapter
 {
   public readonly name = 'express';
   private adapter: ReAuthHttpAdapter;
+  private generateDeviceInfo?: (
+    request: Request,
+  ) => Promise<Record<string, any>>;
 
   constructor(
     config: HttpAdapterConfig,
     private exposeIntrospection: boolean,
+    generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
   ) {
     this.adapter = new ReAuthHttpAdapter(config);
+    this.generateDeviceInfo = generateDeviceInfo;
+  }
+
+  /**
+   * Generate device info from request
+   */
+  async generateDeviceInfoInternal(request: Request): Promise<Record<string, any>> {
+    if (!this.generateDeviceInfo) {
+      return {};
+    }
+
+    const deviceInfo = await this.generateDeviceInfo(request);
+    return deviceInfo;
   }
 
   /**
@@ -38,7 +55,8 @@ export class ExpressAdapter
     ): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
-        (req as any).user = await this.adapter.getCurrentUser(httpReq);
+        const deviceInfo = await this.generateDeviceInfoInternal(req);
+        (req as any).user = await this.adapter.getCurrentUser(httpReq, deviceInfo);
         next();
       } catch (error) {
         // Don't fail the request if user lookup fails, just continue with req.user = null
@@ -205,7 +223,9 @@ export class ExpressAdapter
           },
         };
 
-        const result = await this.adapter.executeAuthStep(request);
+        const deviceInfo = await this.generateDeviceInfoInternal(req);
+
+        const result = await this.adapter.executeAuthStep(request, deviceInfo);
         this.sendResponse(res, result, result.status);
       } catch (error) {
         this.handleError(res, error as Error);
@@ -223,7 +243,8 @@ export class ExpressAdapter
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
-        const result = await this.adapter.checkSession(httpReq as any);
+        const deviceInfo = await this.generateDeviceInfoInternal(req);
+        const result = await this.adapter.checkSession(httpReq as any, deviceInfo);
         this.sendResponse(res, result);
       } catch (error) {
         this.handleError(res, error as Error);
@@ -315,7 +336,8 @@ export class ExpressAdapter
 
     // Otherwise, check session
     const httpReq = this.extractRequest(req);
-    return await this.adapter.getCurrentUser(httpReq);
+    const deviceInfo = await this.generateDeviceInfoInternal(req);
+    return await this.adapter.getCurrentUser(httpReq, deviceInfo);
   }
 
   /**
@@ -332,8 +354,9 @@ export class ExpressAdapter
 export function createExpressAdapter(
   config: HttpAdapterConfig,
   exposeIntrospection: boolean = false,
+  generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
 ): ExpressAdapter {
-  return new ExpressAdapter(config, exposeIntrospection);
+  return new ExpressAdapter(config, exposeIntrospection, generateDeviceInfo);
 }
 
 /**
@@ -342,7 +365,8 @@ export function createExpressAdapter(
 export function expressReAuth(
   config: HttpAdapterConfig,
   exposeIntrospection: boolean = false,
+  generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
 ): MiddlewareFunction<Request, Response, NextFunction> {
-  const adapter = new ExpressAdapter(config, exposeIntrospection);
+  const adapter = new ExpressAdapter(config, exposeIntrospection, generateDeviceInfo);
   return adapter.createMiddleware();
 }

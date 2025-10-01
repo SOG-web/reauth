@@ -1,4 +1,3 @@
-import { InferFumaDB } from 'fumadb';
 import { createCli } from 'fumadb/cli';
 
 export function runMigrations(db: any) {

@@ -54,6 +54,7 @@
     "test:watch": "vitest --watch"
   },
   "dependencies": {
+    "@better-fetch/fetch": "^1.1.18",
     "@re-auth/reauth": "workspace:*",
     "cors": "^2.8.5",
     "express-rate-limit": "^7.4.1",

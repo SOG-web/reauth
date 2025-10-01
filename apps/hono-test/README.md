@@ -198,3 +198,9 @@ This example demonstrates key ReAuth architectural benefits:
 - [ReAuth Core Documentation](../../packages/reauth/README.md)
 - [HTTP Adapters Documentation](../../packages/http-adapters/README.md)
 - [Hono Framework](https://hono.dev/)
+
+Food Product (depends on Market, MarketAgent, ProductAnalyst - all converted)
+Order (depends on Food Product, depends on CEC, DeliveryFee)
+Payments (related to Order, Wallet)
+Coupon (complex with multiple distribution types)
+Notifications (complex email logic, can be done last)

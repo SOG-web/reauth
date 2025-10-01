@@ -105,4 +105,11 @@ export default createReAuthEngine({
   getUserData: async (subjectId, orm) => {
     return { id: subjectId };
   },
+  deviceValidator: async (storedDeviceInfo, currentDeviceInfo) => {
+    // Example: allow access if IP addresses match or if it's a trusted device
+    return Promise.resolve(
+      storedDeviceInfo.ip === currentDeviceInfo.ip ||
+      storedDeviceInfo.trusted === true
+    );
+  },
 });

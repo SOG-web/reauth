@@ -90,7 +90,10 @@ export interface CreateSessionOptions {
 }
 
 export interface SessionServiceOptions {
-  deviceValidator?: (storedDeviceInfo: Record<string, any>, currentDeviceInfo: Record<string, any>) => boolean;
+  deviceValidator?: (
+    storedDeviceInfo: Record<string, any>,
+    currentDeviceInfo: Record<string, any>,
+  ) => boolean | Promise<boolean>;
 }
 
 export interface SessionService {
@@ -114,7 +117,10 @@ export interface SessionService {
     subjectId: string,
     options: CreateSessionOptions,
   ): Promise<Token>;
-  verifySession(token: Token, deviceInfo?: Record<string, any>): Promise<{
+  verifySession(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';

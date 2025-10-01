@@ -34,6 +34,7 @@ import { createExpressAdapter } from '@re-auth/http-adapters-v2';
 const app = express();
 const engine = new ReAuthEngineV2({ /* config */ });
 
+// Create adapter with device info extraction
 const adapter = createExpressAdapter({
   engine,
   basePath: '/api/auth',
@@ -45,6 +46,16 @@ const adapter = createExpressAdapter({
     windowMs: 15 * 60 * 1000,
     max: 100
   }
+}, false, async (req) => {
+  // Extract device information for enhanced security
+  return {
+    ip: req.ip || req.connection.remoteAddress,
+    userAgent: req.get('User-Agent'),
+    fingerprint: req.get('X-Request-ID'),
+    geoLocation: req.get('CF-IPCountry'),
+    deviceType: req.get('CF-Device-Type'),
+    sessionId: req.session?.id,
+  };
 });
 
 app.use('/api/auth', adapter.createRouter());
@@ -65,9 +76,19 @@ import { createFastifyAdapter } from '@re-auth/http-adapters-v2';
 const fastify = Fastify();
 const engine = new ReAuthEngineV2({ /* config */ });
 
+// Create adapter with device info extraction
 const adapter = createFastifyAdapter({
   engine,
   basePath: '/api/auth'
+}, async (request) => {
+  // Extract device information for enhanced security
+  return {
+    ip: request.ip,
+    userAgent: request.headers['user-agent'],
+    fingerprint: request.headers['x-request-id'],
+    geoLocation: request.headers['cf-ipcountry'],
+    deviceType: request.headers['cf-device-type'],
+  };
 });
 
 fastify.register(adapter.createPlugin());
@@ -88,9 +109,20 @@ import { createHonoAdapter } from '@re-auth/http-adapters-v2';
 const app = new Hono();
 const engine = new ReAuthEngineV2({ /* config */ });
 
+// Create adapter with device info extraction
 const adapter = createHonoAdapter({
   engine,
   basePath: '/api/auth'
+}, async (c) => {
+  // Extract device information for enhanced security
+  return {
+    ip: c.env?.CF_CONNECTING_IP || c.req.header('x-forwarded-for'),
+    userAgent: c.req.header('user-agent'),
+    fingerprint: c.req.header('cf-ray'),
+    country: c.req.header('cf-ipcountry'),
+    deviceType: c.req.header('cf-device-type'),
+    timezone: c.req.header('cf-timezone'),
+  };
 });
 
 adapter.registerRoutes(app, '/api/auth');
@@ -102,6 +134,98 @@ app.use('*', adapter.createUserMiddleware());
 // const authApp = adapter.createApp();
 // app.route('/api/auth', authApp);
 ```
+
+## Device Info Extraction
+
+Device information extraction is a core security feature that allows you to capture and analyze request metadata for enhanced authentication, fraud prevention, and analytics. All adapters support customizable device info extraction through their constructor parameters.
+
+### Why Device Info Matters
+
+Device information enables:
+- **Geographic Analysis**: Track user locations and detect suspicious access patterns
+- **Device Fingerprinting**: Identify and validate trusted devices
+- **Security Monitoring**: Detect unusual access patterns or potential breaches
+- **Analytics**: Gather insights about user behavior and platform usage
+- **Compliance**: Meet regulatory requirements for access logging
+
+### Express.js Example
+
+```typescript
+const adapter = createExpressAdapter(config, false, async (req) => {
+  return {
+    ip: req.ip || req.connection.remoteAddress,
+    userAgent: req.get('User-Agent'),
+    fingerprint: req.get('X-Request-ID'),
+    geoLocation: req.get('CF-IPCountry'),
+    deviceType: req.get('CF-Device-Type'),
+    sessionId: req.session?.id,
+    browserFingerprint: req.get('X-Browser-Fingerprint'),
+  };
+});
+```
+
+### Fastify Example
+
+```typescript
+const adapter = createFastifyAdapter(config, async (request) => {
+  return {
+    ip: request.ip,
+    userAgent: request.headers['user-agent'],
+    fingerprint: request.headers['x-request-id'],
+    geoLocation: request.headers['cf-ipcountry'],
+    deviceType: request.headers['cf-device-type'],
+    timezone: request.headers['cf-timezone'],
+  };
+});
+```
+
+### Hono Example
+
+```typescript
+const adapter = createHonoAdapter(config, async (c) => {
+  return {
+    ip: c.env?.CF_CONNECTING_IP || c.req.header('x-forwarded-for'),
+    userAgent: c.req.header('user-agent'),
+    fingerprint: c.req.header('cf-ray'),
+    country: c.req.header('cf-ipcountry'),
+    deviceType: c.req.header('cf-device-type'),
+    timezone: c.req.header('cf-timezone'),
+    datacenter: c.req.header('cf-ray')?.split('-')[0],
+  };
+});
+```
+
+### Advanced Device Info
+
+For comprehensive device analysis, you can extract extensive metadata:
+
+```typescript
+const deviceInfoExtractor = async (request) => {
+  // Framework-specific extraction logic
+  const basicInfo = extractBasicInfo(request);
+  
+  // Additional processing
+  const enhancedInfo = await enrichDeviceInfo(basicInfo);
+  
+  // Database lookups, external API calls, etc.
+  const riskScore = await calculateRiskScore(enhancedInfo);
+  
+  return {
+    ...enhancedInfo,
+    riskScore,
+    trustLevel: riskScore < 0.3 ? 'high' : riskScore < 0.7 ? 'medium' : 'low',
+    lastSeen: new Date().toISOString(),
+  };
+};
+```
+
+### Best Practices
+
+1. **Privacy Compliance**: Ensure device info collection complies with privacy regulations (GDPR, CCPA, etc.)
+2. **Minimal Collection**: Only collect what's necessary for your security and analytics needs
+3. **Secure Storage**: Handle sensitive device data appropriately
+4. **Performance**: Keep device info extraction fast to avoid impacting response times
+5. **Error Handling**: Gracefully handle extraction failures
 
 ## Full Examples
 

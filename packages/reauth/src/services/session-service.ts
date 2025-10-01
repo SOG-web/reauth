@@ -61,7 +61,10 @@ export class FumaSessionService implements SessionService {
   }
 
   // Hybrid token verification - supports both JWT and legacy tokens
-  async verifyToken(token: Token, deviceInfo?: Record<string, any>): Promise<{
+  async verifyToken(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type: 'jwt' | 'legacy';
@@ -246,7 +249,9 @@ export class FumaSessionService implements SessionService {
 
         if (deviceInfo) {
           try {
-            sessionData.deviceInfo = JSON.parse((deviceInfo as any).device_info);
+            sessionData.deviceInfo = JSON.parse(
+              (deviceInfo as any).device_info,
+            );
           } catch {
             sessionData.deviceInfo = {}; // fallback if JSON invalid
           }
@@ -277,7 +282,10 @@ export class FumaSessionService implements SessionService {
     return result;
   }
 
-  async verifySession(token: Token, deviceInfo?: Record<string, any>): Promise<{
+  async verifySession(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';
@@ -311,6 +319,25 @@ export class FumaSessionService implements SessionService {
       return { subject: null, token: null };
     }
 
+    // Get stored device info for validation
+    let storedDeviceInfo: Record<string, any> | null = null;
+    if (this.enhancedMode && deviceInfo && this.options.deviceValidator) {
+      const sessionId = (session as any).id;
+      if (sessionId) {
+        const deviceData = await orm.findFirst('session_devices', {
+          where: (b: any) => b('session_id', '=', sessionId),
+        });
+
+        if (deviceData) {
+          try {
+            storedDeviceInfo = JSON.parse((deviceData as any).device_info);
+          } catch {
+            storedDeviceInfo = {}; // fallback if JSON invalid
+          }
+        }
+      }
+    }
+
     // Check session expiration and if it's about to expire (within 1 minute)
     const currentNow = new Date();
     const sessionExpiresAt = (session as any).expires_at;
@@ -330,6 +357,7 @@ export class FumaSessionService implements SessionService {
       sessionExpired,
       isJWT,
       payload,
+      storedDeviceInfo: storedDeviceInfo ? 'present' : 'none',
     });
 
     // Try JWT verification first (for optimization)
@@ -337,14 +365,6 @@ export class FumaSessionService implements SessionService {
       try {
         payload = await this.jwtService.verifyJWT(accessToken);
         isJWT = true;
-        
-        // Device validation for JWT tokens
-        if (deviceInfo && payload.deviceInfo && this.options.deviceValidator) {
-          if (!this.options.deviceValidator(payload.deviceInfo, deviceInfo)) {
-            console.log('Device validation failed');
-            return { subject: null, token: null };
-          }
-        }
       } catch (jwtError: any) {
         // JWT verification failed, could be expired
         isJWT = false;
@@ -357,6 +377,26 @@ export class FumaSessionService implements SessionService {
       isJWT,
       payload,
     });
+
+    // Device validation for all token types (JWT uses payload, legacy uses stored device info)
+    if (deviceInfo && this.options.deviceValidator) {
+      let deviceToValidate: Record<string, any> | null = null;
+
+      if (isJWT && payload?.deviceInfo) {
+        // JWT tokens store device info in payload
+        deviceToValidate = payload.deviceInfo;
+      } else if (storedDeviceInfo) {
+        // Legacy tokens store device info in session_devices table
+        deviceToValidate = storedDeviceInfo;
+      }
+
+      if (deviceToValidate) {
+        if (!(await this.options.deviceValidator(deviceToValidate, deviceInfo))) {
+          console.log(`Device validation failed for ${isJWT ? 'JWT' : 'legacy'} token`);
+          return { subject: null, token: null };
+        }
+      }
+    }
 
     // Handle expired session or token that needs refresh
     if ((sessionExpired || needsRefresh) && refreshToken && this.jwtService) {

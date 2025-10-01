@@ -42,7 +42,6 @@ export interface HttpAdapterConfig {
     accesssTokenHeader: string;
     refreshTokenHeader?: string;
   };
-  deviceInfoExtractor?: (req: HttpRequest) => Record<string, any>;
 }
 
 // CORS configuration
