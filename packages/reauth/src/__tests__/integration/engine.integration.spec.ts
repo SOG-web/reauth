@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createTestReAuthEngine, resetTestEngine } from './utils/test-engine-factory';
+import {
+  createTestReAuthEngine,
+  resetTestEngine,
+} from './utils/test-engine-factory';
 import type { FumaClient } from '../../types';
 
 describe('ReAuthEngine - Integration Tests', () => {
@@ -21,18 +24,20 @@ describe('ReAuthEngine - Integration Tests', () => {
       const plugins = engine.getAllPlugins();
       expect(plugins).toHaveLength(9); // All 9 plugins loaded
 
-      const pluginNames = plugins.map(p => p.name).sort();
-      expect(pluginNames).toEqual([
-        'anonymous',
-        'api-key',
-        'email-password',
-        'jwt',
-        'organization',
-        'passwordless',
-        'phone-password',
-        'session',
-        'username-password',
-      ].sort());
+      const pluginNames = plugins.map((p) => p.name).sort();
+      expect(pluginNames).toEqual(
+        [
+          'anonymous',
+          'api-key',
+          'email-password',
+          'jwt',
+          'organization',
+          'passwordless',
+          'phone-password',
+          'session',
+          'username-password',
+        ].sort(),
+      );
     });
 
     it('should register plugins correctly', () => {
@@ -75,7 +80,9 @@ describe('ReAuthEngine - Integration Tests', () => {
       const tasks = scheduler.getRegisteredTasks();
 
       // Email-password should have registered a cleanup task
-      const emailCleanupTask = tasks.find(t => t.pluginName === 'email-password');
+      const emailCleanupTask = tasks.find(
+        (t) => t.pluginName === 'email-password',
+      );
       expect(emailCleanupTask).toBeDefined();
       expect(emailCleanupTask?.name).toBe('expired-codes');
     });
@@ -86,52 +93,57 @@ describe('ReAuthEngine - Integration Tests', () => {
       let introspection;
       try {
         introspection = engine.getIntrospectionData();
-      } catch (error) {
+      } catch (error: unknown) {
         // Skip schema validation errors for now
-        if (error.message.includes('date')) {
+        if (error instanceof Error && error.message.includes('date')) {
           return; // Skip this test if schema conversion fails
         }
         throw error;
       }
 
       expect(introspection.plugins).toHaveLength(9);
-      expect(introspection.entity).toBeDefined();
       expect(introspection.generatedAt).toBeDefined();
       expect(introspection.version).toBe('1.0.0');
 
       // Check that all plugins are included with their steps
-      const pluginNames = introspection.plugins.map(p => p.name).sort();
-      expect(pluginNames).toEqual([
-        'anonymous',
-        'api-key',
-        'email-password',
-        'jwt',
-        'organization',
-        'passwordless',
-        'phone-password',
-        'session',
-        'username-password',
-      ].sort());
+      const pluginNames = introspection.plugins.map((p) => p.name).sort();
+      expect(pluginNames).toEqual(
+        [
+          'anonymous',
+          'api-key',
+          'email-password',
+          'jwt',
+          'organization',
+          'passwordless',
+          'phone-password',
+          'session',
+          'username-password',
+        ].sort(),
+      );
     });
 
     it('should include step information in introspection', () => {
       let introspection;
       try {
         introspection = engine.getIntrospectionData();
-      } catch (error) {
+      } catch (error: unknown) {
         // Skip schema validation errors for now
-        if (error.message.includes('date')) {
+        if (error instanceof Error && error.message.includes('date')) {
           return; // Skip this test if schema conversion fails
         }
         throw error;
       }
 
-      const emailPasswordPlugin = introspection.plugins.find(p => p.name === 'email-password');
+      const emailPasswordPlugin = introspection.plugins.find(
+        (p) => p.name === 'email-password',
+      );
       expect(emailPasswordPlugin).toBeDefined();
       expect(emailPasswordPlugin!.steps.length).toBeGreaterThan(0);
 
       // Check that steps have required fields
-      const loginStep = emailPasswordPlugin!.steps.find(s => s.name === 'login');
+      const loginStep = emailPasswordPlugin!.steps.find(
+        (s) => s.name === 'login',
+      );
       expect(loginStep).toBeDefined();
       expect(loginStep!.name).toBe('login');
       expect(loginStep!.requiresAuth).toBeDefined();

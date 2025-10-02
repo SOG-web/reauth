@@ -61,6 +61,9 @@ This example illustrates the ReAuth architecture layers:
 # Install dependencies
 pnpm install
 
+# Run database migrations
+pnpm migrate
+
 # Start development server
 pnpm dev
 ```
@@ -69,7 +72,20 @@ The server will start on `http://localhost:3001`
 
 ### Database Setup
 
-The application uses SQLite with an auto-created `test.db` file. The database schema is automatically initialized when you first run the application.
+The application uses SQLite with database schema versioning. Run migrations to set up the database:
+
+```bash
+# Run database migrations
+pnpm migrate
+```
+
+The migration command will:
+
+1. Load your schema versions from `src/reauth/auth.ts`
+2. Detect the current database version
+3. Run any pending migrations automatically
+
+For more details on the migration CLI, see the [CLI Migration Documentation](../../packages/reauth/CLI_MIGRATION.md).
 
 ## 📡 Available Endpoints
 

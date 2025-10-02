@@ -345,9 +345,32 @@ export class ReAuthHttpAdapter {
   async getIntrospection(): Promise<ApiResponse> {
     const introspectionData = this.engine.getIntrospectionData();
 
+    // Add HTTP adapter configuration to introspection
+    const httpConfig = {
+      basePath: this.config.basePath || '',
+      tokenConfig: {
+        header: {
+          accessTokenHeader:
+            this.config.headerToken?.accesssTokenHeader || 'authorization',
+          refreshTokenHeader:
+            this.config.headerToken?.refreshTokenHeader || 'x-refresh-token',
+          useBearer: true, // Default to Bearer token in Authorization header
+        },
+        cookie: {
+          accessTokenName: this.config.cookie?.name || 'reauth-session',
+          refreshTokenName:
+            this.config.cookie?.refreshTokenName || 'reauth-refresh',
+          enabled: !!this.config.cookie,
+        },
+      },
+    };
+
     return {
       success: true,
-      data: introspectionData,
+      data: {
+        ...introspectionData,
+        httpConfig,
+      },
       meta: {
         timestamp: new Date().toISOString(),
       },

@@ -433,11 +433,6 @@ export class ReAuthEngine {
   }
 
   getIntrospectionData(): {
-    entity: {
-      type: 'object';
-      properties: Record<string, unknown>;
-      required: string[];
-    };
     plugins: Array<{
       name: string;
       description: string;
@@ -455,11 +450,6 @@ export class ReAuthEngine {
   } {
     try {
       return {
-        entity: {
-          type: 'object',
-          properties: {},
-          required: [],
-        },
         plugins: this.plugins.map((p) => ({
           name: p.name,
           description: `${p.name} authentication plugin`,
@@ -480,11 +470,6 @@ export class ReAuthEngine {
     } catch (error) {
       console.error(error);
       return {
-        entity: {
-          type: 'object',
-          properties: {},
-          required: [],
-        },
         plugins: [],
         generatedAt: new Date().toISOString(),
         version: '1.0.0',

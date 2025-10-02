@@ -1,8 +1,8 @@
 import createReAuthEngine, {
-  AuthInput,
-  AuthOutput,
+  buildSchema,
   OrmLike,
-  ReAuthCradle,
+  reauthDbVersions,
+  extendSchemaVersion,
   reauthDb,
 } from '@re-auth/reauth';
 import { kyselyAdapter } from 'fumadb/adapters/kysely';
@@ -14,6 +14,10 @@ import emailPasswordPlugin, {
 import jwtPlugin from '@re-auth/reauth/plugins/jwt';
 import { jwtSchema } from '@re-auth/reauth/services';
 import sessionPlugin, { sessionSchema } from '@re-auth/reauth/plugins/session';
+import { usernamePasswordSchema } from '@re-auth/reauth/plugins/username';
+import { anonymousSchema } from '@re-auth/reauth/plugins/anonymous';
+import { phonePasswordSchema } from '@re-auth/reauth/plugins/phone';
+import { apiKeySchema } from '@re-auth/reauth/plugins/api-key';
 
 export const kysely = new Kysely({
   dialect: new SqliteDialect({
@@ -21,11 +25,45 @@ export const kysely = new Kysely({
   }),
 });
 
-export const factory = reauthDb('1.0.1', [
+// ============================================================
+// SCHEMA VERSIONING EXAMPLES
+// ============================================================
+
+// Version 1.0.1 - Base schema with core authentication
+const { schema: v1, plugins: v1Plugins } = reauthDb('1.0.1', [
   emailPasswordSchema,
   jwtSchema,
   sessionSchema,
 ]);
+
+// Version 1.0.2 - Extended from v1 using the helper function
+// This is the recommended way to create new versions
+const { schema: v2, plugins: v2Plugins } = extendSchemaVersion(
+  v1Plugins,
+  '1.0.2',
+  [usernamePasswordSchema, anonymousSchema, phonePasswordSchema],
+);
+
+// You can continue extending versions:
+// const v3 = extendSchemaVersion(v2, '1.0.3', [apiKeySchema]);
+
+// Old way (still works, but requires repeating all schemas):
+// const v2 = buildSchema('1.0.2', [
+//   emailPasswordSchema,
+//   jwtSchema,
+//   sessionSchema,
+//   usernamePasswordSchema,
+//   anonymousSchema,
+//   phonePasswordSchema,
+// ]);
+
+const { schema: v3, plugins: v3Plugins } = extendSchemaVersion(
+  v2Plugins,
+  '1.0.3',
+  [apiKeySchema],
+);
+
+export const factory = reauthDbVersions([v1, v2, v3]);
 
 export const client = factory.client(
   kyselyAdapter({
@@ -109,7 +147,7 @@ export default createReAuthEngine({
     // Example: allow access if IP addresses match or if it's a trusted device
     return Promise.resolve(
       storedDeviceInfo.ip === currentDeviceInfo.ip ||
-      storedDeviceInfo.trusted === true
+        storedDeviceInfo.trusted === true,
     );
   },
 });

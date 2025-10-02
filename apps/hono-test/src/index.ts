@@ -2,9 +2,8 @@ import { serve } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono } from 'hono';
 import { showRoutes } from 'hono/dev';
-import reAuth, { client } from './reauth/auth';
+import reAuth from './reauth/auth';
 import { honoReAuth } from '@re-auth/http-adapters';
-import { runMigrations } from './mi';
 import { ConnInfo } from 'hono/conninfo';
 
 const app = new Hono();
@@ -61,5 +60,3 @@ declare module 'hono' {
     connInfo: ConnInfo;
   }
 }
-
-runMigrations(client);

@@ -2,7 +2,7 @@
 
 import createReAuthEngine from './engine';
 
-export { reauthDb } from './db';
+export { reauthDb, reauthDbVersions, extendSchemaVersion } from './db';
 export { default as buildSchema } from './base.schema';
 
 export * from './engine';
