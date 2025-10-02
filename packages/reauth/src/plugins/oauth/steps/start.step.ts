@@ -22,7 +22,7 @@ export const startOAuthStep: AuthStep<
   protocol: {
     http: {
       method: 'GET',
-      codes: {},
+      codes: { redirect: 302, success: 200, ip: 500, nf: 404 },
     },
   },
   inputs: ['provider'],

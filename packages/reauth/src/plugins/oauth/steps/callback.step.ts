@@ -32,10 +32,16 @@ export const callbackOAuthStep: AuthStep<
   protocol: {
     http: {
       method: 'POST',
-      codes: { su: 200, ip: 400 },
+      codes: { su: 200, ip: 400, error: 500 },
     },
   },
-  inputs: ['code', 'state', 'oauth_state', 'oauth_code_verifier', 'oauth_provider'],
+  inputs: [
+    'code',
+    'state',
+    'oauth_state',
+    'oauth_code_verifier',
+    'oauth_provider',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
