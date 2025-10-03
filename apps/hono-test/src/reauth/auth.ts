@@ -47,16 +47,6 @@ const { schema: v2, plugins: v2Plugins } = extendSchemaVersion(
 // You can continue extending versions:
 // const v3 = extendSchemaVersion(v2, '1.0.3', [apiKeySchema]);
 
-// Old way (still works, but requires repeating all schemas):
-// const v2 = buildSchema('1.0.2', [
-//   emailPasswordSchema,
-//   jwtSchema,
-//   sessionSchema,
-//   usernamePasswordSchema,
-//   anonymousSchema,
-//   phonePasswordSchema,
-// ]);
-
 const { schema: v3, plugins: v3Plugins } = extendSchemaVersion(
   v2Plugins,
   '1.0.3',

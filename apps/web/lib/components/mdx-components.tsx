@@ -7,6 +7,10 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 import { createGenerator } from 'fumadocs-typescript';
 import { AutoTypeTable } from 'fumadocs-typescript/ui';
 import * as icons from 'lucide-react';
+import { Mermaid } from './mdx/mermaid';
+import * as Twoslash from 'fumadocs-twoslash/ui';
+
+const generator = createGenerator();
 
 export function getMDXComponents(components?: MDXComponents) {
   return {
@@ -21,6 +25,8 @@ export function getMDXComponents(components?: MDXComponents) {
     AutoTypeTable: (props) => (
       <AutoTypeTable {...props} generator={generator} />
     ),
+    Mermaid,
+    ...Twoslash,
     ...components,
   } satisfies MDXComponents;
 }

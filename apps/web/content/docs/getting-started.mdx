@@ -11,14 +11,14 @@ description: Install ReAuth, configure the engine, and run your first build.
 
 ## Install the packages
 
-```bash
-pnpm add @re-auth/reauth @re-auth/http-adapters
+```npm
+npm i @re-auth/reauth @re-auth/http-adapters
 ```
 
 Add development tooling if you plan to emit SDKs:
 
-```bash
-pnpm add -D @re-auth/sdk-generator
+```npm
+npm i -D @re-auth/sdk-generator
 ```
 
 ## Configure the engine
@@ -26,7 +26,7 @@ pnpm add -D @re-auth/sdk-generator
 Create `auth/engine.ts` in your application and wire the core engine together:
 
 ```ts
-import { createReAuthEngine } from '@re-auth/reauth';
+import createReAuthEngine from '@re-auth/reauth';
 import { emailPasswordPlugin } from '@re-auth/reauth/plugins/email-password';
 import { createKyselyAdapter } from '@re-auth/reauth/lib/adapters/kysely';
 

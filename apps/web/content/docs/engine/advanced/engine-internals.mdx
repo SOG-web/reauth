@@ -1,0 +1,269 @@
+---
+title: Engine Internals
+description: Deep dive into how the ReAuth engine orchestrates plugins, hooks, and sessions.
+---
+
+## Engine Architecture
+
+The ReAuth engine is intentionally small. The class in `packages/reauth/src/engine.ts` wires four core subsystems together: the Awilix container, the plugin map, the session service, and the background cleanup scheduler.
+
+```mermaid
+flowchart TB
+    Config[ReAuthConfig]
+    Config --> Engine[ReAuthEngine]
+    Engine --> Container[Awilix Container]
+    Engine --> PluginMap[Plugin Map]
+    Engine --> SessionResolvers[Session Resolvers]
+    Engine --> SessionService[FumaSessionService]
+    Engine --> Cleanup[SimpleCleanupScheduler]
+
+    PluginMap --> Plugins[AuthPlugin.steps]
+    SessionResolvers --> SessionService
+    SessionService --> JWKS[JWT & Refresh Tokens]
+    Cleanup --> Tasks[Cleanup Tasks]
+
+    style Engine fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+    style SessionService fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style Cleanup fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+```
+
+### Initialization Path
+
+<Steps>
+  <Step>
+    ### Construct the container
+
+    ```ts
+    this.container = createContainer({
+      injectionMode: InjectionMode.CLASSIC,
+      strict: true,
+    });
+    ```
+
+    The container exposes `dbClient`, `sessionService`, `sessionResolvers`, and the engine instance itself for plugins to consume through Awilix.
+
+  </Step>
+
+  <Step>
+    ### Create session infrastructure
+
+    - `InMemorySessionResolvers` keeps subject resolvers.
+    - `FumaSessionService` owns session CRUD, JWKS, and refresh logic.
+    - Optional `deviceValidator` hooks allow custom device checks.
+
+  </Step>
+
+  <Step>
+    ### Register plugins
+
+    ```ts
+    for (const plugin of config.plugins || []) {
+      this.registerPlugin(plugin);
+    }
+    ```
+
+    `registerPlugin` stores the plugin, exposes its config to the cleanup scheduler, and calls `plugin.initialize?.(engine, config)`.
+
+  </Step>
+
+  <Step>
+    ### Attach engine and session hooks
+
+    Global hooks from `config.authHooks` and `config.sessionHooks` are appended so they run for every step or session lifecycle event.
+
+  </Step>
+
+  <Step>
+    ### Start background cleanup (optional)
+
+    By default `SimpleCleanupScheduler` runs; set `enableCleanupScheduler: false` to opt out.
+
+  </Step>
+</Steps>
+
+## Step Execution Pipeline
+
+`executeStep(pluginName, stepName, input)` is the only way the engine runs business logic. The implementation in `engine.ts` executes the following pipeline:
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Engine
+    participant Validation as ArkType Validation
+    participant EngineHooks as Engine Hooks
+    participant RootHooks as Plugin Root Hooks
+    participant StepHooks
+    participant StepRun as Step.run
+    participant OutputValidation as Output Validation
+
+    Caller->>Engine: executeStep(plugin, step, input)
+    Engine->>Validation: validationSchema.assert(input)
+    Validation-->>Engine: typed input or throw
+
+    Engine->>EngineHooks: before hooks
+    EngineHooks-->>Engine: possibly mutated input
+
+    Engine->>RootHooks: rootHooks.before
+    RootHooks-->>Engine: input
+
+    Engine->>StepHooks: hooks.before
+    StepHooks-->>Engine: input
+
+    Engine->>StepRun: run(input, ctx)
+    StepRun-->>Engine: output
+
+    Engine->>StepHooks: hooks.after
+    StepHooks-->>Engine: output
+
+    Engine->>RootHooks: rootHooks.after
+    RootHooks-->>Engine: output
+
+    Engine->>EngineHooks: after hooks
+    EngineHooks-->>Engine: output
+
+    Engine->>OutputValidation: outputs.assert(output?)
+    OutputValidation-->>Caller: final output
+
+    Engine->>EngineHooks: onError (if thrown anywhere)
+```
+
+### Execution Context
+
+Each step receives a context object `{ engine, config }`. Through `ctx.engine` you can:
+
+- Resolve services with `getService<T>('serviceName')`.
+- Access the DI container via `getContainer()`.
+- Call other steps with `engine.runStep(...)` for composition.
+- Fetch an ORM instance with `engine.getOrm()`.
+
+### Hook Resolution Order
+
+1. **Engine hooks** – configured via `registerAuthHook` or `authHooks`.
+2. **Plugin root hooks** – `plugin.rootHooks.before/after/onError`.
+3. **Step hooks** – `step.hooks.before/after/onError`.
+
+On error the engine unwinds in reverse order: step → root → engine. Session hooks (`registerSessionHook`) are isolated and only run inside `createSessionFor` / `sessionService` workflows.
+
+### Input and Output Validation
+
+- Input: `step.validationSchema?.assert(input)` uses ArkType to coerce and validate before any hook runs.
+- Output: `step.outputs?.assert(output)` verifies responses after all hooks complete. Both throw with human-readable summaries on failure.
+
+## Session Lifecycle
+
+ReAuth exposes high-level helpers so plugins or adapters can issue and verify sessions without touching the session service directly.
+
+```ts
+const token = await engine.createSessionFor('user', subjectId, ttl, deviceInfo);
+const result = await engine.checkSession(token.accessToken);
+```
+
+### What `createSessionFor` Does
+
+1. Runs **session hooks** with type `'before'`.
+2. Calls `FumaSessionService.createSession` or `createSessionWithMetadata`.
+3. Invokes `'after'` hooks with the new token pair.
+4. On error, runs `'onError'` hooks then rethrows.
+
+### `checkSession`
+
+`checkSession` verifies JWT or legacy tokens, runs session hooks, and returns `{ subject, token, type, payload, valid }`. If JWKS is enabled, `type === 'jwt'` and `payload` contains the decoded token with data from `getUserData`.
+
+### Enabling JWKS Sessions
+
+```ts
+engine.getSessionService().enableJWKS({
+  issuer: 'https://auth.example.com',
+  keyRotationIntervalDays: 30,
+  keyGracePeriodDays: 7,
+  defaultAccessTokenTtlSeconds: 900,
+  defaultRefreshTokenTtlSeconds: 60 * 60 * 24 * 30,
+  enableRefreshTokenRotation: true,
+});
+```
+
+The session service automatically rotates signing keys, blacklists old refresh tokens, and exposes a JWKS endpoint through the HTTP adapters.
+
+## Session Resolvers
+
+Plugins can register subject resolvers so session verification can hydrate domain-specific data:
+
+```ts
+engine.registerSessionResolver('subject', {
+  async getById(id, orm) {
+    const subject = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', id),
+    });
+    if (!subject) return null;
+    return {
+      id: subject.id,
+      email: subject.email,
+    };
+  },
+  sanitize(subject) {
+    return { id: subject.id, email: subject.email };
+  },
+});
+```
+
+Resolvers plug into `FumaSessionService.verifySession`, giving you full control over how subjects are loaded and sanitized before returning to callers.
+
+## Cleanup Scheduler
+
+`SimpleCleanupScheduler` keeps plugin-owned tables tidy. Plugins register tasks via `engine.registerCleanupTask`:
+
+```ts
+engine.registerCleanupTask({
+  name: 'expired-invitations',
+  pluginName: 'organization',
+  intervalMs: 1000 * 60 * 60, // hourly
+  enabled: true,
+  runner: async (orm, config) => {
+    const { cleaned, errors } = await cleanupExpiredInvitations(orm, config);
+    return { cleaned, errors };
+  },
+});
+```
+
+The scheduler stores plugin configs so tasks can honour user-defined options. Enable or disable the scheduler with `enableCleanupScheduler` in `ReAuthConfig`.
+
+## Dependency Injection
+
+Although plugins primarily use the `engine` instance, the Awilix container is accessible when you need fine-grained control:
+
+```ts
+const cradle = engine.getContainer().cradle;
+const sessionService = cradle.sessionService; // FumaSessionService
+const dbClient = cradle.dbClient; // FumaDB client
+```
+
+You can also resolve additional services with `engine.getService<T>('name')` if custom registrations are added.
+
+## Introspection & Profiles
+
+Two helper APIs expose runtime state:
+
+- `engine.getUnifiedProfile(subjectId)` gathers profile data from every plugin implementing `getProfile`.
+- `engine.getIntrospectionData()` lists plugins and their steps with JSON Schema generated from ArkType.
+
+These methods power documentation, SDK generation, and admin dashboards without invoking steps manually.
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="./api-structure"
+    title="API Structure"
+    description="Explore TypeScript interfaces that define plugins, steps, and hooks"
+  />
+  <Card
+    href="./plugin-development"
+    title="Plugin Development"
+    description="Author custom plugins that plug into this execution pipeline"
+  />
+  <Card
+    href="../configuration"
+    title="Configuration"
+    description="See how to compose `ReAuthConfig` for your environment"
+  />
+</Cards>

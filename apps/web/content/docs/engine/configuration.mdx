@@ -1,18 +1,18 @@
 ---
-title: Engine Configuration
+title: Configuration
 description: Detailed reference for configuring the ReAuth engine.
 ---
 
 ## createReAuthEngine options
 
-| Option | Type | Description |
-| --- | --- | --- |
+| Option     | Type              | Description                                                                        |
+| ---------- | ----------------- | ---------------------------------------------------------------------------------- |
 | `database` | `DatabaseAdapter` | Required persistence adapter that implements CRUD for users, sessions, and tokens. |
-| `plugins` | `AuthPlugin[]` | List of plugins that register flows (email/password, OTP, OAuth, etc.). |
-| `session` | `SessionConfig` | TTLs, concurrency limits, rotation strategies. |
-| `cookies` | `CookieConfig` | Defaults for cookie-based flows when using HTTP adapters. |
-| `secrets` | `SecretConfig` | Keys for signing tokens and encrypting device secrets. |
-| `events` | `EventConfig` | Optional event handlers or bus integration. |
+| `plugins`  | `AuthPlugin[]`    | List of plugins that register flows (email/password, OTP, OAuth, etc.).            |
+| `session`  | `SessionConfig`   | TTLs, concurrency limits, rotation strategies.                                     |
+| `cookies`  | `CookieConfig`    | Defaults for cookie-based flows when using HTTP adapters.                          |
+| `secrets`  | `SecretConfig`    | Keys for signing tokens and encrypting device secrets.                             |
+| `events`   | `EventConfig`     | Optional event handlers or bus integration.                                        |
 
 ### Database adapter
 
@@ -34,8 +34,10 @@ ReAuth ships batteries-included adapters for Kysely and Prisma. To bring your ow
 ### Session configuration
 
 ```ts
+import createReAuthEngine from '@re-auth/reauth';
+
 const auth = createReAuthEngine({
-  // ...database, plugins
+  dbClient,
   session: {
     accessTokenTtl: '15m',
     refreshTokenTtl: '30d',
@@ -80,20 +82,158 @@ secrets: {
 
 Rotate secrets carefully—ReAuth keeps a rotation window so old tokens remain valid until expiration.
 
-### Events
+## Schema Versioning
 
-Wire an event bus to capture lifecycle notifications:
+ReAuth uses a versioned schema system to support database migrations and plugin additions over time. This is **critical** when adding new plugins to an existing ReAuth server.
+
+### Basic Schema Setup
+
+When starting a new project, create your initial schema version:
 
 ```ts
-import { createReAuthEngine } from '@re-auth/reauth';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+import { jwtSchema } from '@re-auth/reauth/services';
+import sessionPlugin, { sessionSchema } from '@re-auth/reauth/plugins/session';
 
-const auth = createReAuthEngine({
-  // ...
-  events: {
-    on(event, payload) {
-      logger.info({ event, payload }, 'reauth event');
-    },
+// Version 1.0.1 - Initial schema with core authentication
+const { schema: v1, plugins: v1Plugins } = reauthDb('1.0.1', [
+  emailPasswordSchema,
+  jwtSchema,
+  sessionSchema,
+]);
+
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
   },
+  plugins: [
+    sessionPlugin({}),
+    emailPasswordPlugin({
+      /* config */
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+```
+
+### Adding New Plugins with Schema Versions
+
+When you need to add new plugins to an **existing** ReAuth server, use `extendSchemaVersion` to create a new version:
+
+```ts
+import { extendSchemaVersion } from '@re-auth/reauth';
+import { usernamePasswordSchema } from '@re-auth/reauth/plugins/username';
+import { anonymousSchema } from '@re-auth/reauth/plugins/anonymous';
+import { phonePasswordSchema } from '@re-auth/reauth/plugins/phone';
+
+// Version 1.0.1 - Base schema (existing)
+const { schema: v1, plugins: v1Plugins } = reauthDb('1.0.1', [
+  emailPasswordSchema,
+  jwtSchema,
+  sessionSchema,
+]);
+
+// Version 1.0.2 - Extend v1 with new plugins
+const { schema: v2, plugins: v2Plugins } = extendSchemaVersion(
+  v1Plugins,
+  '1.0.2',
+  [usernamePasswordSchema, anonymousSchema, phonePasswordSchema],
+);
+
+// Register all versions with the factory
+const factory = reauthDbVersions([v1, v2]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+```
+
+<Callout title="Why Schema Versioning?" type="info">
+  Schema versioning allows ReAuth to: - Migrate existing databases safely when
+  adding new plugins - Support zero-downtime deployments with rolling updates -
+  Maintain compatibility with different client versions - Track which plugins
+  are available at each version
+</Callout>
+
+### Multiple Version Extensions
+
+You can continue extending versions as your application evolves:
+
+```ts
+import { apiKeySchema } from '@re-auth/reauth/plugins/api-key';
+
+// Version 1.0.3 - Add API key authentication
+const { schema: v3, plugins: v3Plugins } = extendSchemaVersion(
+  v2Plugins,
+  '1.0.3',
+  [apiKeySchema],
+);
+
+// Register all versions
+const factory = reauthDbVersions([v1, v2, v3]);
+```
+
+### Version Migration Workflow
+
+When deploying a new plugin to production:
+
+1. **Add the new version** using `extendSchemaVersion`
+2. **Register all versions** with `reauthDbVersions([v1, v2, v3])`
+3. **Deploy the new code** - FumaDB automatically migrates the database
+4. **Add the plugin** to your engine configuration
+5. **Test the new flows** in production
+
+**Example complete migration:**
+
+```ts
+// Before: Version 1.0.1 with email/password only
+const { schema: v1, plugins: v1Plugins } = reauthDb('1.0.1', [
+  emailPasswordSchema,
+  jwtSchema,
+  sessionSchema,
+]);
+
+// After: Add OAuth support
+import oauthPlugin, { oauthSchema } from '@re-auth/reauth/plugins/oauth';
+
+const { schema: v2, plugins: v2Plugins } = extendSchemaVersion(
+  v1Plugins,
+  '1.0.2',
+  [oauthSchema],
+);
+
+const factory = reauthDbVersions([v1, v2]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    sessionPlugin({}),
+    emailPasswordPlugin({
+      /* config */
+    }),
+    oauthPlugin({
+      /* config */
+    }), // New plugin
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
 });
 ```
 
@@ -103,33 +243,25 @@ Each plugin documents its own options. Example: email/password plugin
 
 ```ts
 emailPasswordPlugin({
-  requireEmailVerification: true,
-  passwordPolicy: {
-    minLength: 12,
-    requireSymbol: true,
-    checks: [
-      ({ password }) => {
-        if (password.includes('password')) {
-          return 'Password cannot contain the word "password"';
-        }
-        return true;
-      },
-    ],
+  sendCode(subject, code, email, type) {
+    // Send verification/reset codes via your email provider
+    return emailService.send({
+      to: email,
+      subject: type === 'verify' ? 'Verify your email' : 'Reset your password',
+      template: type === 'verify' ? 'email-verification' : 'password-reset',
+      data: { code },
+    });
   },
-  notifications: {
-    sendVerification: async ({ user, token }) => {
-      await emailClient.send({
-        to: user.email,
-        subject: 'Verify your account',
-        template: 'email-verification',
-        data: { token },
-      });
-    },
-  },
+  verifyEmail: true,
+  codeType: 'numeric',
+  codeLength: 6,
+  verificationCodeExpiresIn: 1800000, // 30 minutes
+  resetPasswordCodeExpiresIn: 900000, // 15 minutes
+  cleanupIntervalMinutes: 60,
 });
 ```
 
-Plugins can expose services that the engine injects into flows (for example, to invite organization members or link OAuth identities).
+Plugins can expose custom configuration options specific to their authentication method.
 
 ## Environmental separation
 

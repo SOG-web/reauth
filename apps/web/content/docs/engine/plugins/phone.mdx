@@ -1,0 +1,723 @@
+---
+title: Phone + Password Plugin
+description: Phone number authentication with SMS verification and password security.
+---
+
+## Overview
+
+The `phone-password` plugin provides **phone number-based authentication** with SMS verification codes and password protection. Ideal for regions where phone numbers are the primary identifier or for applications requiring phone verification.
+
+Key features:
+
+- **Phone + password** authentication (similar to email-password but with phone numbers)
+- **SMS verification** with customizable code generation
+- **Password reset** via SMS codes
+- **Phone number changes** with verification
+- **Test users** for development/testing without sending real SMS
+- **Background cleanup** of expired verification codes
+
+<Callout title="SMS provider required" type="warn">
+  You must integrate an SMS provider (Twilio, AWS SNS, etc.) via the `sendCode`
+  function to send verification codes to users.
+</Callout>
+
+## Installation & Setup
+
+```npm
+npm i @re-auth/reauth
+```
+
+### Basic Configuration (with Twilio)
+
+```ts
+import twilio from 'twilio';
+
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID!,
+  process.env.TWILIO_AUTH_TOKEN!,
+);
+
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import phonePasswordPlugin, {
+  phonePasswordSchema,
+} from '@re-auth/reauth/plugins/phone';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+import jwtPlugin from '@re-auth/reauth/plugins/jwt';
+import { jwtSchema } from '@re-auth/reauth/services';
+import sessionPlugin, { sessionSchema } from '@re-auth/reauth/plugins/session';
+
+// Setup database schema and client
+const { schema: v1 } = reauthDb('1.0.1', [
+  phonePasswordSchema,
+  emailPasswordSchema,
+  jwtSchema,
+  sessionSchema,
+]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  plugins: [
+    phonePasswordPlugin({
+      verifyPhone: true, // Enable SMS verification
+      sessionTtlSeconds: 3600,
+      loginOnRegister: false, // Require verification before login
+      codeType: 'numeric',
+      codeLength: 6,
+      verificationCodeExpiresIn: 10 * 60 * 1000, // 10 minutes
+      resetPasswordCodeExpiresIn: 10 * 60 * 1000,
+      cleanupIntervalMinutes: 60,
+      sendCode: async (subject, code, phone, type) => {
+        const message =
+          type === 'verify'
+            ? `Your verification code is: ${code}`
+            : `Your password reset code is: ${code}`;
+
+        await twilioClient.messages.create({
+          to: phone,
+          from: process.env.TWILIO_PHONE_NUMBER!,
+          body: message,
+        });
+      },
+    }),
+  ],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
+  },
+});
+```
+
+### Without Verification (Testing)
+
+```ts
+phonePasswordPlugin({
+  verifyPhone: false, // No SMS verification
+  loginOnRegister: true, // Allow immediate login
+  sessionTtlSeconds: 3600,
+});
+```
+
+### With Test Users
+
+```ts
+phonePasswordPlugin({
+  verifyPhone: true,
+  sendCode: async (subject, code, phone, type) => {
+    // Send SMS via your provider
+  },
+  testUsers: {
+    enabled: true,
+    environment: process.env.NODE_ENV!,
+    checkEnvironment: (env) => env !== 'production',
+    users: [
+      {
+        phone: '+15555551234',
+        password: 'TestPassword123!',
+        profile: { name: 'Test User', role: 'tester' },
+      },
+    ],
+  },
+});
+```
+
+## Configuration
+
+### PhonePasswordConfig
+
+| Option                       | Type                                                                 | Default     | Description                                                              |
+| ---------------------------- | -------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| `verifyPhone`                | `boolean`                                                            | `false`     | Enable SMS verification flow. If `true`, `sendCode` is required.         |
+| `sendCode`                   | `(subject, code, phone, type: 'verify' \| 'reset') => Promise<void>` | -           | **Required** if `verifyPhone: true`. Function to send SMS codes.         |
+| `loginOnRegister`            | `boolean`                                                            | `true`      | Create session token on registration (skip verification).                |
+| `sessionTtlSeconds`          | `number`                                                             | `3600`      | Session token TTL in seconds (1 hour).                                   |
+| `codeType`                   | `'numeric' \| 'alphanumeric' \| 'alphabet'`                          | `'numeric'` | Type of verification code to generate.                                   |
+| `codeLength`                 | `number`                                                             | `4`         | Length of generated codes.                                               |
+| `generateCode`               | `(phone: string, subject?: any) => Promise<string \| number>`        | -           | Custom code generation function (overrides `codeType` and `codeLength`). |
+| `verificationCodeExpiresIn`  | `number`                                                             | `1800000`   | Verification code expiration in milliseconds (30 minutes).               |
+| `resetPasswordCodeExpiresIn` | `number`                                                             | `1800000`   | Reset code expiration in milliseconds (30 minutes).                      |
+| `cleanupIntervalMinutes`     | `number`                                                             | `60`        | Cleanup interval in minutes. Must be 1-1440 (1-24 hours).                |
+| `testUsers`                  | `{ enabled, users, environment, checkEnvironment }`                  | -           | Test user configuration for development without sending real SMS.        |
+
+## Authentication Steps
+
+### 1. Register
+
+**Step name:** `register`  
+**HTTP:** `POST /auth/phone/register`
+
+Register a new user with phone number and password.
+
+**Input:**
+
+```ts
+{
+  phone: string; // E.164 format recommended: +1234567890
+  password: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'eq'; // success | invalid | exists
+  message: string;
+  token?: Token; // Only if loginOnRegister: true
+  subject?: {
+    id: string;
+    phone: string;
+    verified: boolean;
+  };
+  verificationRequired?: boolean;
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Validates phone format
+- Checks if phone already exists
+- Hashes password with bcrypt
+- Creates subject and phone identity
+- If `verifyPhone: true`, sends SMS code and sets `verified: false`
+- If `loginOnRegister: true`, returns session token
+- If `verifyPhone: false`, sets `verified: true` immediately
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('phone-password', 'register', {
+  phone: '+15555551234',
+  password: 'SecurePassword123!',
+  others: { referralCode: 'FRIEND2024' },
+});
+
+if (result.success && result.verificationRequired) {
+  console.log('SMS verification code sent to', result.subject.phone);
+  // Redirect to verification page
+}
+```
+
+### 2. Login
+
+**Step name:** `login`  
+**HTTP:** `POST /auth/phone/login`
+
+Authenticate with phone number and password.
+
+**Input:**
+
+```ts
+{
+  phone: string;
+  password: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'nv'; // success | invalid credentials | not verified
+  message: string;
+  token?: Token;
+  subject?: {
+    id: string;
+    phone: string;
+    verified: boolean;
+  };
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Finds phone identity
+- Verifies password with bcrypt
+- Checks if phone is verified (if `verifyPhone: true`)
+- Returns `status: 'nv'` if phone not verified
+- Creates session token on success
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('phone-password', 'login', {
+  phone: '+15555551234',
+  password: 'SecurePassword123!',
+});
+
+if (result.success) {
+  console.log('Logged in:', result.subject);
+  localStorage.setItem('authToken', result.token.accessToken);
+} else if (result.status === 'nv') {
+  console.log('Phone not verified. Please verify first.');
+}
+```
+
+## Verification Steps
+
+### 3. Verify Phone
+
+**Step name:** `verify-phone`  
+**HTTP:** `POST /auth/phone/verify`
+
+Verify phone number with SMS code received during registration.
+
+**Input:**
+
+```ts
+{
+  phone: string;
+  code: string | number;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'ex' | 'nf'; // success | invalid | expired | not found
+  message: string;
+  token?: Token;
+  subject?: {
+    id: string;
+    phone: string;
+    verified: true;
+  };
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Validates code matches stored verification code
+- Checks code hasn't expired
+- Marks phone identity as `verified: true`
+- Deletes verification code record
+- Creates session token
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('phone-password', 'verify-phone', {
+  phone: '+15555551234',
+  code: '123456',
+});
+
+if (result.success) {
+  console.log('Phone verified!');
+  localStorage.setItem('authToken', result.token.accessToken);
+} else if (result.status === 'ex') {
+  console.log('Code expired. Request a new one.');
+}
+```
+
+### 4. Resend Verification
+
+**Step name:** `resend-verify-phone`  
+**HTTP:** `POST /auth/phone/resend-verify`
+
+Resend SMS verification code.
+
+**Input:**
+
+```ts
+{
+  phone: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'nf'; // success | invalid | not found
+  message: string;
+  expiresAt?: string;
+  others?: Record<string, any>;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep(
+  'phone-password',
+  'resend-verify-phone',
+  {
+    phone: '+15555551234',
+  },
+);
+
+if (result.success) {
+  console.log('New code sent! Expires:', result.expiresAt);
+}
+```
+
+## Password Management
+
+### 5. Send Reset Password Code
+
+**Step name:** `send-reset-password`  
+**HTTP:** `POST /auth/phone/send-reset`
+
+Send SMS code for password reset.
+
+**Input:**
+
+```ts
+{
+  phone: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'nf';
+  message: string;
+  expiresAt?: string;
+  others?: Record<string, any>;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep(
+  'phone-password',
+  'send-reset-password',
+  {
+    phone: '+15555551234',
+  },
+);
+
+if (result.success) {
+  console.log('Reset code sent via SMS');
+}
+```
+
+### 6. Reset Password
+
+**Step name:** `reset-password`  
+**HTTP:** `POST /auth/phone/reset-password`
+
+Reset password using SMS code.
+
+**Input:**
+
+```ts
+{
+  phone: string;
+  code: string | number;
+  newPassword: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'ex' | 'nf';
+  message: string;
+  token?: Token;
+  others?: Record<string, any>;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('phone-password', 'reset-password', {
+  phone: '+15555551234',
+  code: '654321',
+  newPassword: 'NewSecurePassword456!',
+});
+
+if (result.success) {
+  console.log('Password reset successfully');
+}
+```
+
+### 7. Change Password
+
+**Step name:** `change-password`  
+**HTTP:** `POST /auth/phone/change-password`  
+**Auth:** Required
+
+Change password for authenticated user.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  oldPassword: string;
+  newPassword: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic';
+  message: string;
+  token?: Token;
+  others?: Record<string, any>;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('phone-password', 'change-password', {
+  token: userToken,
+  oldPassword: 'CurrentPassword123!',
+  newPassword: 'NewPassword456!',
+});
+```
+
+### 8. Change Phone
+
+**Step name:** `change-phone`  
+**HTTP:** `POST /auth/phone/change-phone`  
+**Auth:** Required
+
+Change phone number for authenticated user.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  newPhone: string;
+  password: string; // Confirm with current password
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'eq';
+  message: string;
+  token?: Token;
+  verificationRequired?: boolean;
+  others?: Record<string, any>;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('phone-password', 'change-phone', {
+  token: userToken,
+  newPhone: '+15555559999',
+  password: 'CurrentPassword123!',
+});
+
+if (result.success && result.verificationRequired) {
+  console.log('Verify new phone with SMS code');
+}
+```
+
+## Background Cleanup
+
+The plugin registers a cleanup task that runs every `cleanupIntervalMinutes` (default: 60 minutes) to delete expired verification and reset codes.
+
+**Cleanup result structure:**
+
+```ts
+{
+  cleaned: number; // Total codes deleted
+  verificationCodesDeleted: number;
+  resetCodesDeleted: number;
+  errors?: string[];
+}
+```
+
+## Profile API
+
+```ts
+const profile = await engine.getUnifiedProfile('user-123');
+
+// profile.plugins['phone-password']
+{
+  phones: [
+    {
+      phone: '+15555551234',
+      verified: true,
+      pendingVerification: false,
+      created_at: '2025-10-03T10:00:00Z',
+      updated_at: '2025-10-03T10:00:00Z'
+    }
+  ],
+  password: { set: true }
+}
+```
+
+## HTTP Adapter Integration
+
+```ts
+POST /auth/phone/register              → phone-password:register
+POST /auth/phone/login                 → phone-password:login
+POST /auth/phone/verify                → phone-password:verify-phone
+POST /auth/phone/resend-verify         → phone-password:resend-verify-phone
+POST /auth/phone/send-reset            → phone-password:send-reset-password
+POST /auth/phone/reset-password        → phone-password:reset-password
+POST /auth/phone/change-password       → phone-password:change-password (auth)
+POST /auth/phone/change-phone          → phone-password:change-phone (auth)
+```
+
+## SMS Providers
+
+### Twilio
+
+```ts
+import twilio from 'twilio';
+
+const client = twilio(accountSid, authToken);
+
+sendCode: async (subject, code, phone, type) => {
+  await client.messages.create({
+    to: phone,
+    from: twilioPhoneNumber,
+    body: `Your ${type === 'verify' ? 'verification' : 'reset'} code is: ${code}`,
+  });
+};
+```
+
+### AWS SNS
+
+```ts
+import { SNS } from '@aws-sdk/client-sns';
+
+const sns = new SNS({ region: 'us-east-1' });
+
+sendCode: async (subject, code, phone, type) => {
+  await sns.publish({
+    PhoneNumber: phone,
+    Message: `Your ${type === 'verify' ? 'verification' : 'reset'} code is: ${code}`,
+  });
+};
+```
+
+## Test Users
+
+```ts
+phonePasswordPlugin({
+  testUsers: {
+    enabled: true,
+    environment: process.env.NODE_ENV!,
+    checkEnvironment: (env) => env === 'development' || env === 'staging',
+    users: [
+      {
+        phone: '+15555551234',
+        password: 'TestPass123!',
+        profile: { name: 'Test User 1', role: 'tester' },
+      },
+      {
+        phone: '+15555555678',
+        password: 'TestPass456!',
+        profile: { name: 'Test User 2', role: 'admin' },
+      },
+    ],
+  },
+});
+
+// Test users bypass SMS sending and use predefined credentials
+// Perfect for CI/CD pipelines and automated testing
+```
+
+## Security Considerations
+
+<Steps>
+  <Step>
+    <h4>1. Phone Format Validation</h4>
+    <p>
+      Always use E.164 format (+[country code][number]) for international
+      compatibility.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. SMS Rate Limiting</h4>
+    <p>
+      Implement rate limiting at the HTTP adapter level to prevent SMS abuse
+      (e.g., max 3 codes per phone per hour).
+    </p>
+  </Step>
+  <Step>
+    <h4>3. Code Expiration</h4>
+    <p>
+      Default 30-minute expiration for codes. Adjust based on your security
+      requirements and user experience.
+    </p>
+  </Step>
+  <Step>
+    <h4>4. Password Hashing</h4>
+    <p>
+      Passwords are hashed with bcrypt (10 rounds by default). Never store
+      plaintext passwords.
+    </p>
+  </Step>
+  <Step>
+    <h4>5. Test Users in Production</h4>
+    <p>
+      Always use <code>checkEnvironment</code> to prevent test users from being
+      enabled in production.
+    </p>
+  </Step>
+</Steps>
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password Plugin"
+    description="Similar authentication with email addresses instead of phone numbers."
+  />
+  <Card
+    href="/docs/engine/plugins/passwordless"
+    title="Passwordless Plugin"
+    description="Combine phone with magic links for passwordless authentication."
+  />
+  <Card
+    href="/docs/engine/plugins/organization"
+    title="Organization Plugin"
+    description="Add phone users to organizations."
+  />
+</Cards>

@@ -1,0 +1,748 @@
+---
+title: Anonymous Plugin
+description: Temporary guest sessions with device fingerprinting and session conversion.
+---
+
+## Overview
+
+The `anonymous` plugin enables **guest access** to your application without requiring upfront registration. Perfect for:
+
+- **Try-before-signup** experiences (e.g., shopping carts, document editors)
+- **Progressive authentication** flows where users can start using your app immediately
+- **Session persistence** with device fingerprinting to maintain temporary state
+- **Frictionless conversion** from guest to registered user accounts
+
+Key features:
+
+- Device fingerprint-based session tracking (SHA-256 hashed for security)
+- Configurable session expiration and extension limits
+- Automatic cleanup of expired guest sessions
+- Seamless conversion to registered accounts via any authentication plugin
+
+<Callout title="Security first" type="warn">
+  Device fingerprints are hashed with SHA-256 before storage. The plugin never
+  stores raw fingerprints, making them non-reversible even if the database is
+  compromised.
+</Callout>
+
+## Installation & Setup
+
+```npm
+npm i @re-auth/reaut
+```
+
+### Basic Configuration
+
+```ts
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import anonymousPlugin, {
+  anonymousSchema,
+} from '@re-auth/reauth/plugins/anonymous';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema and client
+const { schema: v1 } = reauthDb('1.0.1', [
+  emailPasswordSchema,
+  anonymousSchema,
+]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  plugins: [
+    // Register other plugins for conversion targets
+    emailPasswordPlugin({
+      sessionTtlSeconds: 3600,
+      enableRegistration: true,
+    }),
+    anonymousPlugin({
+      sessionTtlSeconds: 1800, // 30 minutes
+      maxGuestsPerFingerprint: 3,
+      guestDataRetentionDays: 7,
+      allowSessionExtension: true,
+      maxSessionExtensions: 3,
+      fingerprintRequired: true,
+      cleanupIntervalMs: 300000, // 5 minutes
+    }),
+  ],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
+  },
+});
+```
+
+### With Conversion Targets
+
+```ts
+import { type } from 'arktype';
+
+anonymousPlugin({
+  sessionTtlSeconds: 1800,
+  allowedConversionPlugins: ['email-password', 'phone', 'username'],
+  conversionTargets: {
+    'email-password': {
+      step: 'register',
+      inputValidation: type({
+        email: 'string.email',
+        password: 'string>=8',
+      }),
+      mapInput: async ({ conversionData, guest, ctx }) => ({
+        email: conversionData.email,
+        password: conversionData.password,
+        metadata: {
+          ...guest.metadata,
+          convertedFrom: 'guest',
+          guestId: guest.id,
+        },
+      }),
+      extract: {
+        subjectId: (output) => output.subject?.id,
+        token: (output) => output.token?.accessToken,
+      },
+    },
+  },
+});
+```
+
+## Configuration
+
+### AnonymousConfig
+
+| Option                      | Type                                         | Default  | Description                                                                                    |
+| --------------------------- | -------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `sessionTtlSeconds`         | `number`                                     | `1800`   | Guest session TTL in seconds (30 minutes). Must be 300-86400 (5 min - 24 hours).               |
+| `maxGuestsPerFingerprint`   | `number`                                     | `3`      | Max concurrent guest sessions per device fingerprint. Must be 1-10.                            |
+| `guestDataRetentionDays`    | `number`                                     | `7`      | How long to keep guest session data after expiration (days). Minimum 1 day.                    |
+| `guestSubjectRetentionDays` | `number`                                     | `7`      | How long to keep orphaned guest subjects after session deletion. Minimum 1 day.                |
+| `allowSessionExtension`     | `boolean`                                    | `true`   | Whether guests can extend their session before expiration.                                     |
+| `maxSessionExtensions`      | `number`                                     | `3`      | Max times a session can be extended. Must be 0-10.                                             |
+| `fingerprintRequired`       | `boolean`                                    | `true`   | Whether device fingerprint is required to create guest sessions.                               |
+| `cleanupIntervalMs`         | `number`                                     | `300000` | Cleanup interval in milliseconds (5 minutes). Must be 60000-86400000 (1 min - 24 hours).       |
+| `allowedConversionPlugins`  | `string[]`                                   | -        | Whitelist of plugin names allowed as conversion targets (e.g., `['email-password', 'phone']`). |
+| `conversionTargets`         | `Record<string, ConversionTargetDefinition>` | -        | Configuration for converting guests to registered users via specific plugins.                  |
+
+### ConversionTargetDefinition
+
+```ts
+{
+  step: string; // Step name in target plugin (e.g., 'register')
+  inputValidation?: Type<any>; // ArkType validation for conversionData
+  mapInput?: (args: {
+    conversionData: Record<string, any>;
+    guest: { id: string; metadata?: any };
+    ctx: StepContext<AnonymousConfig>;
+  }) => Promise<Record<string, any>> | Record<string, any>;
+  extract?: {
+    subjectId?: (output: any) => string | undefined;
+    token?: (output: any) => string | undefined;
+  };
+}
+```
+
+## Guest Session Management
+
+### 1. Create Guest
+
+**Step name:** `create-guest`  
+**HTTP:** `POST /auth/create-guest`
+
+Create a new anonymous guest session.
+
+**Input:**
+
+```ts
+{
+  fingerprint?: string; // Device fingerprint (auto-generated if omitted)
+  userAgent?: string; // For fingerprint generation
+  ip?: string; // For fingerprint generation
+  metadata?: Record<string, any>; // Custom guest metadata
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'tl'; // success | invalid | too many
+  message: string;
+  token?: Token;
+  subject?: {
+    id: string;
+    type: 'guest';
+    fingerprint: string; // Hashed (SHA-256)
+    temporary: true;
+    expiresAt: string;
+    metadata?: Record<string, any>;
+  };
+  guestId?: string;
+  expiresAt?: string;
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Generates device fingerprint from `userAgent`, `ip`, and optional metadata if not provided
+- Hashes fingerprint with SHA-256 before storage (non-reversible)
+- Checks `maxGuestsPerFingerprint` limit (prevents device abuse)
+- Creates subject in `subjects` table
+- Tracks guest subject in `anonymous_subjects` table for safe cleanup
+- Creates session record in `anonymous_sessions` with hashed fingerprint
+- Generates session token with `sessionTtlSeconds` TTL
+- Runs opportunistic cleanup of expired sessions (best-effort)
+
+**Example:**
+
+```ts
+// Client sends device info
+const result = await engine.executeStep('anonymous', 'create-guest', {
+  userAgent: navigator.userAgent,
+  ip: clientIpAddress,
+  metadata: {
+    landingPage: '/product/awesome-widget',
+    referrer: 'google-ads',
+  },
+});
+
+if (result.success) {
+  // Store guest token
+  localStorage.setItem('guestToken', result.token.accessToken);
+  console.log('Guest session expires:', result.expiresAt);
+  console.log('Guest ID:', result.guestId);
+}
+```
+
+**Fingerprint generation:**
+
+The plugin automatically generates a fingerprint hash based on:
+
+- User-Agent header
+- IP address
+- Optional custom metadata
+
+If you prefer to generate fingerprints client-side:
+
+```ts
+// Client-side fingerprinting (example with FingerprintJS)
+import FingerprintJS from '@fingerprintjs/fingerprintjs';
+
+const fp = await FingerprintJS.load();
+const { visitorId } = await fp.get();
+
+const result = await fetch('/auth/create-guest', {
+  method: 'POST',
+  body: JSON.stringify({ fingerprint: visitorId }),
+});
+```
+
+### 2. Extend Guest
+
+**Step name:** `extend-guest`  
+**HTTP:** `POST /auth/extend-guest`  
+**Auth:** Required
+
+Extend the expiration of an active guest session.
+
+**Input:**
+
+```ts
+{
+  token: Token; // Current guest session token
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'tl'; // success | invalid | invalid | limit reached
+  message: string;
+  token?: Token; // New token with extended expiration
+  subject?: {
+    id: string;
+    type: 'guest';
+    fingerprint: string;
+    temporary: true;
+    expiresAt: string; // New expiration
+    metadata?: Record<string, any>;
+  };
+  newExpiresAt?: string;
+  extensionsRemaining?: number;
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Validates guest session token
+- Checks if session is an anonymous session
+- Validates session hasn't already expired
+- Checks `maxSessionExtensions` limit
+- Increments `extension_count` in database
+- Calculates new expiration: `now + sessionTtlSeconds`
+- Creates new token with extended TTL
+- Returns remaining extensions count
+
+**Example:**
+
+```ts
+// Extend session before expiration (e.g., user is still active)
+const result = await engine.executeStep('anonymous', 'extend-guest', {
+  token: guestToken,
+});
+
+if (result.success) {
+  console.log('Session extended until:', result.newExpiresAt);
+  console.log('Extensions remaining:', result.extensionsRemaining);
+  // Update stored token
+  localStorage.setItem('guestToken', result.token.accessToken);
+} else if (result.status === 'tl') {
+  console.log('Maximum extensions reached. Please register.');
+}
+```
+
+**UI pattern: Auto-extension:**
+
+```ts
+// Warn user 5 minutes before expiration
+const WARN_BEFORE_MS = 5 * 60 * 1000;
+
+function scheduleExpirationWarning(expiresAt: string) {
+  const warnAt = new Date(expiresAt).getTime() - WARN_BEFORE_MS;
+  const now = Date.now();
+
+  if (warnAt > now) {
+    setTimeout(() => {
+      showWarning(
+        'Your session will expire soon. Extend or create an account?',
+        {
+          onExtend: async () => {
+            const result = await extendGuestSession();
+            if (result.success) {
+              scheduleExpirationWarning(result.newExpiresAt);
+            }
+          },
+          onRegister: () => navigateToSignup(),
+        },
+      );
+    }, warnAt - now);
+  }
+}
+```
+
+### 3. Convert Guest
+
+**Step name:** `convert-guest`  
+**HTTP:** `POST /auth/convert-guest`  
+**Auth:** Required
+
+Convert an anonymous guest session to a registered user account.
+
+**Input:**
+
+```ts
+{
+  token: Token; // Guest session token
+  conversionData: Record<string, any>; // Data for target plugin (email, password, etc.)
+  targetPlugin: string; // Plugin to convert to (e.g., 'email-password')
+  preserveMetadata?: boolean; // Whether to preserve guest metadata
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'unf';
+  message: string;
+  error?: string | object;
+  token?: Token; // New registered user token
+  subject?: {
+    id: string; // New subject ID
+    type: 'registered';
+    convertedFrom: 'guest';
+    targetPlugin: string;
+    temporary: false;
+    metadata?: Record<string, any>;
+  };
+  convertedTo?: string;
+  preservedMetadata?: Record<string, any>;
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Validates guest session token
+- Checks session is an anonymous session and not expired
+- Validates `targetPlugin` is in `allowedConversionPlugins` (if configured)
+- Retrieves conversion target configuration from `conversionTargets`
+- Validates `conversionData` against `inputValidation` schema (if provided)
+- Maps input using `mapInput` function
+- Executes target plugin's configured step (e.g., `email-password:register`)
+- Extracts new subject ID and token using `extract` configuration
+- Deletes anonymous session and subject records (cleanup)
+- Returns new registered user token
+
+**Example: Convert to Email/Password:**
+
+```ts
+// Guest decides to register
+const result = await engine.executeStep('anonymous', 'convert-guest', {
+  token: guestToken,
+  targetPlugin: 'email-password',
+  conversionData: {
+    email: 'user@example.com',
+    password: 'SecurePassword123!',
+  },
+  preserveMetadata: true, // Keep guest shopping cart, preferences, etc.
+});
+
+if (result.success) {
+  console.log('Converted to registered user:', result.subject.id);
+  console.log('Preserved metadata:', result.preservedMetadata);
+  // Update stored token
+  localStorage.setItem('authToken', result.token.accessToken);
+  localStorage.removeItem('guestToken');
+}
+```
+
+**Example: Multi-step conversion flow:**
+
+```tsx
+function GuestConversionModal({ guestToken, guestMetadata }) {
+  const [step, setStep] = useState('choice');
+
+  if (step === 'choice') {
+    return (
+      <div>
+        <h2>Save your progress</h2>
+        <p>Your cart: {guestMetadata.cartItems?.length} items</p>
+        <button onClick={() => setStep('email')}>Sign up with Email</button>
+        <button onClick={() => setStep('phone')}>Sign up with Phone</button>
+      </div>
+    );
+  }
+
+  if (step === 'email') {
+    return (
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const result = await convertGuest({
+            token: guestToken,
+            targetPlugin: 'email-password',
+            conversionData: {
+              email: e.target.email.value,
+              password: e.target.password.value,
+            },
+            preserveMetadata: true,
+          });
+          if (result.success) {
+            navigateToDashboard();
+          }
+        }}
+      >
+        <input name="email" type="email" required />
+        <input name="password" type="password" required minLength={8} />
+        <button>Create Account & Continue</button>
+      </form>
+    );
+  }
+}
+```
+
+## Background Cleanup
+
+The plugin registers a cleanup task that runs every `cleanupIntervalMs` (default: 5 minutes) to:
+
+1. **Delete expired sessions**: Sessions where `expires_at < NOW()`
+2. **Delete orphaned guest subjects**: Subjects in `anonymous_subjects` with no matching session (after `guestSubjectRetentionDays`)
+
+**Cleanup result structure:**
+
+```ts
+{
+  cleaned: number; // Total items cleaned
+  sessionsDeleted: number;
+  subjectsDeleted: number;
+  errors?: string[];
+}
+```
+
+**Disable cleanup:**
+
+```ts
+const engine = createReAuthEngine({
+  enableCleanupScheduler: false, // Disables all cleanup tasks
+  // ...
+});
+```
+
+**Adjust interval:**
+
+```ts
+anonymousPlugin({
+  cleanupIntervalMs: 600000, // Cleanup every 10 minutes
+  // ...
+});
+```
+
+<Callout title="Performance consideration" type="info">
+  The default 5-minute cleanup interval is aggressive to prevent guest session
+  buildup. For high-traffic applications, consider increasing to 15-30 minutes
+  and monitoring database size.
+</Callout>
+
+## Profile API
+
+The plugin exposes a `getProfile` method for retrieving guest session details:
+
+```ts
+const profile = await engine.getUnifiedProfile('guest-123');
+
+// profile.plugins['anonymous']
+{
+  anonymous_session: {
+    fingerprint: '5f4dcc3b5aa7...', // SHA-256 hash
+    created_at: '2025-10-03T10:00:00Z',
+    expires_at: '2025-10-03T10:30:00Z',
+    extension_count: 1,
+    metadata: {
+      cartItems: ['item-1', 'item-2'],
+      preferences: { theme: 'dark' }
+    }
+  }
+}
+```
+
+## Session Resolver
+
+The plugin registers a custom session resolver for guest subjects:
+
+```ts
+// When resolving a guest session, the subject includes:
+{
+  id: 'guest-123',
+  type: 'guest',
+  temporary: true,
+  fingerprint: '5f4dcc3b5aa7...', // Hashed
+  expiresAt: '2025-10-03T10:30:00Z',
+  metadata: { ... },
+  extensionsUsed: 1
+}
+
+// Sanitized public response (fingerprint removed):
+{
+  id: 'guest-123',
+  type: 'guest',
+  temporary: true,
+  expiresAt: '2025-10-03T10:30:00Z',
+  metadata: { ... },
+  extensionsUsed: 1
+}
+```
+
+## HTTP Adapter Integration
+
+When using HTTP adapters, anonymous steps are automatically exposed:
+
+```ts
+POST /auth/create-guest     → anonymous:create-guest
+POST /auth/extend-guest     → anonymous:extend-guest (auth)
+POST /auth/convert-guest    → anonymous:convert-guest (auth)
+```
+
+## Complete Example: Progressive Authentication
+
+```ts
+// 1. User lands on your app (no authentication)
+const guestResult = await engine.executeStep('anonymous', 'create-guest', {
+  userAgent: req.headers['user-agent'],
+  ip: req.ip,
+  metadata: {
+    landingPage: req.path,
+    referrer: req.headers['referer'],
+  },
+});
+
+// Store guest token in cookie
+res.cookie('guest_token', guestResult.token.accessToken);
+
+// 2. User adds items to cart (using guest session)
+const cartData = { items: ['product-1', 'product-2'], total: 59.99 };
+await db
+  .update('anonymous_sessions')
+  .set({ metadata: cartData })
+  .where({ subject_id: guestResult.guestId });
+
+// 3. User extends session (still browsing)
+const extendResult = await engine.executeStep('anonymous', 'extend-guest', {
+  token: guestResult.token,
+});
+
+// 4. User decides to checkout → convert to registered account
+const convertResult = await engine.executeStep('anonymous', 'convert-guest', {
+  token: extendResult.token,
+  targetPlugin: 'email-password',
+  conversionData: {
+    email: 'user@example.com',
+    password: 'SecurePassword123!',
+  },
+  preserveMetadata: true, // Cart data preserved
+});
+
+// 5. Continue with registered user session
+res.cookie('auth_token', convertResult.token.accessToken);
+res.clearCookie('guest_token');
+```
+
+## Security Considerations
+
+<Steps>
+  <Step>
+    <h4>1. Fingerprint Hashing</h4>
+    <p>
+      Device fingerprints are hashed with SHA-256 before storage. Even if the
+      database is compromised, attackers cannot reverse the hash to identify
+      devices.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. Session Limits</h4>
+    <p>
+      <code>maxGuestsPerFingerprint</code> prevents device abuse by limiting
+      concurrent guest sessions per fingerprint (default 3).
+    </p>
+  </Step>
+  <Step>
+    <h4>3. Short TTL</h4>
+    <p>
+      Guest sessions default to 30 minutes (vs. 1 hour for registered users).
+      This limits exposure if a guest token is stolen.
+    </p>
+  </Step>
+  <Step>
+    <h4>4. Extension Limits</h4>
+    <p>
+      <code>maxSessionExtensions</code> (default 3) prevents indefinite guest
+      sessions, encouraging conversion to registered accounts.
+    </p>
+  </Step>
+  <Step>
+    <h4>5. Automatic Cleanup</h4>
+    <p>
+      Background cleanup every 5 minutes removes expired sessions and orphaned
+      subjects, preventing data accumulation.
+    </p>
+  </Step>
+  <Step>
+    <h4>6. Conversion Whitelist</h4>
+    <p>
+      <code>allowedConversionPlugins</code> restricts which plugins guests can
+      convert to, preventing unauthorized access patterns.
+    </p>
+  </Step>
+</Steps>
+
+## Use Cases
+
+### E-commerce: Guest Checkout
+
+```ts
+// Allow browsing and cart without signup
+const guest = await createGuest({ metadata: { source: 'homepage' } });
+
+// Add items to cart (stored in guest metadata)
+await updateGuestMetadata(guest.id, { cart: [...items] });
+
+// At checkout, convert to registered user
+await convertGuest({
+  token: guest.token,
+  targetPlugin: 'email-password',
+  conversionData: { email, password },
+  preserveMetadata: true, // Keep cart
+});
+```
+
+### SaaS: Free Trial
+
+```ts
+// Try app features without signup
+const guest = await createGuest({ metadata: { trialStarted: new Date() } });
+
+// Track usage in guest session
+await logGuestAction(guest.id, 'created-document');
+
+// When user hits feature limit, prompt conversion
+if (guestActions.length >= 3) {
+  showModal('Upgrade to unlimited access', {
+    onSignup: () => convertGuestToUser(),
+  });
+}
+```
+
+### Collaborative Tools: Anonymous Editing
+
+```ts
+// Join collaborative document as guest
+const guest = await createGuest({
+  metadata: {
+    documentId: 'doc-123',
+    displayName: 'Anonymous User',
+  },
+});
+
+// Real-time collaboration using guest session
+websocket.emit('join', {
+  token: guest.token.accessToken,
+  documentId: 'doc-123',
+});
+
+// Later, convert to save work permanently
+await convertGuest({
+  targetPlugin: 'email-password',
+  preserveMetadata: true, // Keep document edits
+});
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password Plugin"
+    description="Convert guests to email/password accounts."
+  />
+  <Card
+    href="/docs/engine/plugins/organization"
+    title="Organization Plugin"
+    description="Add guests to organizations after conversion."
+  />
+  <Card
+    href="/docs/engine/configuration"
+    title="Engine Configuration"
+    description="Configure cleanup intervals and session TTLs."
+  />
+</Cards>

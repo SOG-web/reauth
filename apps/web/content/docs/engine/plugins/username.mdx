@@ -1,0 +1,492 @@
+---
+title: Username + Password Plugin
+description: Simple username-based authentication without email verification.
+---
+
+## Overview
+
+The `username-password` plugin provides **username-based authentication** - a simpler alternative to email-based auth when email verification isn't required. Perfect for:
+
+- **Internal tools** and admin panels
+- **Gaming platforms** where usernames are primary identifiers
+- **Privacy-focused applications** that don't collect emails
+- **Legacy system migrations** from username-based auth
+
+Key features:
+
+- **No verification required** - usernames don't need verification like emails
+- **Simple registration** with username + password
+- **Password management** (change password)
+- **Test users** for development
+- **Instant login** after registration (configurable)
+
+<Callout title="No email required" type="info">
+  This plugin doesn't require or validate email addresses. If you need
+  email-based features (verification, password reset via email), use the
+  `email-password` plugin instead.
+</Callout>
+
+## Installation & Setup
+
+```npm
+npm i @re-auth/reauth
+```
+
+### Basic Configuration
+
+```ts
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import usernamePasswordPlugin, {
+  usernamePasswordSchema,
+} from '@re-auth/reauth/plugins/username';
+
+// Setup database schema and client
+const { schema: v1 } = reauthDb('1.0.1', [usernamePasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  plugins: [
+    usernamePasswordPlugin({
+      loginOnRegister: true,
+      sessionTtlSeconds: 3600,
+      enableResetByUsername: false, // Username reset not yet implemented
+      cleanupIntervalMinutes: 60,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
+  },
+});
+```
+
+### With Test Users
+
+```ts
+usernamePasswordPlugin({
+  loginOnRegister: true,
+  sessionTtlSeconds: 3600,
+  testUsers: {
+    enabled: true,
+    environment: process.env.NODE_ENV!,
+    checkEnvironment: (env) => env !== 'production',
+    users: [
+      {
+        username: 'testuser',
+        password: 'TestPassword123!',
+        profile: { name: 'Test User', role: 'tester' },
+      },
+      {
+        username: 'admin',
+        password: 'AdminPass456!',
+        profile: { name: 'Admin User', role: 'admin' },
+      },
+    ],
+  },
+});
+```
+
+## Configuration
+
+### UsernamePasswordConfig
+
+| Option                       | Type                                                | Default     | Description                                               |
+| ---------------------------- | --------------------------------------------------- | ----------- | --------------------------------------------------------- |
+| `loginOnRegister`            | `boolean`                                           | `true`      | Create session token on registration (auto-login).        |
+| `sessionTtlSeconds`          | `number`                                            | `3600`      | Session token TTL in seconds (1 hour).                    |
+| `enableResetByUsername`      | `boolean`                                           | `false`     | Enable password reset by username (not yet implemented).  |
+| `resetPasswordCodeExpiresIn` | `number`                                            | `1800000`   | Reset code expiration in milliseconds (30 minutes).       |
+| `codeType`                   | `'numeric' \| 'alphanumeric' \| 'alphabet'`         | `'numeric'` | Type of code for reset (if implemented).                  |
+| `codeLength`                 | `number`                                            | `4`         | Length of generated codes (if reset implemented).         |
+| `cleanupIntervalMinutes`     | `number`                                            | `60`        | Cleanup interval in minutes. Must be 1-1440 (1-24 hours). |
+| `testUsers`                  | `{ enabled, users, environment, checkEnvironment }` | -           | Test user configuration for development.                  |
+
+## Authentication Steps
+
+### 1. Register
+
+**Step name:** `register`  
+**HTTP:** `POST /auth/username/register`
+
+Register a new user with username and password.
+
+**Input:**
+
+```ts
+{
+  username: string;
+  password: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'eq'; // success | invalid | exists
+  message: string;
+  token?: Token; // If loginOnRegister: true
+  subject?: {
+    id: string;
+    username: string;
+    verified: boolean;
+  };
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Validates username format (no spaces, alphanumeric + underscore/hyphen)
+- Checks if username already exists
+- Hashes password with bcrypt
+- Creates subject and username identity
+- Sets `verified: true` (no verification needed)
+- Returns session token if `loginOnRegister: true`
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('username-password', 'register', {
+  username: 'johndoe',
+  password: 'SecurePassword123!',
+  others: { displayName: 'John Doe', avatar: 'avatar1.png' },
+});
+
+if (result.success) {
+  console.log('Registered as:', result.subject.username);
+  if (result.token) {
+    localStorage.setItem('authToken', result.token.accessToken);
+  }
+}
+```
+
+**Username validation:**
+
+```ts
+// Typical username requirements:
+// - 3-20 characters
+// - Alphanumeric + underscore/hyphen
+// - No spaces
+// - Case-insensitive (stored lowercase)
+
+const isValidUsername = (username: string) => {
+  return /^[a-zA-Z0-9_-]{3,20}$/.test(username);
+};
+```
+
+### 2. Login
+
+**Step name:** `login`  
+**HTTP:** `POST /auth/username/login`
+
+Authenticate with username and password.
+
+**Input:**
+
+```ts
+{
+  username: string;
+  password: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic'; // success | invalid credentials
+  message: string;
+  token?: Token;
+  subject?: {
+    id: string;
+    username: string;
+    verified: boolean;
+  };
+  others?: Record<string, any>;
+}
+```
+
+**Behavior:**
+
+- Finds username identity (case-insensitive)
+- Verifies password with bcrypt
+- Creates session token on success
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('username-password', 'login', {
+  username: 'johndoe',
+  password: 'SecurePassword123!',
+});
+
+if (result.success) {
+  console.log('Logged in as:', result.subject.username);
+  localStorage.setItem('authToken', result.token.accessToken);
+  window.location.href = '/dashboard';
+} else {
+  console.error('Invalid username or password');
+}
+```
+
+### 3. Change Password
+
+**Step name:** `change-password`  
+**HTTP:** `POST /auth/username/change-password`  
+**Auth:** Required
+
+Change password for authenticated user.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  oldPassword: string;
+  newPassword: string;
+  others?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic'; // success | unauthorized | invalid
+  message: string;
+  token?: Token;
+  others?: Record<string, any>;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep(
+  'username-password',
+  'change-password',
+  {
+    token: userToken,
+    oldPassword: 'CurrentPassword123!',
+    newPassword: 'NewPassword456!',
+  },
+);
+
+if (result.success) {
+  console.log('Password changed successfully');
+}
+```
+
+## Profile API
+
+```ts
+const profile = await engine.getUnifiedProfile('user-123');
+
+// profile.plugins['username-password']
+{
+  usernames: [
+    {
+      username: 'johndoe',
+      verified: true,
+      created_at: '2025-10-03T10:00:00Z',
+      updated_at: '2025-10-03T10:00:00Z'
+    }
+  ],
+  password: { set: true }
+}
+```
+
+## HTTP Adapter Integration
+
+```ts
+POST /auth/username/register           → username-password:register
+POST /auth/username/login              → username-password:login
+POST /auth/username/change-password    → username-password:change-password (auth)
+```
+
+## Test Users
+
+```ts
+usernamePasswordPlugin({
+  testUsers: {
+    enabled: true,
+    environment: process.env.NODE_ENV!,
+    checkEnvironment: (env) => env === 'development' || env === 'staging',
+    users: [
+      {
+        username: 'testuser',
+        password: 'TestPass123!',
+        profile: { displayName: 'Test User', role: 'tester' },
+      },
+    ],
+  },
+});
+
+// Test users bypass database checks and use predefined credentials
+// Perfect for automated testing and CI/CD pipelines
+```
+
+## Comparison with Email-Password
+
+| Feature               | Username-Password  | Email-Password    |
+| --------------------- | ------------------ | ----------------- |
+| Verification Required | ❌ No              | ✅ Yes (optional) |
+| Email Collection      | ❌ No              | ✅ Yes            |
+| Password Reset        | ❌ Not implemented | ✅ Via email      |
+| Privacy               | ✅ Higher          | ❌ Lower          |
+| User Experience       | ✅ Simpler         | ❌ More steps     |
+| Recovery Options      | ❌ Limited         | ✅ Email-based    |
+
+**When to use Username-Password:**
+
+- Internal tools where email isn't necessary
+- Gaming/social platforms with username culture
+- Privacy-focused apps
+- Simple MVPs and prototypes
+
+**When to use Email-Password:**
+
+- Public-facing applications
+- Need email notifications
+- Account recovery is critical
+- Email verification required for trust
+
+## Security Considerations
+
+<Steps>
+  <Step>
+    <h4>1. Username Uniqueness</h4>
+    <p>
+      Usernames are globally unique and case-insensitive. "JohnDoe" and
+      "johndoe" are treated as the same username.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. Password Hashing</h4>
+    <p>
+      Passwords are hashed with bcrypt (10 rounds by default). Never store
+      plaintext passwords.
+    </p>
+  </Step>
+  <Step>
+    <h4>3. No Recovery</h4>
+    <p>
+      Without email, password recovery is limited. Consider adding security
+      questions or backup codes if needed.
+    </p>
+  </Step>
+  <Step>
+    <h4>4. Brute Force Protection</h4>
+    <p>
+      Implement rate limiting at the HTTP adapter level to prevent brute force
+      attacks on login.
+    </p>
+  </Step>
+  <Step>
+    <h4>5. Username Enumeration</h4>
+    <p>
+      The plugin returns generic error messages to prevent username enumeration
+      attacks.
+    </p>
+  </Step>
+</Steps>
+
+## Complete Example: React Login Form
+
+```tsx
+function LoginForm() {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get('username') as string;
+    const password = formData.get('password') as string;
+
+    const step = mode === 'login' ? 'login' : 'register';
+    const result = await engine.executeStep('username-password', step, {
+      username,
+      password,
+    });
+
+    if (result.success) {
+      localStorage.setItem('authToken', result.token.accessToken);
+      window.location.href = '/dashboard';
+    } else {
+      setError(result.message);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h2>{mode === 'login' ? 'Login' : 'Create Account'}</h2>
+
+      {error && <div className="error">{error}</div>}
+
+      <input
+        name="username"
+        type="text"
+        placeholder="Username"
+        pattern="[a-zA-Z0-9_-]{3,20}"
+        required
+      />
+      <input
+        name="password"
+        type="password"
+        placeholder="Password"
+        minLength={8}
+        required
+      />
+
+      <button type="submit">{mode === 'login' ? 'Login' : 'Sign Up'}</button>
+
+      <button
+        type="button"
+        onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+      >
+        {mode === 'login' ? 'Create account' : 'Already have an account?'}
+      </button>
+    </form>
+  );
+}
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-or-username"
+    title="Email or Username Plugin"
+    description="Combine email and username authentication for flexibility."
+  />
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password Plugin"
+    description="Alternative with email verification and recovery options."
+  />
+  <Card
+    href="/docs/engine/plugins/organization"
+    title="Organization Plugin"
+    description="Add username users to organizations."
+  />
+</Cards>

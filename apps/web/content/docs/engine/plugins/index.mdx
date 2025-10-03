@@ -1,0 +1,345 @@
+---
+title: Plugins
+description: Understand how ReAuth plugins extend authentication flows and manage state.
+---
+
+## Plugin Architecture
+
+ReAuth plugins are self-contained modules that register authentication flows (called **steps**) and integrate with the core engine. Each plugin:
+
+- Defines a set of **steps** that handle specific authentication tasks
+- Registers **session resolvers** to hydrate user data
+- Optionally registers **cleanup tasks** for background maintenance
+- Can expose a **profile API** for aggregated user data
+- Supports **root-level hooks** that intercept all step executions
+
+<Callout title="Plugin isolation" type="info">
+  Plugins don't share state directly. They communicate through the engine's
+  container (dependency injection) and the database ORM, keeping concerns
+  separated.
+</Callout>
+
+## Plugin Lifecycle
+
+<Steps>
+  <Step>
+    <h4>1. Registration</h4>
+    <p>
+      The engine calls <code>plugin.initialize(engine, config)</code> during
+      construction, allowing the plugin to register resolvers, cleanup tasks,
+      and configure dependencies.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. Step Execution</h4>
+    <p>
+      When <code>engine.executeStep(pluginName, stepName, input)</code> runs,
+      the engine validates input, calls plugin-level and step-level hooks, and
+      returns typed output.
+    </p>
+  </Step>
+  <Step>
+    <h4>3. Background Tasks</h4>
+    <p>
+      Registered cleanup tasks run on intervals (e.g., every hour) to prune
+      expired codes, invitations, or sessions without blocking request flows.
+    </p>
+  </Step>
+  <Step>
+    <h4>4. Profile Aggregation</h4>
+    <p>
+      The engine can call <code>plugin.getProfile(subjectId, ctx)</code> to
+      gather user-specific data (emails, credentials, memberships) for unified
+      responses.
+    </p>
+  </Step>
+</Steps>
+
+## Built-in Plugins
+
+ReAuth ships with production-ready plugins for common authentication patterns:
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password"
+    description="Traditional username/email sign-in with verification codes and password resets."
+  />
+  <Card
+    href="/docs/engine/plugins/passwordless"
+    title="Passwordless"
+    description="Magic links and WebAuthn (passkeys) for frictionless authentication."
+  />
+  <Card
+    href="/docs/engine/plugins/organization"
+    title="Organizations"
+    description="Multi-tenant workspaces with role-based access control and invitations."
+  />
+  <Card
+    href="/docs/engine/plugins/oauth"
+    title="OAuth Providers"
+    description="Drop-in integrations for GitHub, Google, and custom OAuth servers."
+  />
+</Cards>
+
+## Creating a Custom Plugin
+
+To build your own plugin, implement the `AuthPlugin<Cfg>` interface:
+
+```ts
+import type { AuthPlugin, AuthStep, StepContext } from '@re-auth/reauth';
+
+interface MyPluginConfig {
+  apiKey: string;
+  enableFeature: boolean;
+}
+
+const myPlugin: AuthPlugin<MyPluginConfig> = {
+  name: 'my-plugin',
+  config: {
+    apiKey: process.env.API_KEY,
+    enableFeature: true,
+  },
+  initialize(engine, config) {
+    // Register session resolver
+    engine.registerSessionResolver('myProvider', {
+      async getById(id, orm) {
+        return await orm.findFirst('my_users', {
+          where: (b) => b('id', '=', id),
+        });
+      },
+    });
+
+    // Register cleanup task
+    engine.registerCleanupTask({
+      name: 'cleanup-stale-data',
+      pluginName: 'my-plugin',
+      intervalMs: 3600000, // 1 hour
+      enabled: true,
+      runner: async (orm, config) => {
+        // Prune old records
+        return { cleaned: 0 };
+      },
+    });
+  },
+  steps: [
+    {
+      name: 'authenticate',
+      description: 'Authenticate user with my provider',
+      inputs: ['token'],
+      validationSchema: type({
+        token: 'string',
+      }),
+      protocol: {
+        http: {
+          method: 'POST',
+          codes: { success: 200, invalid: 401 },
+        },
+      },
+      async run(input: { token: string }, ctx: StepContext<MyPluginConfig>) {
+        const { token } = input;
+        const orm = await ctx.engine.getOrm();
+
+        // Your authentication logic here
+        const user = await orm.findFirst('my_users', {
+          where: (b) => b('token', '=', token),
+        });
+
+        if (!user) {
+          return {
+            success: false,
+            status: 'invalid',
+            message: 'Invalid token',
+          };
+        }
+
+        const sessionToken = await ctx.engine.createSessionFor(
+          'myProvider',
+          user.id,
+          3600, // 1 hour TTL
+        );
+
+        return {
+          success: true,
+          status: 'success',
+          message: 'Authenticated',
+          token: sessionToken,
+          subject: user,
+        };
+      },
+    },
+  ],
+};
+```
+
+<Callout title="Step validation" type="warn">
+  Define `validationSchema` using ArkType to ensure input is validated before
+  execution. The engine automatically rejects malformed requests.
+</Callout>
+
+## Plugin Hooks
+
+Plugins support three levels of hooks for intercepting execution:
+
+### Root-level Hooks
+
+Execute before/after **every step** in the plugin:
+
+```ts
+const myPlugin: AuthPlugin<MyConfig> = {
+  name: 'my-plugin',
+  rootHooks: {
+    before: async (input, ctx, step) => {
+      console.log(`Executing ${step.name}`);
+      return input; // optionally transform input
+    },
+    after: async (output, ctx, step) => {
+      console.log(`Step ${step.name} completed`);
+      return output; // optionally transform output
+    },
+    onError: async (error, input, ctx, step) => {
+      console.error(`Step ${step.name} failed:`, error);
+    },
+  },
+  steps: [
+    /* ... */
+  ],
+};
+```
+
+### Step-level Hooks
+
+Execute only for a specific step:
+
+```ts
+{
+  name: 'login',
+  hooks: {
+    before: async (input, ctx) => {
+      // Log login attempt
+    },
+    after: async (output, ctx) => {
+      // Track successful login
+    },
+    onError: async (error, ctx) => {
+      // Alert on failed login
+    },
+  },
+  run: async (input, ctx) => {
+    // Step logic
+  },
+}
+```
+
+### Engine-level Hooks
+
+Register hooks that intercept **all plugins**:
+
+```ts
+engine.registerAuthHook({
+  type: 'before',
+  universal: true,
+  fn: async (data, container) => {
+    console.log('Before any step');
+    return data;
+  },
+});
+```
+
+## Session Resolvers
+
+Plugins register session resolvers to hydrate subject data when verifying tokens:
+
+```ts
+engine.registerSessionResolver('myProvider', {
+  async getById(id: string, orm: OrmLike) {
+    const user = await orm.findFirst('my_users', {
+      where: (b) => b('id', '=', id),
+    });
+    return user ?? null;
+  },
+  sanitize(subject: any) {
+    // Remove sensitive fields before responding
+    const { password, ...safe } = subject;
+    return safe;
+  },
+});
+```
+
+When `engine.checkSession(token)` is called, the resolver fetches the full user record and sanitizes it for API responses.
+
+## Cleanup Tasks
+
+Plugins can register background tasks to prune expired data:
+
+```ts
+engine.registerCleanupTask({
+  name: 'expired-codes',
+  pluginName: 'email-password',
+  intervalMs: 3600000, // 1 hour
+  enabled: true,
+  runner: async (orm, config) => {
+    const deleted = await orm.deleteMany('verification_codes', {
+      where: (b) => b('expires_at', '<', new Date()),
+    });
+    return { cleaned: deleted };
+  },
+});
+```
+
+The engine's `CleanupScheduler` runs these tasks automatically. Disable via `enableCleanupScheduler: false` in `ReAuthConfig`.
+
+<Callout title="Production cleanup" type="success">
+  Cleanup tasks run in the background without blocking request threads. Set
+  reasonable intervals (e.g., hourly) to balance resource usage and data
+  hygiene.
+</Callout>
+
+## Profile Aggregation
+
+Plugins expose a `getProfile` method to return user-specific data:
+
+```ts
+async getProfile(subjectId: string, ctx: PluginProfileContext) {
+  const orm = await ctx.engine.getOrm();
+  const identities = await orm.findMany('identities', {
+    where: (b) => b('subject_id', '=', subjectId),
+  });
+  return { identities };
+}
+```
+
+Call `engine.getUnifiedProfile(subjectId)` to aggregate data from all plugins:
+
+```ts
+const profile = await engine.getUnifiedProfile('user-123');
+// {
+//   subjectId: 'user-123',
+//   plugins: {
+//     'email-password': { emails: [...], password: { set: true } },
+//     'passwordless': { credentials: [...], magic_links: [...] },
+//     'organization': { organizations: [...] }
+//   },
+//   generatedAt: '2025-10-03T12:00:00Z'
+// }
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password Plugin"
+    description="Deep dive into configuration, steps, and verification flows."
+  />
+  <Card
+    href="/docs/engine/plugins/passwordless"
+    title="Passwordless Plugin"
+    description="Magic links, WebAuthn registration, and credential management."
+  />
+  <Card
+    href="/docs/engine/configuration"
+    title="Engine Configuration"
+    description="Configure session TTLs, cleanup intervals, and plugin order."
+  />
+</Cards>

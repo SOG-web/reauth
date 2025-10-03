@@ -1,0 +1,1063 @@
+---
+title: Organization Plugin
+description: Multi-tenant workspaces with role-based access control (RBAC).
+---
+
+## Overview
+
+The `organization` plugin enables **multi-tenancy** in your application by providing organization (workspace/team) management with:
+
+- **Organization Creation**: Users can create multiple organizations with hierarchical support
+- **Member Invitations**: Admin-controlled invitation system with expiration
+- **Role-Based Access Control**: Flexible roles (admin, member, viewer) and permissions
+- **Membership Management**: Add, remove, and update member roles
+- **Background Cleanup**: Automatic removal of expired invitations and memberships
+
+Perfect for SaaS platforms, team collaboration tools, and any application requiring workspace isolation.
+
+<Callout title="⚠️ PLUGIN DEPENDENCY (Optional)" type="warning">
+  If you set `useEmailPlugin: true`, the `email-password` plugin **MUST** be
+  registered **BEFORE** this plugin. The engine will throw an error at
+  initialization if the email plugin is missing. Alternatively, set
+  `useEmailPlugin: false` and provide a `getEmail` function to fetch email
+  addresses from your own user table.
+</Callout>
+
+<Callout title="Authentication Required" type="info">
+  All organization steps require an authenticated session token. Users must be
+  logged in before creating or managing organizations.
+</Callout>
+
+## Installation & Setup
+
+```npm
+npm i @re-auth/reauth
+```
+
+### Basic Configuration
+
+```ts
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import organizationPlugin, {
+  organizationSchema,
+} from '@re-auth/reauth/plugins/organization';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema and client
+const { schema: v1 } = reauthDb('1.0.1', [
+  emailPasswordSchema,
+  organizationSchema,
+]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  plugins: [
+    // ✅ REQUIRED: Email plugin MUST be registered FIRST if useEmailPlugin: true
+    emailPasswordPlugin({
+      sessionTtlSeconds: 3600,
+      verifyEmail: true,
+      sendEmail: async (to, type, payload) => {
+        await sendEmail(to, type, payload);
+      },
+    }),
+    // Then register organization plugin
+    organizationPlugin({
+      maxOrganizationsPerUser: 5,
+      allowHierarchy: true,
+      defaultRole: 'member',
+      availableRoles: ['admin', 'member', 'viewer'],
+      invitationTtlDays: 7,
+      cleanupIntervalMinutes: 120,
+      useEmailPlugin: true, // Uses email-password plugin for email lookups
+    }),
+  ],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
+  },
+});
+```
+
+### Without Email Plugin
+
+```ts
+organizationPlugin({
+  useEmailPlugin: false,
+  getEmail: async (email: string) => {
+    // Fetch email from your custom user table
+    const user = await db.query('SELECT email FROM users WHERE email = ?', [
+      email,
+    ]);
+    return user?.email ?? '';
+  },
+  // ... other config
+});
+```
+
+## Configuration
+
+### OrganizationConfig
+
+| Option                    | Type                                 | Default                         | Description                                                                                        |
+| ------------------------- | ------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `maxOrganizationsPerUser` | `number`                             | `10`                            | Maximum organizations a user can create (as admin). Must be 1-100.                                 |
+| `allowHierarchy`          | `boolean`                            | `true`                          | Enable parent/child organization relationships.                                                    |
+| `defaultRole`             | `string`                             | `'member'`                      | Default role assigned to new members.                                                              |
+| `availableRoles`          | `string[]`                           | `['admin', 'member', 'viewer']` | Allowed roles for organization members.                                                            |
+| `invitationTtlDays`       | `number`                             | `7`                             | Invitation expiration in days. Must be 1-30 days.                                                  |
+| `cleanupIntervalMinutes`  | `number`                             | `120`                           | Cleanup interval in minutes. Must be 60-1440 (1-24 hours).                                         |
+| `useEmailPlugin`          | `boolean`                            | `true`                          | Use `email-password` plugin for email resolution. **Required** to be `true` or provide `getEmail`. |
+| `getEmail`                | `(email: string) => Promise<string>` | -                               | **Required** if `useEmailPlugin: false`. Function to fetch email from custom source.               |
+
+<Callout title="Role validation" type="info">
+  The `defaultRole` must be included in `availableRoles`. The plugin validates
+  this on initialization and throws an error if misconfigured.
+</Callout>
+
+## Organization Management
+
+### 1. Create Organization
+
+**Step name:** `create-organization`  
+**HTTP:** `POST /auth/create-organization`  
+**Auth:** Required
+
+Create a new organization (workspace/team).
+
+**Input:**
+
+```ts
+{
+  token: Token; // Session token
+  name: string;
+  slug?: string; // Auto-generated if omitted
+  parent_id?: string; // For hierarchical organizations
+  settings?: Record<string, any>;
+  metadata?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'eq' | 'unf'; // success | unauthorized | invalid | exists | forbidden
+  message: string;
+  organization?: {
+    id: string;
+    name: string;
+    slug: string;
+    parent_id?: string;
+    settings?: Record<string, any>;
+    metadata?: Record<string, any>;
+    created_at: string;
+  };
+  token?: Token;
+}
+```
+
+**Behavior:**
+
+- Validates authentication token
+- Checks `maxOrganizationsPerUser` limit (counts orgs where user is admin)
+- Auto-generates slug if not provided (lowercase, hyphens, timestamp + random suffix)
+- Validates slug format: `/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/`
+- Checks slug uniqueness across all organizations
+- If `parent_id` provided, validates hierarchy is enabled and user has admin access to parent
+- Creates organization record with `is_active: true`
+- Creates admin membership for creator with `status: 'active'`
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('organization', 'create-organization', {
+  token: userToken,
+  name: 'Acme Corp',
+  slug: 'acme-corp',
+  settings: { timezone: 'UTC', currency: 'USD' },
+  metadata: { industry: 'SaaS', size: 'startup' },
+});
+
+if (result.success) {
+  console.log('Organization created:', result.organization);
+  console.log('Your role: admin');
+}
+```
+
+**Hierarchical organizations:**
+
+```ts
+// Create parent organization first
+const parent = await engine.executeStep('organization', 'create-organization', {
+  token: adminToken,
+  name: 'Parent Corp',
+});
+
+// Create child organization
+const child = await engine.executeStep('organization', 'create-organization', {
+  token: adminToken,
+  name: 'Engineering Team',
+  parent_id: parent.organization.id,
+});
+```
+
+### 2. List Organizations
+
+**Step name:** `list-organizations`  
+**HTTP:** `GET /auth/list-organizations`  
+**Auth:** Required
+
+Get all organizations the authenticated user belongs to.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip';
+  message: string;
+  organizations?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    role: string; // User's role in this org
+    parent_id?: string;
+    settings?: Record<string, any>;
+    metadata?: Record<string, any>;
+  }>;
+  token?: Token;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('organization', 'list-organizations', {
+  token: userToken,
+});
+
+result.organizations?.forEach((org) => {
+  console.log(`${org.name} - Your role: ${org.role}`);
+});
+```
+
+### 3. Get Organization
+
+**Step name:** `get-organization`  
+**HTTP:** `GET /auth/get-organization`  
+**Auth:** Required
+
+Get detailed information about a specific organization, including member list.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  organization_id: string;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'unf';
+  message: string;
+  organization?: {
+    id: string;
+    name: string;
+    slug: string;
+    parent_id?: string;
+    settings?: Record<string, any>;
+    metadata?: Record<string, any>;
+    role: string; // User's role
+    members?: Array<{
+      subject_id: string;
+      role: string;
+      joined_at: string;
+    }>;
+  };
+  token?: Token;
+}
+```
+
+**Behavior:**
+
+- Validates user is a member of the organization
+- Returns organization details + member list
+- User's role determines visibility (admins see all members, others may have restricted views)
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('organization', 'get-organization', {
+  token: userToken,
+  organization_id: 'org-123',
+});
+
+if (result.success) {
+  console.log(`Organization: ${result.organization.name}`);
+  console.log(`Members: ${result.organization.members.length}`);
+}
+```
+
+### 4. Update Organization
+
+**Step name:** `update-organization`  
+**HTTP:** `PATCH /auth/update-organization`  
+**Auth:** Required (admin role)
+
+Update organization details (admin only).
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  organization_id: string;
+  name?: string;
+  slug?: string;
+  settings?: Record<string, any>;
+  metadata?: Record<string, any>;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'unf' | 'eq';
+  message: string;
+  organization?: {
+    id: string;
+    name: string;
+    slug: string;
+    settings?: Record<string, any>;
+    metadata?: Record<string, any>;
+    updated_at: string;
+  };
+  token?: Token;
+}
+```
+
+**Behavior:**
+
+- Validates admin access
+- If slug is updated, checks uniqueness
+- Merges settings/metadata with existing values
+- Updates `updated_at` timestamp
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('organization', 'update-organization', {
+  token: adminToken,
+  organization_id: 'org-123',
+  name: 'Acme Corporation',
+  settings: { timezone: 'America/New_York' },
+});
+```
+
+## Member Management
+
+### 5. Invite Member
+
+**Step name:** `invite-member`  
+**HTTP:** `POST /auth/invite-member`  
+**Auth:** Required (admin role)
+
+Invite a user to join the organization.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  organization_id: string;
+  email: string; // Must be valid email format
+  role: string; // Must be in availableRoles
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'eq' | 'unf';
+  message: string;
+  invitation?: {
+    id: string;
+    token: string; // Invitation token (format: inv_timestamp_random_random)
+    expires_at: string;
+  };
+  token?: Token;
+}
+```
+
+**Behavior:**
+
+- Validates admin permission
+- Validates role is in `availableRoles`
+- Checks if user is already a member (prevents duplicates)
+- Checks for existing pending invitations (prevents duplicates)
+- Generates invitation token: `inv_{timestamp}_{random}_{random}`
+- Calculates expiration: `now + invitationTtlDays`
+- Creates invitation with `status: 'pending'`
+- Returns invitation token (send this to user via email/notification)
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('organization', 'invite-member', {
+  token: adminToken,
+  organization_id: 'org-123',
+  email: 'newuser@example.com',
+  role: 'member',
+});
+
+if (result.success) {
+  // Send invitation token to user via email
+  await emailService.send({
+    to: 'newuser@example.com',
+    subject: 'You're invited to join Acme Corp',
+    html: `
+      <p>Click the link below to accept the invitation:</p>
+      <a href="https://yourapp.com/accept-invite?token=${result.invitation.token}">
+        Accept Invitation
+      </a>
+      <p>This invitation expires on ${result.invitation.expires_at}</p>
+    `,
+  });
+}
+```
+
+### 6. Accept Invitation
+
+**Step name:** `accept-invitation`  
+**HTTP:** `POST /auth/accept-invitation`  
+**Auth:** Required
+
+Accept an organization invitation and join as a member.
+
+**Input:**
+
+```ts
+{
+  invitation_token: string;
+  token: Token; // User must be authenticated
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'unf' | 'eq';
+  message: string;
+  membership?: {
+    id: string;
+    organization_id: string;
+    role: string;
+  };
+  token?: Token;
+}
+```
+
+**Behavior:**
+
+- Validates user is authenticated
+- Finds invitation by token
+- Checks invitation status is `'pending'` (not expired/accepted/revoked)
+- Validates invitation hasn't expired (`expires_at > now`)
+- If expired, updates status to `'expired'` and returns error
+- Checks organization is active
+- Prevents duplicate memberships
+- Creates membership with `status: 'active'`, `joined_at: now`
+- Updates invitation status to `'accepted'`, sets `accepted_at`
+
+**Example:**
+
+```ts
+// User clicks invitation link: /accept-invite?token=inv_abc123...
+const invitationToken = new URLSearchParams(window.location.search).get(
+  'token',
+);
+
+const result = await engine.executeStep('organization', 'accept-invitation', {
+  invitation_token: invitationToken,
+  token: userToken,
+});
+
+if (result.success) {
+  console.log(`Joined organization with role: ${result.membership.role}`);
+  // Redirect to organization dashboard
+  window.location.href = `/org/${result.membership.organization_id}`;
+} else if (result.status === 'ic') {
+  console.log('Invitation expired or invalid');
+}
+```
+
+### 7. Remove Member
+
+**Step name:** `remove-member`  
+**HTTP:** `POST /auth/remove-member`  
+**Auth:** Required (admin role)
+
+Remove a member from the organization.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  organization_id: string;
+  subject_id?: string; // Provide subject_id OR email
+  email?: string;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'unf';
+  message: string;
+  token?: Token;
+}
+```
+
+**Behavior:**
+
+- Validates admin permission
+- Finds member by `subject_id` or `email`
+- Deletes membership record
+- Cannot remove the last admin (prevents lockout)
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('organization', 'remove-member', {
+  token: adminToken,
+  organization_id: 'org-123',
+  email: 'user@example.com',
+});
+```
+
+### 8. Change Member Role
+
+**Step name:** `change-member-role`  
+**HTTP:** `POST /auth/change-member-role`  
+**Auth:** Required (admin role)
+
+Update a member's role within the organization.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  organization_id: string;
+  subject_id?: string;
+  email?: string;
+  role: string; // Must be in availableRoles
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'ic' | 'unf';
+  message: string;
+  membership?: {
+    id: string;
+    subject_id: string;
+    organization_id: string;
+    role: string;
+    updated_at: string;
+  };
+  token?: Token;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('organization', 'change-member-role', {
+  token: adminToken,
+  organization_id: 'org-123',
+  email: 'user@example.com',
+  role: 'admin', // Promote to admin
+});
+```
+
+## Advanced: Roles & Permissions
+
+### 9. Set Roles & Permissions
+
+**Step name:** `set-roles-permissions`  
+**HTTP:** `POST /auth/set-roles-permissions`  
+**Auth:** Required (admin role)
+
+Set or remove multiple roles and permissions for a member.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  organization_id: string;
+  subject_id?: string;
+  email?: string;
+  roles?: string[]; // Roles to add
+  permissions?: string[]; // Permissions to add
+  remove_roles?: string[]; // Roles to remove
+  remove_permissions?: string[]; // Permissions to remove
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'unf';
+  message: string;
+  membership?: {
+    id: string;
+    subject_id: string;
+    organization_id: string;
+    roles: string[];
+    permissions: string[];
+    updated_at: string;
+  };
+  token?: Token;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep(
+  'organization',
+  'set-roles-permissions',
+  {
+    token: adminToken,
+    organization_id: 'org-123',
+    email: 'user@example.com',
+    roles: ['editor', 'reviewer'],
+    permissions: ['read:reports', 'write:documents'],
+    remove_permissions: ['delete:documents'],
+  },
+);
+```
+
+### 10. Get Roles & Permissions
+
+**Step name:** `get-roles-permissions`  
+**HTTP:** `GET /auth/get-roles-permissions`  
+**Auth:** Required
+
+Get roles and permissions for a specific member.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  organization_id: string;
+  subject_id?: string;
+  email?: string;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'unf';
+  message: string;
+  membership?: {
+    id: string;
+    subject_id: string;
+    organization_id: string;
+    roles: string[];
+    permissions: string[];
+    role: string; // Primary role
+    email: string;
+  };
+  token?: Token;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep(
+  'organization',
+  'get-roles-permissions',
+  {
+    token: userToken,
+    organization_id: 'org-123',
+    email: 'user@example.com',
+  },
+);
+
+console.log('Roles:', result.membership.roles);
+console.log('Permissions:', result.membership.permissions);
+```
+
+## Background Cleanup
+
+The plugin registers a cleanup task that runs every `cleanupIntervalMinutes` (default: 120 minutes / 2 hours) to:
+
+1. **Delete expired invitations**: Invitations where `expires_at < NOW()` or `status = 'expired'`
+2. **Delete revoked invitations**: Invitations with `status = 'revoked'`
+3. **Update pending invitations**: Changes `status` from `'pending'` to `'expired'` if past expiration
+4. **Delete expired memberships**: Memberships with `expires_at < NOW()` (excluding suspended memberships)
+
+**Cleanup result structure:**
+
+```ts
+{
+  cleaned: number; // Total items cleaned
+  expiredInvitationsDeleted: number;
+  revokedInvitationsDeleted: number;
+  membershipsDeleted: number;
+  errors?: string[];
+}
+```
+
+**Disable cleanup:**
+
+```ts
+const engine = createReAuthEngine({
+  enableCleanupScheduler: false, // Disables all cleanup tasks
+  // ...
+});
+```
+
+**Adjust interval:**
+
+```ts
+organizationPlugin({
+  cleanupIntervalMinutes: 180, // Cleanup every 3 hours
+  // ...
+});
+```
+
+<Callout title="Cleanup constraints" type="info">
+  `cleanupIntervalMinutes` must be between 60 and 1440 (1-24 hours). The plugin
+  validates this on initialization.
+</Callout>
+
+## Profile API
+
+The plugin exposes a `getProfile` method for retrieving user's organization memberships:
+
+```ts
+const profile = await engine.getUnifiedProfile('user-123');
+
+// profile.plugins['organization']
+{
+  organizations: [
+    {
+      organization_id: 'org-abc',
+      organization_name: 'Acme Corp',
+      role: 'admin',
+      status: 'active',
+      created_at: '2025-01-15T10:00:00Z',
+      updated_at: '2025-01-15T10:00:00Z',
+    },
+    {
+      organization_id: 'org-xyz',
+      organization_name: 'Beta Inc',
+      role: 'member',
+      status: 'active',
+      created_at: '2025-02-20T14:30:00Z',
+      updated_at: '2025-02-20T14:30:00Z',
+    },
+  ];
+}
+```
+
+## Session Resolver
+
+The plugin registers a custom session resolver that enhances subjects with organization memberships:
+
+```ts
+// When resolving a session, the subject includes:
+{
+  id: 'user-123',
+  // ... other subject fields
+  organizations: [
+    { organization_id: 'org-abc', role: 'admin', status: 'active' },
+    { organization_id: 'org-xyz', role: 'member', status: 'active' }
+  ]
+}
+
+// Sanitized public response:
+{
+  id: 'user-123',
+  // ... other subject fields
+  organizationCount: 2 // Sensitive org details removed
+}
+```
+
+## Integration with Email Plugin
+
+When `useEmailPlugin: true`, the organization plugin requires the `email-password` plugin:
+
+```ts
+const engine = createReAuthEngine({
+  plugins: [
+    // Email plugin MUST come first
+    emailPasswordPlugin({
+      /* ... */
+    }),
+    organizationPlugin({
+      useEmailPlugin: true,
+      // ...
+    }),
+  ],
+});
+```
+
+This allows the organization plugin to query the `identities` table for email lookups.
+
+If managing emails externally:
+
+```ts
+organizationPlugin({
+  useEmailPlugin: false,
+  getEmail: async (email: string) => {
+    // Fetch from your custom user table
+    const user = await db.query('SELECT email FROM users WHERE email = ?', [
+      email,
+    ]);
+    return user?.email ?? '';
+  },
+});
+```
+
+## HTTP Adapter Integration
+
+When using HTTP adapters, organization steps are automatically exposed:
+
+```ts
+POST   /auth/create-organization     → organization:create-organization (auth)
+GET    /auth/list-organizations      → organization:list-organizations (auth)
+GET    /auth/get-organization        → organization:get-organization (auth)
+PATCH  /auth/update-organization     → organization:update-organization (auth, admin)
+POST   /auth/invite-member           → organization:invite-member (auth, admin)
+POST   /auth/accept-invitation       → organization:accept-invitation (auth)
+POST   /auth/remove-member           → organization:remove-member (auth, admin)
+POST   /auth/change-member-role      → organization:change-member-role (auth, admin)
+POST   /auth/set-roles-permissions   → organization:set-roles-permissions (auth, admin)
+GET    /auth/get-roles-permissions   → organization:get-roles-permissions (auth)
+```
+
+## Complete Example: Organization Workflow
+
+```ts
+// 1. User creates organization
+const createResult = await engine.executeStep(
+  'organization',
+  'create-organization',
+  {
+    token: userToken,
+    name: 'My SaaS Startup',
+    slug: 'my-saas-startup',
+  },
+);
+
+const orgId = createResult.organization.id;
+
+// 2. Admin invites team member
+const inviteResult = await engine.executeStep('organization', 'invite-member', {
+  token: userToken, // Creator is admin
+  organization_id: orgId,
+  email: 'colleague@example.com',
+  role: 'member',
+});
+
+// Send invitation email with token
+await emailService.send({
+  to: 'colleague@example.com',
+  subject: 'Join My SaaS Startup on MyApp',
+  html: `<a href="https://myapp.com/invite/${inviteResult.invitation.token}">Accept Invite</a>`,
+});
+
+// 3. Colleague accepts invitation
+const acceptResult = await engine.executeStep(
+  'organization',
+  'accept-invitation',
+  {
+    invitation_token: inviteResult.invitation.token,
+    token: colleagueToken, // Colleague must be logged in
+  },
+);
+
+// 4. Admin promotes colleague to admin
+const roleResult = await engine.executeStep(
+  'organization',
+  'change-member-role',
+  {
+    token: userToken,
+    organization_id: orgId,
+    email: 'colleague@example.com',
+    role: 'admin',
+  },
+);
+
+// 5. List all organizations for user
+const listResult = await engine.executeStep(
+  'organization',
+  'list-organizations',
+  {
+    token: userToken,
+  },
+);
+
+console.log('My organizations:', listResult.organizations);
+```
+
+## Hierarchical Organizations
+
+Enable nested organizations for complex structures:
+
+```ts
+organizationPlugin({
+  allowHierarchy: true,
+  // ...
+});
+
+// Create parent
+const parent = await engine.executeStep('organization', 'create-organization', {
+  token: adminToken,
+  name: 'ACME Corporation',
+});
+
+// Create engineering department
+const engineering = await engine.executeStep(
+  'organization',
+  'create-organization',
+  {
+    token: adminToken,
+    name: 'Engineering',
+    parent_id: parent.organization.id,
+  },
+);
+
+// Create backend team under engineering
+const backend = await engine.executeStep(
+  'organization',
+  'create-organization',
+  {
+    token: adminToken,
+    name: 'Backend Team',
+    parent_id: engineering.organization.id,
+  },
+);
+
+// Structure: ACME → Engineering → Backend Team
+```
+
+## Security Considerations
+
+<Steps>
+  <Step>
+    <h4>1. Admin-Only Operations</h4>
+    <p>
+      Invitations, member management, and organization updates require admin
+      role. The plugin validates permissions on every operation.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. Slug Uniqueness</h4>
+    <p>
+      Organization slugs must be globally unique. The plugin checks this before
+      creation and updates to prevent collisions.
+    </p>
+  </Step>
+  <Step>
+    <h4>3. Invitation Expiration</h4>
+    <p>
+      Invitations expire after <code>invitationTtlDays</code> (default 7 days).
+      Expired invitations cannot be accepted and are automatically cleaned up.
+    </p>
+  </Step>
+  <Step>
+    <h4>4. Membership Limits</h4>
+    <p>
+      <code>maxOrganizationsPerUser</code> prevents users from creating
+      unlimited organizations. Counts only orgs where user is admin.
+    </p>
+  </Step>
+  <Step>
+    <h4>5. Duplicate Prevention</h4>
+    <p>
+      The plugin checks for existing memberships and pending invitations before
+      creating new ones, preventing duplicate invitations.
+    </p>
+  </Step>
+  <Step>
+    <h4>6. Hierarchical Access Control</h4>
+    <p>
+      When creating child organizations, the plugin validates the user has admin
+      access to the parent organization.
+    </p>
+  </Step>
+</Steps>
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password Plugin"
+    description="User authentication required before creating organizations."
+  />
+  <Card
+    href="/docs/engine/plugins/passwordless"
+    title="Passwordless Plugin"
+    description="Combine with magic links or WebAuthn for modern auth flows."
+  />
+  <Card
+    href="/docs/http-adapters"
+    title="HTTP Adapters"
+    description="Expose organization endpoints via Express, Fastify, or Hono."
+  />
+</Cards>

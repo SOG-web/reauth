@@ -1,0 +1,740 @@
+---
+title: OAuth Plugin
+description: Social authentication with Google, GitHub, and custom OAuth providers.
+---
+
+## Overview
+
+The `oauth` plugin enables **social authentication** with OAuth 2.0 providers like Google, GitHub, Discord, and custom providers. Built on [Arctic](https://arctic.js.org/) for robust OAuth client management.
+
+Key features:
+
+- **Pre-configured providers**: Google, GitHub, Discord, Facebook, Microsoft, and more
+- **PKCE support**: Enhanced security for public clients (SPAs, mobile apps)
+- **Account linking**: Automatically links OAuth accounts to existing email accounts
+- **Custom providers**: Easily add any OAuth 2.0 compliant provider
+- **Token management**: Secure storage of access tokens and refresh tokens
+
+<Callout title="Account linking" type="info">
+  When a user signs in with OAuth, the plugin automatically links their OAuth
+  account to an existing account if the email matches. This provides seamless
+  multi-auth support.
+</Callout>
+
+## Installation & Setup
+
+```npm
+npm i @re-auth/reauth arctic
+```
+
+### Basic Configuration (Google + GitHub)
+
+```ts
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import oauthPlugin, { oauthSchema } from '@re-auth/reauth/plugins/oauth';
+
+// Setup database schema and client
+const { schema: v1 } = reauthDb('1.0.1', [oauthSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  plugins: [
+    oauthPlugin({
+      sessionTtlSeconds: 3600,
+      providers: [
+        {
+          name: 'google',
+          type: 'pkce', // Use PKCE for enhanced security
+          clientFactory: (config) =>
+            new Google(
+              config.clientId,
+              config.clientSecret,
+              config.redirectUri,
+            ),
+          defaultScopes: ['openid', 'profile', 'email'],
+          config: {
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            redirectUri: 'https://yourapp.com/auth/callback/google',
+          },
+        },
+        {
+          name: 'github',
+          type: 'regular',
+          clientFactory: (config) =>
+            new GitHub(
+              config.clientId,
+              config.clientSecret,
+              config.redirectUri,
+            ),
+          defaultScopes: ['user:email'],
+          config: {
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+            redirectUri: 'https://yourapp.com/auth/callback/github',
+          },
+        },
+      ],
+    }),
+  ],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
+  },
+});
+```
+
+### Advanced: Custom User Info Fetcher
+
+```ts
+{
+  name: 'custom-provider',
+  type: 'regular',
+  clientFactory: (config) => new CustomOAuthClient(config),
+  defaultScopes: ['read:user', 'read:email'],
+  config: {
+    clientId: process.env.CUSTOM_CLIENT_ID!,
+    clientSecret: process.env.CUSTOM_CLIENT_SECRET!,
+    redirectUri: 'https://yourapp.com/auth/callback/custom',
+    getUserInfo: async (accessToken, idToken) => {
+      // Fetch user info from provider's API
+      const response = await fetch('https://api.customprovider.com/user', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await response.json();
+
+      return {
+        id: data.userId,
+        email: data.emailAddress,
+        name: data.displayName,
+        picture: data.avatarUrl,
+        verified_email: data.emailVerified,
+      };
+    },
+  },
+}
+```
+
+## Configuration
+
+### OAuthPluginConfig
+
+| Option              | Type                    | Default | Description                             |
+| ------------------- | ----------------------- | ------- | --------------------------------------- |
+| `providers`         | `OAuthProviderConfig[]` | `[]`    | Array of OAuth provider configurations. |
+| `sessionTtlSeconds` | `number`                | `3600`  | Session token TTL in seconds (1 hour).  |
+
+### OAuthProviderConfig
+
+```ts
+{
+  name: string; // Provider identifier (e.g., 'google', 'github')
+  type: 'regular' | 'pkce'; // OAuth flow type
+  clientFactory: (config: BaseOAuthConfig) => any; // Arctic client factory
+  defaultScopes: string[]; // Default OAuth scopes
+  config: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    scopes?: string[]; // Override defaultScopes
+    getUserInfo?: (accessToken: string, idToken?: string) => Promise<OAuthUserInfo>;
+    onAccountLink?: (oauthUser: OAuthUserInfo, existingSubject: any, container: any) => Promise<any>;
+    onAccountCreate?: (oauthUser: OAuthUserInfo, container: any) => Promise<Partial<any>>;
+    linkField?: string; // Field for linking accounts (default: 'email')
+  };
+}
+```
+
+### OAuthUserInfo
+
+```ts
+{
+  id: string; // Provider user ID
+  email?: string;
+  name?: string;
+  picture?: string;
+  verified_email?: boolean;
+  [key: string]: any; // Provider-specific fields
+}
+```
+
+## OAuth Flow
+
+### 1. Start OAuth
+
+**Step name:** `start`  
+**HTTP:** `GET /auth/oauth/start`
+
+Initiate OAuth flow and redirect user to provider's authorization page.
+
+**Input:**
+
+```ts
+{
+  provider: string; // Provider name (e.g., 'google', 'github')
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'redirect' | 'nf'; // redirect | not found
+  message: string;
+  redirect?: string; // Authorization URL
+  secret?: {
+    oauth_state: string; // CSRF protection
+    oauth_code_verifier?: string; // PKCE (if type: 'pkce')
+    oauth_provider: string; // Provider name for callback
+  };
+}
+```
+
+**Behavior:**
+
+- Validates provider exists in configuration
+- Generates state parameter for CSRF protection
+- Generates code verifier for PKCE flows (if `type: 'pkce'`)
+- Creates authorization URL with scopes
+- Returns redirect URL and secrets (to be stored in cookies/session)
+
+**Example:**
+
+```ts
+// Frontend: Initiate OAuth flow
+async function signInWithGoogle() {
+  const result = await fetch('/auth/oauth/start?provider=google');
+  const data = await result.json();
+
+  if (data.success) {
+    // Store secrets in HTTP-only cookies (done by HTTP adapter automatically)
+    // Redirect to provider
+    window.location.href = data.redirect;
+  }
+}
+```
+
+**HTTP Adapter automatically handles:**
+
+```ts
+// HTTP adapter sets cookies for secrets
+res.cookie('oauth_state', data.secret.oauth_state, {
+  httpOnly: true,
+  secure: true,
+});
+res.cookie('oauth_code_verifier', data.secret.oauth_code_verifier, {
+  httpOnly: true,
+  secure: true,
+});
+res.cookie('oauth_provider', data.secret.oauth_provider, {
+  httpOnly: true,
+  secure: true,
+});
+
+// Then redirects
+res.redirect(data.redirect);
+```
+
+### 2. OAuth Callback
+
+**Step name:** `callback`  
+**HTTP:** `POST /auth/oauth/callback`
+
+Handle OAuth provider's redirect and complete authentication.
+
+**Input:**
+
+```ts
+{
+  code: string; // Authorization code from provider
+  state: string; // State from query params
+  oauth_state: string; // State from cookie (CSRF check)
+  oauth_code_verifier?: string; // PKCE verifier from cookie
+  oauth_provider: string; // Provider name from cookie
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'error'; // success | invalid | error
+  message: string;
+  token?: Token;
+  subject?: {
+    id: string;
+    email: string;
+    name: string;
+    picture: string;
+    provider: string; // e.g., 'google-oauth'
+    verified: boolean;
+  };
+}
+```
+
+**Behavior:**
+
+- Validates state parameter matches (CSRF protection)
+- Exchanges authorization code for access token + ID token
+- Fetches user info from provider API using `getUserInfo` function
+- Checks if OAuth account already exists:
+  - **Exists**: Updates tokens, returns existing subject
+  - **New OAuth, existing email**: Links OAuth account to existing subject
+  - **New OAuth, new email**: Creates new subject + OAuth identity + email identity
+- Creates session token
+- Returns authenticated user
+
+**Example:**
+
+```ts
+// Provider redirects to: https://yourapp.com/auth/callback/google?code=abc123&state=xyz789
+
+// HTTP adapter extracts cookies and query params, then calls:
+const result = await engine.executeStep('oauth', 'callback', {
+  code: req.query.code,
+  state: req.query.state,
+  oauth_state: req.cookies.oauth_state,
+  oauth_code_verifier: req.cookies.oauth_code_verifier,
+  oauth_provider: req.cookies.oauth_provider,
+});
+
+if (result.success) {
+  // Store session token
+  res.cookie('auth_token', result.token.accessToken);
+  // Clear OAuth cookies
+  res.clearCookie('oauth_state');
+  res.clearCookie('oauth_code_verifier');
+  res.clearCookie('oauth_provider');
+  // Redirect to app
+  res.redirect('/dashboard');
+}
+```
+
+### 3. Link OAuth Account
+
+**Step name:** `link`  
+**HTTP:** `POST /auth/oauth/link`  
+**Auth:** Required
+
+Link an OAuth account to an already authenticated user.
+
+**Input:**
+
+```ts
+{
+  token: Token; // Current session token
+  provider: string; // OAuth provider to link
+  // ... OAuth callback data
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip';
+  message: string;
+  token?: Token;
+}
+```
+
+**Example:**
+
+```ts
+// User already logged in, wants to link Google account
+const result = await engine.executeStep('oauth', 'link', {
+  token: currentUserToken,
+  provider: 'google',
+  // ... complete OAuth flow
+});
+
+if (result.success) {
+  console.log('Google account linked successfully');
+}
+```
+
+### 4. Unlink OAuth Account
+
+**Step name:** `unlink`  
+**HTTP:** `POST /auth/oauth/unlink`  
+**Auth:** Required
+
+Remove OAuth account linkage from authenticated user.
+
+**Input:**
+
+```ts
+{
+  token: Token;
+  provider: string; // Provider to unlink (e.g., 'google')
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ip' | 'unf';
+  message: string;
+  token?: Token;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('oauth', 'unlink', {
+  token: userToken,
+  provider: 'github',
+});
+
+if (result.success) {
+  console.log('GitHub account unlinked');
+}
+```
+
+## Supported Providers
+
+ReAuth uses [Arctic](https://arctic.js.org/) for OAuth client management. Supported providers include:
+
+<Cards>
+  <Card title="Google" description="PKCE recommended, OpenID Connect" />
+  <Card title="GitHub" description="Regular OAuth 2.0" />
+  <Card title="Discord" description="Regular OAuth 2.0" />
+  <Card title="Facebook" description="Regular OAuth 2.0" />
+  <Card title="Microsoft" description="PKCE recommended" />
+  <Card title="Apple" description="PKCE recommended" />
+  <Card title="Twitter/X" description="Regular OAuth 2.0" />
+  <Card title="LinkedIn" description="Regular OAuth 2.0" />
+  <Card title="Spotify" description="PKCE recommended" />
+  <Card title="Twitch" description="Regular OAuth 2.0" />
+</Cards>
+
+See [Arctic documentation](https://arctic.js.org/) for the full provider list and configuration details.
+
+## Account Linking
+
+The OAuth plugin automatically links accounts based on email address:
+
+```ts
+// Scenario 1: User registered with email/password
+await engine.executeStep('email-password', 'register', {
+  email: 'user@example.com',
+  password: 'SecurePass123!',
+});
+// Subject created with email identity
+
+// Scenario 2: Same user signs in with Google OAuth
+await engine.executeStep('oauth', 'start', { provider: 'google' });
+// ... OAuth flow completes with user@example.com from Google
+
+// Result: OAuth identity is linked to existing subject
+// User now has TWO identities:
+// 1. email-password: user@example.com
+// 2. google-oauth: user@example.com
+
+// User can now sign in with either method
+```
+
+**Custom linking logic:**
+
+```ts
+{
+  name: 'google',
+  config: {
+    // ...
+    linkField: 'username', // Link by username instead of email
+    onAccountLink: async (oauthUser, existingSubject, container) => {
+      // Custom linking logic
+      console.log('Linking OAuth account:', oauthUser.id);
+      console.log('To existing subject:', existingSubject.id);
+
+      // Optionally merge user data
+      await container.db.updateUser(existingSubject.id, {
+        picture: oauthUser.picture,
+        name: oauthUser.name,
+      });
+
+      return existingSubject;
+    },
+    onAccountCreate: async (oauthUser, container) => {
+      // Custom account creation logic
+      return {
+        username: oauthUser.email?.split('@')[0],
+        fullName: oauthUser.name,
+        avatar: oauthUser.picture,
+      };
+    },
+  },
+}
+```
+
+## Database Schema
+
+The OAuth plugin uses two tables:
+
+### `identities` table
+
+```sql
+CREATE TABLE identities (
+  id UUID PRIMARY KEY,
+  subject_id UUID NOT NULL REFERENCES subjects(id),
+  provider VARCHAR(50) NOT NULL, -- e.g., 'google-oauth', 'github-oauth'
+  identifier VARCHAR(255) NOT NULL, -- Provider user ID
+  verified BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(provider, identifier)
+);
+```
+
+### `oauth_identities` table
+
+```sql
+CREATE TABLE oauth_identities (
+  id UUID PRIMARY KEY,
+  identity_id UUID NOT NULL REFERENCES identities(id),
+  provider VARCHAR(50) NOT NULL, -- e.g., 'google', 'github'
+  provider_user_id VARCHAR(255) NOT NULL,
+  access_token TEXT,
+  refresh_token TEXT,
+  provider_data JSONB, -- Full user info from provider
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+## HTTP Adapter Integration
+
+When using HTTP adapters, OAuth steps are automatically exposed:
+
+```ts
+GET  /auth/oauth/start         → oauth:start (redirects to provider)
+POST /auth/oauth/callback      → oauth:callback (provider redirects here)
+POST /auth/oauth/link          → oauth:link (auth required)
+POST /auth/oauth/unlink        → oauth:unlink (auth required)
+```
+
+**Custom OAuth URLs:**
+
+```ts
+// In your HTTP adapter configuration
+GET  /login/google             → oauth:start?provider=google
+GET  /login/github             → oauth:start?provider=github
+POST /auth/google/callback     → oauth:callback (provider=google from cookie)
+POST /auth/github/callback     → oauth:callback (provider=github from cookie)
+```
+
+## Complete Example: React OAuth Flow
+
+### Frontend
+
+```tsx
+// components/SocialLogin.tsx
+export function SocialLogin() {
+  const handleOAuthLogin = (provider: 'google' | 'github') => {
+    // Redirect to start OAuth flow
+    window.location.href = `/auth/oauth/start?provider=${provider}`;
+  };
+
+  return (
+    <div>
+      <button onClick={() => handleOAuthLogin('google')}>
+        <GoogleIcon /> Sign in with Google
+      </button>
+      <button onClick={() => handleOAuthLogin('github')}>
+        <GitHubIcon /> Sign in with GitHub
+      </button>
+    </div>
+  );
+}
+
+// pages/auth/callback/[provider].tsx
+export default function OAuthCallback() {
+  const router = useRouter();
+  const { provider } = router.query;
+
+  useEffect(() => {
+    const handleCallback = async () => {
+      // HTTP adapter handles this automatically
+      // User is redirected here after OAuth provider callback
+
+      // Check if authenticated
+      const session = await fetch('/auth/session');
+      if (session.ok) {
+        router.push('/dashboard');
+      } else {
+        router.push('/login?error=oauth_failed');
+      }
+    };
+
+    if (provider) {
+      handleCallback();
+    }
+  }, [provider]);
+
+  return <div>Completing sign in...</div>;
+}
+```
+
+### Backend (Express)
+
+```ts
+import express from 'express';
+import { createExpressAdapter } from '@re-auth/http-adapters';
+
+const app = express();
+const authRouter = createExpressAdapter(engine);
+
+app.use('/auth', authRouter);
+
+// OAuth start (GET /auth/oauth/start?provider=google)
+// → Redirects to Google with state & code_verifier in cookies
+
+// OAuth callback (GET /auth/oauth/callback?code=...&state=...)
+// → Provider redirects here
+// → HTTP adapter extracts cookies, calls engine.executeStep('oauth', 'callback', ...)
+// → Sets auth_token cookie, redirects to /dashboard
+
+app.listen(3000);
+```
+
+## Environment Variables
+
+```bash
+# .env
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+
+# Redirect URIs must match OAuth provider configuration
+GOOGLE_REDIRECT_URI=https://yourapp.com/auth/callback/google
+GITHUB_REDIRECT_URI=https://yourapp.com/auth/callback/github
+```
+
+## Security Considerations
+
+<Steps>
+  <Step>
+    <h4>1. State Parameter (CSRF Protection)</h4>
+    <p>
+      The plugin generates a random state parameter stored in HTTP-only cookies.
+      This prevents cross-site request forgery attacks.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. PKCE (Proof Key for Code Exchange)</h4>
+    <p>
+      Use <code>type: 'pkce'</code> for providers that support it (Google,
+      Microsoft, etc.). PKCE prevents authorization code interception attacks.
+    </p>
+  </Step>
+  <Step>
+    <h4>3. HTTP-Only Cookies</h4>
+    <p>
+      OAuth state, code verifier, and session tokens should be stored in
+      HTTP-only cookies to prevent XSS attacks.
+    </p>
+  </Step>
+  <Step>
+    <h4>4. Redirect URI Validation</h4>
+    <p>
+      Ensure redirect URIs in your OAuth provider configuration exactly match
+      the configured values. Mismatches will cause OAuth flow to fail.
+    </p>
+  </Step>
+  <Step>
+    <h4>5. Token Storage</h4>
+    <p>
+      Access tokens and refresh tokens are stored in the{' '}
+      <code>oauth_identities</code> table. Ensure this table has proper access
+      controls.
+    </p>
+  </Step>
+  <Step>
+    <h4>6. Scope Minimization</h4>
+    <p>
+      Request only the scopes your application needs. Excessive scopes increase
+      security risk and user friction.
+    </p>
+  </Step>
+</Steps>
+
+## Testing OAuth Locally
+
+### Using ngrok for HTTPS tunneling
+
+```bash
+# Install ngrok
+npm install -g ngrok
+
+# Start your dev server
+npm run dev # localhost:3000
+
+# Create HTTPS tunnel
+ngrok http 3000
+# Output: https://abc123.ngrok.io
+
+# Update OAuth provider redirect URIs to use ngrok URL:
+# Google: https://abc123.ngrok.io/auth/callback/google
+# GitHub: https://abc123.ngrok.io/auth/callback/github
+
+# Update your .env
+GOOGLE_REDIRECT_URI=https://abc123.ngrok.io/auth/callback/google
+GITHUB_REDIRECT_URI=https://abc123.ngrok.io/auth/callback/github
+```
+
+### OAuth Provider Setup
+
+**Google (via Google Cloud Console):**
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create project → APIs & Services → Credentials
+3. Create OAuth 2.0 Client ID
+4. Add authorized redirect URIs: `https://yourapp.com/auth/callback/google`
+5. Copy Client ID and Client Secret
+
+**GitHub (via GitHub Settings):**
+
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. OAuth Apps → New OAuth App
+3. Authorization callback URL: `https://yourapp.com/auth/callback/github`
+4. Copy Client ID and Client Secret
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password Plugin"
+    description="Combine OAuth with traditional email/password authentication."
+  />
+  <Card
+    href="/docs/engine/plugins/organization"
+    title="Organization Plugin"
+    description="Add OAuth users to organizations automatically."
+  />
+  <Card
+    href="https://arctic.js.org/"
+    title="Arctic Documentation"
+    description="Learn about all supported OAuth providers and configurations."
+  />
+</Cards>

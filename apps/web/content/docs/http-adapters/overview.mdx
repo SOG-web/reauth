@@ -1,144 +1,449 @@
 ---
 title: HTTP Adapter Overview
-description: Serve the ReAuth engine over Express, Fastify, Hono, Next.js, and edge runtimes.
+description: Serve the ReAuth engine over Express, Hono, and edge runtimes with automatic endpoint discovery.
 ---
 
-ReAuth keeps transport logic out of the core engine. The `@re-auth/http-adapters` package exposes adapters that translate deterministic engine flows into HTTP handlers.
+ReAuth keeps transport logic out of the core engine. The `@re-auth/http-adapters` package exposes adapters that translate deterministic engine flows into HTTP handlers with automatic plugin endpoint discovery.
 
 <Callout title="Swap runtimes without rewrites" type="info">
   Adapters only translate incoming requests and outgoing responses. The engine
-  logic, policies, and persistence stay the same whether you host on Express,
-  Fastify, Hono, or edge workers.
+  logic, plugin configuration, and persistence stay the same whether you host on
+  Express, Hono, Cloudflare Workers, or Vercel Edge.
 </Callout>
 
 ## Supported runtimes
 
-| Adapter              | Entry point            | Notes                                          |
-| -------------------- | ---------------------- | ---------------------------------------------- |
-| Express              | `createExpressAdapter` | Provides `router` and `middleware` helpers.    |
-| Fastify              | `createFastifyAdapter` | Registers routes with prefix support.          |
-| Hono                 | `HonoAdapter`          | Works on Bun, Cloudflare Workers, Vercel Edge. |
-| Next.js (App Router) | `createNextHandler`    | Returns handlers for `GET`, `POST`, etc.       |
-| Generic Fetch        | `createFetchAdapter`   | Minimal adapter for standard Request/Response. |
+| Adapter             | Entry point            | Notes                                                                                           |
+| ------------------- | ---------------------- | ----------------------------------------------------------------------------------------------- |
+| Express             | `createExpressAdapter` | Provides `createRouter()` and `createUserMiddleware()` helpers.                                 |
+| Hono                | `honoReAuth`           | Works on Bun, Cloudflare Workers, Vercel Edge, Node.js.                                         |
+| Itty-Router (Fetch) | `reAuthRouter`         | Generic fetch adapter for any fetch-compatible runtime (e.g. Deno, Cloudflare Workers, Nextjs). |
 
-All adapters share the same configuration surface:
+<Callout title="Framework support" type="info">
+  Fastify adapter is available in the package exports but not fully documented
+  yet. Express, Hono, and itty-router are production-ready.
+</Callout>
+
+## Quick Start
+
+All adapters share the same core configuration pattern:
 
 ```ts
-import { createExpressAdapter } from '@re-auth/http-adapters';
-import { auth } from '../auth/engine';
+import createReAuthEngine from '@re-auth/reauth';
+import { honoReAuth } from '@re-auth/http-adapters';
+import { Hono } from 'hono';
+import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
 
-const adapter = createExpressAdapter({
-  engine: auth,
-  basePath: '/auth',
-  exposeHealthz: true,
-  middleware: {
-    before: [
-      (req, res, next) => rateLimiter.consume(req.ip).then(() => next()),
-    ],
-    after: [],
-  },
+const engine = createReAuthEngine({
+  dbClient,
+  plugins: [
+    emailPasswordPlugin({
+      /* config */
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
 });
+
+const app = new Hono();
+const adapter = honoReAuth(
+  {
+    engine,
+    basePath: '/auth',
+  },
+  async (c) => {
+    // Extract device info for security
+    return {
+      ip: c.req.header('x-forwarded-for'),
+      userAgent: c.req.header('user-agent'),
+      fingerprint: c.req.header('x-request-id'),
+    };
+  },
+);
+
+// Register authentication routes
+adapter.registerRoutes(app, '/auth', true); // true = expose introspection
+
+// Optional: Add user middleware for automatic authentication
+app.use('/', adapter.createUserMiddleware());
 ```
 
 <Steps>
   <Step>
-    <h4>1. Wire up your engine</h4>
+    <h4>1. Create your ReAuth engine</h4>
     <p>
-      Import the configured ReAuth engine so the adapter can call deterministic
-      flows.
+      Configure the engine with database adapter, plugins, and user data
+      resolver.
     </p>
   </Step>
   <Step>
-    <h4>2. Choose a base path</h4>
+    <h4>2. Create HTTP adapter with device info extractor</h4>
     <p>
-      Namespace routes like <code>/auth</code> or <code>/api/auth</code> to
-      avoid collisions.
+      Pass your engine and a device info extraction function to capture request
+      metadata for security.
     </p>
   </Step>
   <Step>
-    <h4>3. Layer middleware</h4>
+    <h4>3. Register routes on your framework</h4>
     <p>
-      Add framework-specific middleware for rate limiting, logging, or tracing
-      before and after ReAuth handlers.
+      Use adapter methods like <code>registerRoutes()</code> or{' '}
+      <code>createRouter()</code> to expose authentication endpoints.
+    </p>
+  </Step>
+  <Step>
+    <h4>4. Optional: Add user middleware</h4>
+    <p>
+      Enable automatic session checking and user population with{' '}
+      <code>createUserMiddleware()</code>.
     </p>
   </Step>
 </Steps>
 
-### Common options
+## Configuration Options
 
-| Option                | Description                                                             |
-| --------------------- | ----------------------------------------------------------------------- |
-| `engine`              | The ReAuth engine instance.                                             |
-| `basePath`            | URL prefix for all routes (defaults to `/auth`).                        |
-| `exposeHealthz`       | If true, registers `GET /healthz`.                                      |
-| `middleware.before`   | Array of framework-specific middleware that run before ReAuth handlers. |
-| `middleware.after`    | Middleware that run after handlers (logging, error formatting).         |
-| `createSessionCookie` | Toggle cookie issuance for session tokens.                              |
+### HttpAdapterConfig
 
-### Custom route guards
+| Option        | Type               | Description                                                        |
+| ------------- | ------------------ | ------------------------------------------------------------------ |
+| `engine`      | `ReAuthEngine`     | **Required.** The ReAuth engine instance.                          |
+| `basePath`    | `string`           | URL prefix for plugin routes (optional, used for path generation). |
+| `cors`        | `CorsConfig`       | CORS configuration for cross-origin requests.                      |
+| `rateLimit`   | `RateLimitConfig`  | Rate limiting configuration (requests per window).                 |
+| `security`    | `SecurityConfig`   | Security headers and sanitization options.                         |
+| `validation`  | `ValidationConfig` | Input validation and payload size limits.                          |
+| `cookie`      | `CookieConfig`     | Cookie configuration for session tokens.                           |
+| `headerToken` | `HeaderConfig`     | Custom header names for access and refresh tokens.                 |
 
-Adapters expose hooks to add HTTP-layer policies without breaking engine determinism. For example, to enforce API keys on REST routes:
+### Device Info Extraction
+
+Device information extraction is a **required second parameter** for adapters. It captures request metadata for enhanced security, fraud prevention, and analytics:
 
 ```ts
-const adapter = createExpressAdapter({
-  engine: auth,
-  middleware: {
-    before: [requireApiKey],
-  },
+const adapter = honoReAuth({ engine }, async (c) => {
+  return {
+    ip: c.req.header('x-forwarded-for'),
+    userAgent: c.req.header('user-agent'),
+    fingerprint: c.req.header('cf-ray'),
+    country: c.req.header('cf-ipcountry'),
+    deviceType: c.req.header('cf-device-type'),
+    timezone: c.req.header('cf-timezone'),
+  };
 });
 ```
 
+The device info is passed to `engine.executeStep()` and `engine.checkSession()` for validation and logging.
+
+### Session Token Configuration
+
+**Token delivery via cookies:**
+
+```ts
+const adapter = createExpressAdapter(
+  {
+    engine,
+    cookie: {
+      name: 'reauth-session',
+      refreshTokenName: 'reauth-refresh',
+      options: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 3600, // seconds
+      },
+      refreshOptions: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 86400,
+      },
+    },
+  },
+  false,
+  deviceInfoExtractor,
+);
+```
+
+**Token delivery via custom headers:**
+
+```ts
+const adapter = honoReAuth(
+  {
+    engine,
+    headerToken: {
+      accesssTokenHeader: 'x-access-token',
+      refreshTokenHeader: 'x-refresh-token',
+    },
+  },
+  deviceInfoExtractor,
+);
+```
+
+<Callout title="Token extraction order" type="info">
+  The adapter checks for tokens in this order:
+  1. `Authorization: Bearer <token>` header
+  2. Custom headers (if configured)
+  3. Cookies (if configured)
+  
+  Supports both string tokens and `{ accessToken, refreshToken }` objects.
+</Callout>
+
+## Automatic Endpoint Discovery
+
+Adapters automatically discover and expose HTTP endpoints from plugin steps. No manual route registration required:
+
+```ts
+// Plugin defines a step
+emailPasswordPlugin({
+  steps: [
+    {
+      name: 'login',
+      protocol: {
+        http: {
+          method: 'POST',
+          auth: false, // no authentication required
+          codes: {
+            su: 200, // success
+            ic: 401, // invalid credentials
+            unv: 403, // unverified
+          },
+        },
+      },
+    },
+  ],
+});
+
+// Adapter automatically creates:
+// POST /auth/email-password/login
+```
+
+Endpoint paths follow the pattern: `{basePath}/{pluginName}/{stepName}`
+
 ### Error handling
 
-Every adapter surfaces standardized error shapes:
+Every adapter returns standardized error responses:
 
 ```json
 {
+  "success": false,
   "error": {
-    "code": "EMAIL_ALREADY_REGISTERED",
-    "message": "A user with that email already exists.",
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid email format",
     "details": {
       "field": "email"
     }
+  },
+  "meta": {
+    "timestamp": "2025-10-03T12:00:00.000Z"
   }
 }
 ```
 
-Wrap adapters with your framework's error handling middleware to customize logging or tagging.
+### Success responses
+
+Standardized success format:
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "su",
+    "message": "Login successful",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "subject": {
+      "id": "user-123",
+      "email": "user@example.com"
+    }
+  },
+  "meta": {
+    "timestamp": "2025-10-03T12:00:00.000Z"
+  },
+  "status": 200
+}
+```
+
+## Built-in Endpoints
+
+Adapters automatically expose these system endpoints:
+
+- **`GET /health`** - Health check (always available)
+- **`GET /session`** - Check current session validity
+- **`GET /plugins`** - List all registered plugins (if introspection enabled)
+- **`GET /plugins/:plugin`** - Get plugin details (if introspection enabled)
+- **`GET /introspection`** - Full API introspection (if introspection enabled)
+
+Plus all plugin step endpoints discovered from your engine configuration.
+
+<Callout title="Introspection security" type="warn">
+  Set the second parameter to `true` when calling `registerRoutes()` or
+  `createRouter()` to expose introspection endpoints. Only enable in development
+  or behind authentication.
+</Callout>
+
+## User Middleware
+
+Adapters provide middleware to automatically check sessions and populate the current user:
+
+```ts
+// Hono
+app.use('/', adapter.createUserMiddleware());
+app.get('/profile', (c) => {
+  const user = c.get('user'); // AuthenticatedUser | null
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  return c.json({ profile: user.subject });
+});
+
+// Express
+app.use(adapter.createUserMiddleware());
+
+app.get('/profile', (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.json({ profile: req.user.subject });
+});
+```
+
+The `AuthenticatedUser` type:
+
+```ts
+interface AuthenticatedUser {
+  subject: any; // User data from getUserData()
+  token: Token; // Session token (string or { accessToken, refreshToken })
+  valid: boolean; // Whether session is valid
+  metadata?: {
+    payload?: ReAuthJWTPayload;
+    type?: 'jwt' | 'legacy';
+  };
+}
+```
+
+## Security Features
+
+### CORS Configuration
+
+```ts
+const adapter = createExpressAdapter(
+  {
+    engine,
+    cors: {
+      origin: ['https://example.com'],
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: true,
+      maxAge: 86400, // 24 hours
+    },
+  },
+  false,
+  deviceInfoExtractor,
+);
+```
+
+### Rate Limiting
+
+```ts
+const adapter = honoReAuth(
+  {
+    engine,
+    rateLimit: {
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // requests per window
+      message: 'Too many requests',
+      keyGenerator: (req) => req.ip,
+    },
+  },
+  deviceInfoExtractor,
+);
+```
+
+### Security Headers
+
+```ts
+const adapter = createExpressAdapter(
+  {
+    engine,
+    security: {
+      helmet: true, // Enables security headers
+      sanitizeInput: true,
+      sanitizeOutput: false,
+    },
+  },
+  false,
+  deviceInfoExtractor,
+);
+```
+
+When `helmet: true`, these headers are automatically set:
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Strict-Transport-Security` (HTTPS only)
+
+### Input Validation
+
+```ts
+const adapter = honoReAuth(
+  {
+    engine,
+    validation: {
+      validateInput: true,
+      maxPayloadSize: 1024 * 1024, // 1MB
+      sanitizeFields: ['email', 'username', 'name'],
+      allowedFields: [], // Empty = allow all
+    },
+  },
+  deviceInfoExtractor,
+);
+```
 
 ## Adapter-specific guides
 
 <Cards>
   <Card
     href="./usage"
-    title="Express & Fastify"
+    title="Express, Hono & Itty-Router"
     description="Follow end-to-end setup instructions with routing examples and middleware recipes."
   />
   <Card
-    title="Next.js & Edge"
-    description="Guidance for App Router, Edge Runtime, and fetch handlers (coming soon)."
+    title="Edge Deployment"
+    description="Best practices for Cloudflare Workers, Vercel Edge, Deno, and Bun (coming soon)."
   />
   <Card
-    title="GraphQL & RPC Bridges"
+    title="GraphQL & tRPC Bridges"
     description="Patterns for piping deterministic flows into typed RPC schemas (coming soon)."
   />
 </Cards>
 
-## Testing adapters
+## Error Types
 
-The `@re-auth/http-adapters` package exports a test harness that spins up a memory datastore and executes the full suite of flows. You can use it to validate your own adapters:
+The adapter exports these error classes for custom error handling:
 
 ```ts
-import { testAdapter } from '@re-auth/http-adapters/testing';
+import {
+  HttpAdapterError,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  RateLimitError,
+} from '@re-auth/http-adapters';
 
-await testAdapter({
-  adapter: () => createExpressAdapter({ engine: auth }),
+// Custom error handling
+app.use((err, req, res, next) => {
+  if (err instanceof ValidationError) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: err.code,
+        message: err.message,
+        details: err.details,
+      },
+    });
+  }
+  // Handle other error types
 });
 ```
-
-Reusable fixtures guarantee parity with official adapters.
-
-<Callout title="Confidence before deployment" type="success">
-  Run the test harness in CI to ensure custom middleware or framework upgrades
-  never change the observable behaviour of your adapter.
-</Callout>

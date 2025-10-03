@@ -1,0 +1,608 @@
+---
+title: Next.js Integration
+description: Integrate ReAuth into Next.js App Router with itty-router for full-stack authentication.
+---
+
+Next.js is a popular React framework with built-in API routes. ReAuth integrates seamlessly with Next.js App Router using the itty-router adapter, providing full-stack authentication for your application.
+
+## Quick Start
+
+### Installation
+
+```bash
+npm install @re-auth/reauth @re-auth/http-adapters fumadb kysely
+```
+
+### Create Auth Route Handler
+
+Create a catch-all route handler at `app/api/auth/[...reauth]/route.ts`:
+
+```ts
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql',
+    db: kysely,
+  }),
+);
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Send email via Resend, SendGrid, etc.
+        console.log(`Email to ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Create itty-router adapter
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/api/auth',
+    cors: {
+      origin: [process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'],
+      credentials: true,
+    },
+  },
+  async (request) => {
+    // Extract device info from Next.js request
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded ? forwarded.split(',')[0] : 'unknown';
+
+    return {
+      ip,
+      userAgent: request.headers.get('user-agent'),
+      fingerprint: request.headers.get('x-fingerprint'),
+    };
+  },
+);
+
+// Create router without CORS (Next.js handles it)
+const router = adapter.createRouter('/api/auth', false);
+
+// Export Next.js route handlers
+export const GET = router.fetch;
+export const POST = router.fetch;
+export const PUT = router.fetch;
+export const DELETE = router.fetch;
+export const PATCH = router.fetch;
+export const OPTIONS = router.fetch;
+```
+
+### Alternative: Route Handler per Method
+
+You can also create individual handlers:
+
+```ts
+// app/api/auth/[...reauth]/route.ts
+const handler = (request: Request) => router.fetch(request);
+
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE };
+```
+
+## Database Configuration
+
+### PostgreSQL with Prisma
+
+```ts
+// lib/db.ts
+import { PrismaClient } from '@prisma/client';
+import { Kysely } from 'kysely';
+import { PrismaDialect } from 'kysely-prisma';
+
+const prisma = new PrismaClient();
+
+export const db = new Kysely<Database>({
+  dialect: new PrismaDialect({
+    prisma,
+  }),
+});
+```
+
+### PostgreSQL with Native Kysely
+
+```ts
+// lib/db.ts
+import { Kysely, PostgresDialect } from 'kysely';
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+});
+
+export const db = new Kysely<Database>({
+  dialect: new PostgresDialect({ pool }),
+});
+```
+
+### Vercel Postgres
+
+```ts
+// lib/db.ts
+import { sql } from '@vercel/postgres';
+import { Kysely, PostgresDialect } from 'kysely';
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL,
+});
+
+export const db = new Kysely<Database>({
+  dialect: new PostgresDialect({ pool }),
+});
+```
+
+## Environment Variables
+
+```bash
+# .env.local
+DATABASE_URL=postgresql://user:password@localhost:5432/reauth
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Email Service (e.g., Resend)
+RESEND_API_KEY=re_xxxxx
+
+# JWT Secrets
+JWT_SECRET=your-jwt-secret
+SESSION_SECRET=your-session-secret
+```
+
+## Client-Side Integration
+
+### Create Auth Context
+
+```tsx
+// lib/auth-context.tsx
+'use client';
+
+import { createContext, useContext, useEffect, useState } from 'react';
+
+interface User {
+  id: string;
+  email: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check session on mount
+    fetch('/api/auth/session', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) setUser(data.user);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const res = await fetch('/api/auth/email-password/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+      credentials: 'include',
+    });
+
+    if (!res.ok) throw new Error('Login failed');
+
+    const data = await res.json();
+    setUser(data.user);
+  };
+
+  const register = async (email: string, password: string) => {
+    const res = await fetch('/api/auth/email-password/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+      credentials: 'include',
+    });
+
+    if (!res.ok) throw new Error('Registration failed');
+
+    const data = await res.json();
+    setUser(data.user);
+  };
+
+  const logout = async () => {
+    await fetch('/api/auth/email-password/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
+};
+```
+
+### Add Provider to Layout
+
+```tsx
+// app/layout.tsx
+import { AuthProvider } from '@/lib/auth-context';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### Use in Components
+
+```tsx
+// app/login/page.tsx
+'use client';
+
+import { useAuth } from '@/lib/auth-context';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { login } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login(email, password);
+      router.push('/dashboard');
+    } catch (error) {
+      alert('Login failed');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        required
+      />
+      <button type="submit">Login</button>
+    </form>
+  );
+}
+```
+
+## Server-Side Authentication
+
+### Middleware for Protected Routes
+
+```ts
+// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export async function middleware(request: NextRequest) {
+  // Check session cookie
+  const sessionToken = request.cookies.get('reauth-session')?.value;
+
+  if (!sessionToken) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Verify session with ReAuth
+  const response = await fetch(`${request.nextUrl.origin}/api/auth/session`, {
+    headers: {
+      Cookie: `reauth-session=${sessionToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/profile/:path*'],
+};
+```
+
+### Server Actions
+
+```ts
+// app/actions.ts
+'use server';
+
+import { cookies } from 'next/headers';
+
+export async function getCurrentUser() {
+  const sessionToken = cookies().get('reauth-session')?.value;
+
+  if (!sessionToken) return null;
+
+  const response = await fetch('http://localhost:3000/api/auth/session', {
+    headers: {
+      Cookie: `reauth-session=${sessionToken}`,
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  return data.user;
+}
+
+export async function logout() {
+  const sessionToken = cookies().get('reauth-session')?.value;
+
+  await fetch('http://localhost:3000/api/auth/email-password/logout', {
+    method: 'POST',
+    headers: {
+      Cookie: `reauth-session=${sessionToken}`,
+    },
+  });
+
+  cookies().delete('reauth-session');
+}
+```
+
+### Server Components
+
+```tsx
+// app/dashboard/page.tsx
+import { getCurrentUser } from '@/app/actions';
+import { redirect } from 'next/navigation';
+
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  return (
+    <div>
+      <h1>Welcome, {user.email}!</h1>
+    </div>
+  );
+}
+```
+
+## Email Integration
+
+### With Resend
+
+```ts
+// lib/email.ts
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function sendVerificationCode(email: string, code: string) {
+  await resend.emails.send({
+    from: 'auth@yourdomain.com',
+    to: email,
+    subject: 'Verify your email',
+    html: `<p>Your verification code: <strong>${code}</strong></p>`,
+  });
+}
+```
+
+Use in ReAuth engine:
+
+```ts
+const engine = createReAuthEngine({
+  // ...
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        if (type === 'verify') {
+          await sendVerificationCode(email, code);
+        } else {
+          await sendPasswordResetCode(email, code);
+        }
+      },
+      verifyEmail: true,
+    }),
+  ],
+  // ...
+});
+```
+
+## Deployment
+
+### Vercel
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
+```
+
+### Environment Variables on Vercel
+
+Add these in your Vercel project settings:
+
+- `DATABASE_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `RESEND_API_KEY`
+- `JWT_SECRET`
+- `SESSION_SECRET`
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine AS base
+
+# Install dependencies
+FROM base AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+# Build application
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+# Production image
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV production
+
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+EXPOSE 3000
+ENV PORT 3000
+
+CMD ["node", "server.js"]
+```
+
+## Testing
+
+```ts
+// __tests__/auth.test.ts
+import { describe, test, expect } from 'vitest';
+
+describe('ReAuth API', () => {
+  test('POST /api/auth/email-password/register', async () => {
+    const response = await fetch(
+      'http://localhost:3000/api/auth/email-password/register',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'SecurePass123!',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  test('GET /api/auth/session without auth', async () => {
+    const response = await fetch('http://localhost:3000/api/auth/session');
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+## Best Practices
+
+1. **Use Server Actions**: Leverage Next.js Server Actions for server-side authentication logic
+2. **Middleware Protection**: Protect routes with Next.js middleware
+3. **Edge Runtime**: Consider using Edge Runtime for auth routes for better performance
+4. **Environment Variables**: Always use environment variables for secrets
+5. **Cookie Security**: Configure secure cookies in production (httpOnly, secure, sameSite)
+6. **Error Handling**: Implement comprehensive error handling and user feedback
+7. **Rate Limiting**: Add rate limiting to prevent brute force attacks
+
+## Troubleshooting
+
+### CORS Issues
+
+If you experience CORS issues, ensure:
+
+- `credentials: 'include'` is set in fetch calls
+- CORS origin matches your app URL
+- Cookies are properly configured
+
+### Session Not Persisting
+
+Check that:
+
+- Cookies are enabled in browser
+- Cookie domain is correct
+- `credentials: 'include'` is used in fetch
+
+### Database Connection Errors
+
+Verify:
+
+- DATABASE_URL is correct
+- Database is accessible from deployment
+- Connection pooling is configured properly
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="./vercel-edge"
+    title="Vercel Edge Functions"
+    description="Deploy ReAuth on Vercel's Edge Runtime for global low-latency authentication."
+  />
+  <Card
+    href="./cloudflare-workers"
+    title="Cloudflare Workers"
+    description="Deploy ReAuth on Cloudflare's edge network."
+  />
+  <Card
+    href="../usage"
+    title="Usage Examples"
+    description="Explore more framework-specific examples."
+  />
+</Cards>

@@ -1,0 +1,537 @@
+---
+title: Vercel Edge Functions
+description: Deploy ReAuth on Vercel Edge Runtime for globally distributed, low-latency authentication.
+---
+
+Vercel Edge Functions run on Vercel's global edge network, providing ultra-low latency authentication at the edge. ReAuth's itty-router adapter integrates seamlessly with Vercel's Edge Runtime.
+
+## Quick Start
+
+### Create Edge API Route
+
+Create an edge function at `app/api/auth/[...reauth]/route.ts`:
+
+```ts
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Declare edge runtime
+export const runtime = 'edge';
+
+// Setup database schema
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql',
+    db: kysely, // Use Vercel Postgres or Neon
+  }),
+);
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Send email via edge-compatible service
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'auth@yourdomain.com',
+            to: email,
+            subject: type === 'verify' ? 'Verify your email' : 'Reset password',
+            html: `<p>Your verification code: <strong>${code}</strong></p>`,
+          }),
+        });
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Create itty-router adapter
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/api/auth',
+    cors: {
+      origin: [process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'],
+      credentials: true,
+    },
+  },
+  async (request) => {
+    // Extract device info from Vercel Edge request
+    return {
+      ip:
+        request.headers.get('x-real-ip') ||
+        request.headers.get('x-forwarded-for'),
+      userAgent: request.headers.get('user-agent'),
+      country: request.headers.get('x-vercel-ip-country'),
+      city: request.headers.get('x-vercel-ip-city'),
+      region: request.headers.get('x-vercel-ip-country-region'),
+      latitude: request.headers.get('x-vercel-ip-latitude'),
+      longitude: request.headers.get('x-vercel-ip-longitude'),
+    };
+  },
+);
+
+// Create router
+const router = adapter.createRouter('/api/auth', false);
+
+// Export handlers
+export const GET = router.fetch;
+export const POST = router.fetch;
+export const PUT = router.fetch;
+export const DELETE = router.fetch;
+export const PATCH = router.fetch;
+export const OPTIONS = router.fetch;
+```
+
+## Vercel Postgres Integration
+
+Vercel Postgres is serverless PostgreSQL optimized for edge:
+
+```ts
+import { sql } from '@vercel/postgres';
+import { Kysely } from 'kysely';
+import { VercelPostgresDialect } from 'kysely-vercel-postgres';
+
+export const db = new Kysely<Database>({
+  dialect: new VercelPostgresDialect({
+    sql,
+  }),
+});
+
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql',
+    db,
+  }),
+);
+```
+
+## Neon Database Integration
+
+Neon offers serverless Postgres with edge-optimized connections:
+
+```ts
+import { neon } from '@neondatabase/serverless';
+import { Kysely } from 'kysely';
+import { NeonDialect } from 'kysely-neon';
+
+const sql = neon(process.env.DATABASE_URL!);
+
+export const db = new Kysely<Database>({
+  dialect: new NeonDialect({
+    sql,
+  }),
+});
+```
+
+## Environment Variables
+
+```bash
+# .env.local
+DATABASE_URL=postgres://user:pass@endpoint.neon.tech/reauth
+POSTGRES_URL=vercel-postgres-connection-string
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Email
+RESEND_API_KEY=re_xxxxx
+
+# Security
+JWT_SECRET=your-jwt-secret
+SESSION_SECRET=your-session-secret
+```
+
+## Edge-Compatible Services
+
+### Email with Resend
+
+Resend is edge-compatible and recommended for Vercel Edge:
+
+```ts
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const sendCode = async (
+  subject: string,
+  code: string,
+  email: string,
+  type: string,
+) => {
+  await resend.emails.send({
+    from: 'auth@yourdomain.com',
+    to: email,
+    subject: type === 'verify' ? 'Verify your email' : 'Reset password',
+    html: `<p>Your verification code: <strong>${code}</strong></p>`,
+  });
+};
+```
+
+### Email with SendGrid (Fetch API)
+
+```ts
+const sendCode = async (
+  subject: string,
+  code: string,
+  email: string,
+  type: string,
+) => {
+  await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email }] }],
+      from: { email: 'auth@yourdomain.com' },
+      subject: type === 'verify' ? 'Verify Email' : 'Reset Password',
+      content: [
+        {
+          type: 'text/plain',
+          value: `Your verification code: ${code}`,
+        },
+      ],
+    }),
+  });
+};
+```
+
+## Geolocation Features
+
+Leverage Vercel Edge geolocation headers:
+
+```ts
+const adapter = reAuthRouter({ engine }, async (request) => {
+  const deviceInfo = {
+    ip: request.headers.get('x-real-ip'),
+    userAgent: request.headers.get('user-agent'),
+    country: request.headers.get('x-vercel-ip-country'),
+    countryName: request.headers.get('x-vercel-ip-country-name'),
+    region: request.headers.get('x-vercel-ip-country-region'),
+    regionName: request.headers.get('x-vercel-ip-country-region-name'),
+    city: request.headers.get('x-vercel-ip-city'),
+    latitude: request.headers.get('x-vercel-ip-latitude'),
+    longitude: request.headers.get('x-vercel-ip-longitude'),
+    timezone: request.headers.get('x-vercel-ip-timezone'),
+  };
+
+  // Log suspicious locations
+  if (deviceInfo.country === 'US' && deviceInfo.city) {
+    console.log(`Login from ${deviceInfo.city}, ${deviceInfo.region}`);
+  }
+
+  return deviceInfo;
+});
+```
+
+## Edge Config for Feature Flags
+
+Use Vercel Edge Config for feature flags:
+
+```ts
+import { get } from '@vercel/edge-config';
+
+const isEmailVerificationEnabled = await get('emailVerificationEnabled');
+
+const engine = createReAuthEngine({
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // ...
+      },
+      verifyEmail: isEmailVerificationEnabled ?? true,
+    }),
+  ],
+  // ...
+});
+```
+
+## Middleware for Protected Routes
+
+```ts
+// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/profile/:path*'],
+};
+
+export async function middleware(request: NextRequest) {
+  const sessionToken = request.cookies.get('reauth-session')?.value;
+
+  if (!sessionToken) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Verify session at edge
+  const response = await fetch(`${request.nextUrl.origin}/api/auth/session`, {
+    headers: {
+      Cookie: `reauth-session=${sessionToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Add user data to headers for downstream consumption
+  const data = await response.json();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-user-id', data.user.id);
+  requestHeaders.set('x-user-email', data.user.email);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+}
+```
+
+## Edge Caching
+
+Cache introspection endpoints at the edge:
+
+```ts
+// app/api/auth/introspection/route.ts
+export const runtime = 'edge';
+
+export async function GET(request: Request) {
+  const introspection = await adapter.getAdapter().introspect();
+
+  return new Response(JSON.stringify(introspection), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+      'CDN-Cache-Control': 'public, max-age=3600',
+      'Vercel-CDN-Cache-Control': 'public, max-age=3600',
+    },
+  });
+}
+```
+
+## Performance Optimization
+
+### Connection Pooling
+
+Use connection pooling with Neon:
+
+```ts
+import { Pool } from '@neondatabase/serverless';
+import { Kysely } from 'kysely';
+import { NeonDialect } from 'kysely-neon';
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const db = new Kysely<Database>({
+  dialect: new NeonDialect({
+    pool,
+  }),
+});
+```
+
+### Query Optimization
+
+```ts
+// Cache frequently accessed data
+const getUserData = async (subjectId: string, orm: any) => {
+  // Check cache first
+  const cached = cache.get(subjectId);
+  if (cached) return cached;
+
+  // Query database
+  const user = await orm
+    .selectFrom('users')
+    .where('id', '=', subjectId)
+    .selectAll()
+    .executeTakeFirst();
+
+  // Cache for 5 minutes
+  cache.set(subjectId, user, 300000);
+
+  return user;
+};
+```
+
+## Monitoring and Logging
+
+```ts
+const adapter = reAuthRouter({ engine }, async (request) => {
+  const startTime = Date.now();
+
+  adapter.registerMiddleware(router, {
+    finally: [
+      async (response, request) => {
+        const duration = Date.now() - startTime;
+
+        // Log to Vercel Analytics
+        console.log(
+          JSON.stringify({
+            method: request.method,
+            url: request.url,
+            status: response.status,
+            duration,
+            country: request.headers.get('x-vercel-ip-country'),
+            city: request.headers.get('x-vercel-ip-city'),
+          }),
+        );
+      },
+    ],
+  });
+
+  return {
+    ip: request.headers.get('x-real-ip'),
+    userAgent: request.headers.get('user-agent'),
+  };
+});
+```
+
+## Testing Edge Functions Locally
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Run development server
+vercel dev
+```
+
+## Deployment
+
+### Deploy to Vercel
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
+```
+
+### Environment Variables
+
+Add these in your Vercel project settings:
+
+- `DATABASE_URL` or `POSTGRES_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `RESEND_API_KEY` or `SENDGRID_API_KEY`
+- `JWT_SECRET`
+- `SESSION_SECRET`
+
+### Automatic Deployments
+
+Connect your GitHub repository to Vercel for automatic deployments on push.
+
+## Edge Runtime Limitations
+
+Be aware of Edge Runtime constraints:
+
+- **No Node.js APIs**: Use Web APIs only
+- **No native modules**: Stick to pure JavaScript/TypeScript
+- **Execution time**: 30-second max execution time
+- **Memory**: Limited memory (typically 128MB)
+- **Bundle size**: Keep bundle size under 1MB for best performance
+
+## Best Practices
+
+1. **Use Edge-Compatible Services**: Choose services with Fetch API support
+2. **Minimize Bundle Size**: Tree-shake and optimize imports
+3. **Connection Pooling**: Use connection poolers like Neon for database access
+4. **Geolocation**: Leverage Vercel's geolocation headers for enhanced security
+5. **Caching**: Cache static data at the edge with appropriate headers
+6. **Monitoring**: Use structured logging for Vercel Analytics integration
+7. **Error Handling**: Implement comprehensive error handling for edge constraints
+
+## Troubleshooting
+
+### Module Not Found Errors
+
+Ensure all imports are edge-compatible. Avoid Node.js-specific modules.
+
+### Database Connection Timeouts
+
+Use edge-optimized database connections:
+
+- Vercel Postgres with `@vercel/postgres`
+- Neon with `@neondatabase/serverless`
+- Connection poolers like PgBouncer
+
+### Cold Start Performance
+
+Minimize bundle size and initialize connections lazily:
+
+```ts
+let client: any = null;
+
+const getClient = () => {
+  if (!client) {
+    client = factory.client(kyselyAdapter({ provider: 'postgresql', db }));
+  }
+  return client;
+};
+```
+
+### Cookie Issues
+
+Ensure cookies work across edge and serverless:
+
+```ts
+const adapter = reAuthRouter(
+  {
+    engine,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      domain: process.env.COOKIE_DOMAIN,
+    },
+  },
+  deviceInfoExtractor,
+);
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="./cloudflare-workers"
+    title="Cloudflare Workers"
+    description="Deploy ReAuth on Cloudflare's global edge network."
+  />
+  <Card
+    href="./nextjs"
+    title="Next.js Integration"
+    description="Full Next.js integration guide with App Router."
+  />
+  <Card
+    href="../overview"
+    title="HTTP Adapter Overview"
+    description="Learn about all available HTTP adapters."
+  />
+</Cards>

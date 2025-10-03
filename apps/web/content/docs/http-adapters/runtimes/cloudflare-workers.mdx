@@ -1,0 +1,334 @@
+---
+title: Cloudflare Workers
+description: Deploy ReAuth on Cloudflare Workers with itty-router for edge authentication.
+---
+
+Itty-router was originally designed for Cloudflare Workers and remains its optimization target. ReAuth's itty-router adapter provides seamless integration for edge authentication at Cloudflare's global network.
+
+## Quick Start
+
+```ts
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'sqlite', // or use D1 for Cloudflare
+    db: kysely,
+  }),
+);
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Send email via Cloudflare Email Workers or external service
+        await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email }] }],
+            from: { email: 'auth@example.com' },
+            subject: type === 'verify' ? 'Verify your email' : 'Reset password',
+            content: [{ type: 'text/plain', value: `Your code: ${code}` }],
+          }),
+        });
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Create itty-router adapter
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+  },
+  async (request) => {
+    // Extract Cloudflare-specific device info
+    return {
+      ip: request.headers.get('CF-Connecting-IP'),
+      userAgent: request.headers.get('User-Agent'),
+      fingerprint: request.headers.get('CF-Ray'),
+      country: request.headers.get('CF-IPCountry'),
+      deviceType: request.headers.get('CF-Device-Type'),
+      timezone: request.headers.get('CF-Timezone'),
+      datacenter: request.headers.get('CF-Ray')?.split('-')[0],
+      tlsVersion: request.headers.get('CF-Visitor'),
+    };
+  },
+);
+
+// Create router with CORS
+const router = adapter.createRouter('/auth', true, {
+  origin: ['https://app.example.com'],
+  credentials: true,
+});
+
+// Export for Cloudflare Workers
+export default {
+  ...router, // strips the proxy before returning
+};
+```
+
+## Using Cloudflare D1
+
+Cloudflare D1 is a serverless SQL database perfect for ReAuth:
+
+```ts
+import { D1Database } from '@cloudflare/workers-types';
+
+interface Env {
+  DB: D1Database;
+  SENDGRID_API_KEY: string;
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    // Setup Kysely with D1
+    const db = new Kysely<Database>({
+      dialect: new D1Dialect({ database: env.DB }),
+    });
+
+    const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+    const factory = reauthDbVersions([v1]);
+    const client = factory.client(
+      kyselyAdapter({
+        provider: 'd1',
+        db,
+      }),
+    );
+
+    const engine = createReAuthEngine({
+      dbClient: {
+        version: async () => await client.version(),
+        orm: (version) => client.orm(version),
+      },
+      plugins: [
+        emailPasswordPlugin({
+          sendCode: async (subject, code, email, type) => {
+            await fetch('https://api.sendgrid.com/v3/mail/send', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                personalizations: [{ to: [{ email }] }],
+                from: { email: 'auth@example.com' },
+                subject:
+                  type === 'verify' ? 'Verify your email' : 'Reset password',
+                content: [{ type: 'text/plain', value: `Code: ${code}` }],
+              }),
+            });
+          },
+          verifyEmail: true,
+        }),
+      ],
+      getUserData: async (subjectId, orm) => ({ id: subjectId }),
+    });
+
+    const adapter = reAuthRouter({ engine }, async (req) => ({
+      ip: req.headers.get('CF-Connecting-IP'),
+      country: req.headers.get('CF-IPCountry'),
+    }));
+
+    const router = adapter.createRouter('/auth', false);
+
+    return router.fetch(request, env, ctx);
+  },
+};
+```
+
+## Configuration
+
+### wrangler.toml
+
+```toml
+name = "reauth-worker"
+main = "src/index.ts"
+compatibility_date = "2025-10-04"
+
+[env.production]
+workers_dev = false
+route = "auth.example.com/*"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reauth_production"
+database_id = "your-database-id"
+
+[vars]
+ENVIRONMENT = "production"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "your-kv-namespace-id"
+```
+
+## Deployment
+
+```npm
+npm i -g wrangler
+```
+
+```bash
+# Login to Cloudflare
+wrangler login
+```
+
+```bash
+# Create D1 database
+wrangler d1 create reauth_production
+
+# Run migrations
+wrangler d1 migrations apply reauth_production
+
+# Deploy to production
+wrangler deploy
+```
+
+## Advanced Features
+
+### Rate Limiting with Cloudflare KV
+
+```ts
+const adapter = reAuthRouter(
+  {
+    engine,
+    rateLimit: {
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+      keyGenerator: (req) => req.headers.get('CF-Connecting-IP') || 'unknown',
+    },
+  },
+  deviceInfoExtractor,
+);
+```
+
+### Custom Middleware
+
+```ts
+const router = adapter.createRouter('/auth', true);
+
+// Add custom logging middleware
+adapter.registerMiddleware(router, {
+  before: [
+    async (request) => {
+      console.log(
+        `[${new Date().toISOString()}] ${request.method} ${request.url}`,
+      );
+    },
+  ],
+  finally: [
+    async (response) => {
+      if (response.status >= 400) {
+        console.error(`Error response: ${response.status}`);
+      }
+    },
+  ],
+});
+```
+
+### Caching with Cloudflare Cache API
+
+```ts
+router.get('/auth/plugins', async (request) => {
+  const cacheKey = new Request(request.url, request);
+  const cache = caches.default;
+
+  let response = await cache.match(cacheKey);
+
+  if (!response) {
+    const result = await adapter.getAdapter().listPlugins();
+    response = new Response(JSON.stringify(result), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+    await cache.put(cacheKey, response.clone());
+  }
+
+  return response;
+});
+```
+
+## Best Practices
+
+1. **Use D1 for persistence**: Cloudflare D1 provides serverless SQL with automatic backups
+2. **Leverage CF headers**: Extract rich device info from Cloudflare's headers
+3. **Enable caching**: Cache introspection endpoints to reduce compute time
+4. **Use KV for sessions**: Store session data in KV for fast global access
+5. **Set appropriate limits**: Configure rate limiting based on your traffic patterns
+6. **Monitor with Analytics**: Use Cloudflare Analytics to track authentication patterns
+
+## Troubleshooting
+
+### Cold Start Optimization
+
+Minimize cold starts by:
+
+- Keeping bundle size small
+- Using tree-shaking
+- Avoiding heavy dependencies
+
+### D1 Connection Issues
+
+If D1 queries fail:
+
+- Check database binding in wrangler.toml
+- Verify migrations are applied
+- Ensure proper error handling
+
+### CORS Errors
+
+Configure CORS properly:
+
+```ts
+const router = adapter.createRouter('/auth', true, {
+  origin: ['https://app.example.com', 'https://admin.example.com'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization'],
+});
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="../overview"
+    title="HTTP Adapter Overview"
+    description="Learn about all available HTTP adapters and their features."
+  />
+  <Card
+    href="./bun"
+    title="Bun Runtime"
+    description="Deploy ReAuth on Bun for high-performance standalone servers."
+  />
+  <Card
+    href="./nextjs"
+    title="Next.js Integration"
+    description="Integrate ReAuth into Next.js App Router applications."
+  />
+</Cards>

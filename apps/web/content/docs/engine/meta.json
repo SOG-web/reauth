@@ -1,6 +1,17 @@
 {
   "title": "Engine",
   "description": "Core ReAuth engine configuration and lifecycle guidance.",
+  "icon": "ServerCog",
   "root": true,
-  "pages": ["overview", "configuration"]
+  "pages": [
+    "---Introduction---",
+    "overview",
+    "configuration",
+    "partial-integration",
+    "---Plugins---",
+    "plugins",
+    "---Advanced---",
+    "advanced"
+  ],
+  "folders": ["plugins", "advanced"]
 }

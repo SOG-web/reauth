@@ -4,6 +4,7 @@ import { createFileSystemTypesCache } from 'fumadocs-twoslash/cache-fs';
 import remarkMath from 'remark-math';
 import { remarkTypeScriptToJavaScript } from 'fumadocs-docgen/remark-ts2js';
 import rehypeKatex from 'rehype-katex';
+import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins';
 import {
   rehypeCodeDefaultOptions,
   remarkSteps,
@@ -68,6 +69,7 @@ export default defineConfig({
       remarkMath,
       remarkAutoTypeTable,
       remarkTypeScriptToJavaScript,
+      remarkMdxMermaid,
     ],
     rehypePlugins: (v) => [rehypeKatex, ...v],
   },

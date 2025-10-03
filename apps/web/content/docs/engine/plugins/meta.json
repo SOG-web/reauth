@@ -1,0 +1,17 @@
+{
+  "title": "Plugins",
+  "description": "Built-in and custom authentication plugins for ReAuth.",
+  "pages": [
+    "email-password",
+    "passwordless",
+    "username",
+    "email-or-username",
+    "phone",
+    "organization",
+    "anonymous",
+    "oauth",
+    "api-key",
+    "jwt",
+    "session"
+  ]
+}

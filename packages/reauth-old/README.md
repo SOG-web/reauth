@@ -16,8 +16,8 @@ ReAuth Core is a **runtime, framework, and protocol-independent** authentication
 
 ## 📦 Installation
 
-```bash
-pnpm add @re-auth/reauth
+```npm
+npm i @re-auth/reauth
 # or
 yarn add @re-auth/reauth
 # or

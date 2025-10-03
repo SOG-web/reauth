@@ -1,34 +1,246 @@
 ---
-title: Engine Overview
-description: Understand how the ReAuth engine models flows, policies, and persistence.
+title: Overview
+description: Understand how the ReAuth engine models flows, hooks, and persistence.
 ---
 
 ## Architecture
 
 The engine separates authentication concerns into three layers:
 
-1. **State**: deterministic persistence via pluggable database adapters (Kysely, Prisma, custom SQL/KV).
-2. **Flows**: reusable authentication flows composed from plugins (email/password, OAuth, passkeys, organizations).
-3. **Policies**: hooks and guards that gate every flow the same way regardless of transport.
+1. **State**: deterministic persistence via pluggable database adapters using FumaDB.
+2. **Flows**: reusable authentication flows composed from plugins (email/password, OAuth, JWT, organizations).
+3. **Hooks**: middleware-style interceptors that gate and extend flows at multiple levels (engine, plugin, step).
 
 Because the engine is transport agnostic, the same configuration runs in Node, Deno, Bun, or edge environments.
 
-```
-┌─────────────┐      ┌───────────────┐      ┌────────────────┐
-│  Database   │◄────►│  State Layer  │◄────►│ Engine Runtime │
-└─────────────┘      └───────────────┘      └──────┬─────────┘
-                                             Plugins│
-                                      ┌────────────┴─────────────┐
-                                      │ email/password, OAuth,   │
-                                      │ 2FA, organizations,      │
-                                      │ custom assertions        │
-                                      └──────────────────────────┘
+```mermaid
+flowchart LR
+    DB[(Database)]:::dbStyle
+    State[State Layer]:::stateStyle
+    Engine[Engine Runtime]:::engineStyle
+    Plugins[Plugins Layer]:::pluginStyle
+
+    DB <-->|Read/Write| State
+    State <-->|Manage State| Engine
+    Engine -->|Load & Execute| Plugins
+
+    subgraph PluginTypes[" "]
+        EP[Email/Password]
+        OAuth[OAuth Providers]
+        MFA[2FA/MFA]
+        Org[Organizations]
+        Custom[Custom Flows]
+    end
+
+    Plugins -.->|Contains| PluginTypes
+
+    classDef dbStyle fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    classDef stateStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef engineStyle fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef pluginStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
 ```
 
 <Callout title="Transport agnostic by design" type="info">
   Run the same engine configuration across Node, Deno, Bun, or edge runtimes
   without changing flow logic. Adapters only translate requests, not the
   business rules.
+</Callout>
+
+## The ReAuth Philosophy
+
+### A Universal Authentication Pattern
+
+ReAuth is **not just a TypeScript library**—it's a **new standard for building authentication platforms** that transcends language and ecosystem boundaries. The pattern separates authentication into three universal concerns that every system needs:
+
+```mermaid
+flowchart TB
+    subgraph Pattern["ReAuth Universal Pattern"]
+        direction TB
+        Logic["🧠 Business Logic<br/>(Transport Agnostic)"]
+        Protocol["🔌 Protocol Layer<br/>(HTTP, GraphQL, gRPC, etc.)"]
+        Storage["💾 Storage Layer<br/>(SQL, NoSQL, KV, etc.)"]
+
+        Logic -.->|"Adapts to"| Protocol
+        Logic -.->|"Adapts to"| Storage
+    end
+
+    subgraph Implementations["Language Implementations"]
+        TS["TypeScript/JavaScript<br/>@re-auth/reauth"]
+        Go["Go<br/>go-reauth (future)"]
+        Rust["Rust<br/>reauth-rs (future)"]
+        Python["Python<br/>pyreauth (future)"]
+    end
+
+    Pattern ==>|"Same Pattern"| Implementations
+
+    style Pattern fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+    style Logic fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style Protocol fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    style Storage fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+```
+
+### Why This Pattern Matters
+
+<Callout title="Language-agnostic by design" type="success">
+  ReAuth defines a **protocol-independent authentication architecture** that any
+  language can implement. The TypeScript implementation is the reference, but
+  the pattern works in Go, Rust, Python, or any ecosystem.
+</Callout>
+
+#### 1. **Separation of Concerns**
+
+Authentication logic should never be coupled to HTTP, GraphQL, or any specific protocol. ReAuth enforces this by:
+
+- **Core Engine**: Pure business logic with zero transport dependencies
+- **Protocol Adapters**: Thin translation layers that map protocols to engine operations
+- **Storage Adapters**: Pluggable persistence without vendor lock-in
+
+```mermaid
+flowchart LR
+    subgraph Clients["Clients (Any Protocol)"]
+        REST[REST Client]
+        GQL[GraphQL Client]
+        gRPC[gRPC Client]
+        Custom[Custom Protocol]
+    end
+
+    subgraph Adapters["Protocol Adapters"]
+        RESTA[REST Adapter]
+        GQLA[GraphQL Adapter]
+        gRPCA[gRPC Adapter]
+        CustomA[Custom Adapter]
+    end
+
+    subgraph Core["ReAuth Engine (Universal)"]
+        Engine[Authentication Engine]
+        Plugins[Plugin System]
+    end
+
+    REST --> RESTA
+    GQL --> GQLA
+    gRPC --> gRPCA
+    Custom --> CustomA
+
+    RESTA --> Engine
+    GQLA --> Engine
+    gRPCA --> Engine
+    CustomA --> Engine
+
+    Engine --> Plugins
+
+    style Core fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+    style Engine fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+```
+
+#### 2. **Composable Authentication Flows**
+
+Instead of monolithic auth systems, ReAuth uses **plugins** that compose together:
+
+- Email/Password + Email Verification + 2FA
+- OAuth + Organizations + Custom Claims
+- Passwordless + WebAuthn + Device Fingerprinting
+
+Each plugin is a self-contained module with its own schema, validation, and business logic.
+
+#### 3. **Runtime Independence**
+
+The same authentication rules run in:
+
+- **Node.js** backends
+- **Deno** / **Bun** edge functions
+- **Cloudflare Workers** / **Vercel Edge**
+- **AWS Lambda** / **Google Cloud Functions**
+
+No runtime-specific code in the core engine.
+
+### Replicating ReAuth in Other Ecosystems
+
+To implement ReAuth in another language, follow this blueprint:
+
+<Steps>
+  <Step>
+    ### Define the Core Interfaces
+    
+    ```typescript
+    interface AuthEngine {
+      plugins: PluginRegistry;
+      database: DatabaseAdapter;
+      session: SessionManager;
+      policies: PolicyRegistry;
+    }
+    
+    interface AuthPlugin {
+      name: string;
+      schema: ValidationSchema;
+      controller: FlowController;
+      hooks: LifecycleHooks;
+    }
+    ```
+  </Step>
+  
+  <Step>
+    ### Implement Storage Adapters
+    
+    Create adapters for your ecosystem's popular databases:
+    
+    - Go: `pgx`, `gorm`, `ent`
+    - Rust: `sqlx`, `diesel`, `sea-orm`
+    - Python: `sqlalchemy`, `prisma`, `tortoise`
+  </Step>
+  
+  <Step>
+    ### Build Protocol Adapters
+    
+    Map protocol requests to engine operations:
+    
+    - HTTP frameworks (Express-like, Gin, Actix-web, FastAPI)
+    - GraphQL servers (Apollo-like, gqlgen, async-graphql, Strawberry)
+    - gRPC services (standard protobuf definitions)
+  </Step>
+  
+  <Step>
+    ### Create Core Plugins
+    
+    Start with universal authentication flows:
+    
+    - Email/Password
+    - OAuth 2.0 / OIDC
+    - JWT with JWKS
+    - Session Management
+  </Step>
+  
+  <Step>
+    ### Follow the Lifecycle Pattern
+    
+    ```mermaid
+    flowchart TD
+        Start([Request]) --> Validate[1. Validate Input]
+        Validate --> BeforeExec[2. Before Execute<br/>Policies & Guards]
+        BeforeExec --> Execute[3. Execute Flow<br/>Core Logic]
+        Execute --> AfterExec[4. After Execute<br/>Side Effects]
+        AfterExec --> Response([Response])
+        
+        style Validate fill:#e3f2fd
+        style BeforeExec fill:#fff3e0
+        style Execute fill:#e8f5e9
+        style AfterExec fill:#f3e5f5
+    ```
+  </Step>
+</Steps>
+
+### ReAuth as a Standard
+
+The ReAuth pattern establishes a **universal authentication standard** by:
+
+1. **Defining clear boundaries** between transport, logic, and storage
+2. **Providing composable building blocks** (plugins) instead of monoliths
+3. **Enabling cross-runtime consistency** through protocol-agnostic design
+4. **Supporting incremental adoption** by allowing custom plugins and adapters
+
+<Callout title="Cross-language compatibility" type="info">
+  Different language implementations of ReAuth can **share the same database
+  schema** and **interoperate seamlessly**. A Go backend and TypeScript edge
+  function can authenticate users from the same user pool.
 </Callout>
 
 ## Core concepts
@@ -38,40 +250,69 @@ Because the engine is transport agnostic, the same configuration runs in Node, D
 The engine accepts a configuration object that nails down persistence, plugins, and security settings:
 
 ```ts
-import { createReAuthEngine } from '@re-auth/reauth';
-import { createKyselyAdapter } from '@re-auth/reauth/lib/adapters/kysely';
+import createReAuthEngine from '@re-auth/reauth';
 import { emailPasswordPlugin } from '@re-auth/reauth/plugins/email-password';
+import { db } from './database'; // FumaDB client
 
 export const auth = createReAuthEngine({
-  database: createKyselyAdapter({ client: db }),
-  plugins: [emailPasswordPlugin({ requireEmailVerification: true })],
-  session: {
-    maxConcurrentSessions: 5,
-    refreshTokenTtl: '30d',
+  dbClient: db, // FumaDB client instance
+  plugins: [
+    emailPasswordPlugin({
+      requireEmailVerification: true,
+      sessionTtlSeconds: 3600, // 1 hour
+    }),
+  ],
+  authHooks: [
+    // Engine-level hooks (run for all flows)
+    {
+      type: 'before',
+      universal: true,
+      fn: async (data) => {
+        console.log('Before any auth flow');
+        return data;
+      },
+    },
+  ],
+  sessionHooks: [
+    // Session-level hooks
+    {
+      type: 'after',
+      fn: async (data) => {
+        console.log('After session created');
+        return data;
+      },
+    },
+  ],
+  getUserData: async (subjectId, orm) => {
+    // Fetch additional user data for sessions
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return { email: user?.email, name: user?.name };
   },
-  cookies: {
-    domain: '.example.com',
-    secure: process.env.NODE_ENV === 'production',
-  },
+  enableCleanupScheduler: true, // Auto-cleanup expired sessions
 });
 ```
 
 Key sections:
 
-- `database`: persistence adapter implementing the ReAuth datastore contract.
+- `dbClient`: FumaDB client for persistence.
 - `plugins`: authentication flows that extend the engine.
-- `session`: limits and TTLs governing access/refresh tokens.
-- `cookies`: defaults for cookie-based credentials when adapters need them.
+- `authHooks`: engine-level hooks that run for all authentication flows.
+- `sessionHooks`: hooks that run during session creation/verification.
+- `getUserData`: function to fetch additional user data for JWT payloads.
 
 ### Plugins
 
-Plugins encapsulate new flows and can ship their own schema, service layer, and policy hooks. A plugin typically exports:
+Plugins encapsulate authentication flows as **steps**. Each plugin can define:
 
-- **Schema** describing the payloads it accepts and emits.
-- **Controller** logic containing handlers for primary operations (register, login, etc.).
-- **Services** that the engine can reuse (e.g., email verification, MFA device management).
+- **Steps**: Individual operations (register, login, verify-email, etc.) with input/output schemas.
+- **Validation Schemas**: ArkType schemas for runtime input validation and TypeScript type inference.
+- **Output Schemas**: Optional ArkType schemas for output validation.
+- **Hooks**: Step-level (`before`, `after`, `onError`) and plugin-level root hooks.
+- **Database Tables**: Custom tables and relations via FumaDB schema plugins.
 
-Plugins are composable—order matters when they register overrides or guard rails. ReAuth core ships with:
+Plugins are composable and can depend on each other. ReAuth core ships with:
 
 <Cards>
   <Card
@@ -94,64 +335,130 @@ Plugins are composable—order matters when they register overrides or guard rai
 
 You can also author custom plugins by implementing the `AuthPlugin` interface and registering hooks in `engine.plugins.use()`.
 
-### Lifecycle hooks
+### Hooks System
 
-Every flow runs through middleware-style hooks:
+ReAuth provides a flexible hooks system at three levels:
 
 <Steps>
   <Step>
-    <h4>1. beforeValidate</h4>
-    <p>
-      Normalize inbound payloads and attach metadata before schema validation
-      runs.
-    </p>
+    ### Engine-Level Hooks
+    
+    Global hooks that run for all authentication flows:
+    
+    ```ts
+    auth.registerAuthHook({
+      type: 'before',
+      universal: true,
+      fn: async (data) => {
+        // Rate limiting, logging, etc.
+        return data;
+      }
+    });
+    ```
   </Step>
+  
   <Step>
-    <h4>2. validate</h4>
-    <p>
-      Apply schema validation plus plugin-level assertions to reject bad input
-      fast.
-    </p>
+    ### Plugin-Level Root Hooks
+    
+    Hooks that run for all steps within a plugin:
+    
+    ```ts
+    {
+      rootHooks: {
+        before: async (input, ctx, step) => {
+          // Pre-process input for all plugin steps
+          return input;
+        },
+        after: async (output, ctx, step) => {
+          // Post-process output
+          return output;
+        },
+        onError: async (error, input, ctx, step) => {
+          // Handle errors
+        }
+      }
+    }
+    ```
   </Step>
+  
   <Step>
-    <h4>3. beforeExecute</h4>
-    <p>Gate flows with policies or rate limits once the payload is verified.</p>
+    ### Step-Level Hooks
+    
+    Hooks specific to individual steps:
+    
+    ```ts
+    {
+      hooks: {
+        before: async (input, ctx) => {
+          // Step-specific pre-processing
+        },
+        after: async (output, ctx) => {
+          // Step-specific post-processing  
+        },
+        onError: async (error, ctx) => {
+          // Step-specific error handling
+        }
+      }
+    }
+    ```
   </Step>
+  
   <Step>
-    <h4>4. execute</h4>
-    <p>
-      Run the plugin controller to mutate state, create sessions, and emit
-      events.
-    </p>
-  </Step>
-  <Step>
-    <h4>5. afterExecute</h4>
-    <p>
-      Perform side effects like audit logging or webhooks after state is
-      consistent.
-    </p>
+    ### Session Hooks
+    
+    Special hooks for session lifecycle:
+    
+    ```ts
+    auth.registerSessionHook({
+      type: 'after',
+      fn: async (data) => {
+        // Track session creation
+        return data;
+      }
+    });
+    ```
   </Step>
 </Steps>
 
-Plugins register handlers for any phase, letting you inject audits, analytics, or custom risks scoring without changing transport code.
+Hooks run in order: **Engine → Plugin Root → Step**, allowing fine-grained control without coupling to transport.
 
-### Deterministic policies
+### Input & Output Validation
 
-Policies express guard rails the same way regardless of transport. For example, to block users with unverified email addresses across every adapter:
+ReAuth uses **ArkType** for runtime validation with TypeScript type inference:
 
 ```ts
-auth.policies.register('requireVerifiedEmail', ({ user }) => {
-  if (!user.emailVerified) {
-    return {
-      allowed: false,
-      reason: 'Email verification required before accessing org resources.',
-    };
-  }
-  return { allowed: true };
+import { type } from 'arktype';
+
+const registerSchema = type({
+  email: 'email',
+  password: 'string>8',
+  'username?': 'string>3',
 });
+
+const step = {
+  name: 'register',
+  validationSchema: registerSchema, // Input validation
+  outputs: type({
+    success: 'boolean',
+    subject: type({
+      id: 'string.uuid',
+      email: 'email',
+    }),
+  }), // Output validation (optional)
+  async run(input, ctx) {
+    // input is fully typed!
+    const { email, password, username } = input;
+    // ...
+  },
+};
 ```
 
-Adapters inspect policy results before responding to the client, so you avoid drift between REST, GraphQL, or edge handlers.
+**Benefits:**
+
+- ✅ Runtime type safety
+- ✅ Compile-time TypeScript types
+- ✅ Automatic validation errors
+- ✅ JSON Schema generation for introspection
 
 ## Data expectations
 
