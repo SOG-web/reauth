@@ -26,7 +26,9 @@ export class HonoAdapter {
   /**
    * Generate device info from request
    */
-  async generateDeviceInfoInternal(request: Context): Promise<Record<string, any>> {
+  async generateDeviceInfoInternal(
+    request: Context,
+  ): Promise<Record<string, any>> {
     if (!this.generateDeviceInfo) {
       return {};
     }
@@ -224,6 +226,20 @@ export class HonoAdapter {
 
         const result = await this.adapter.executeAuthStep(req, deviceInfo);
 
+        // Set cookies from secret field (OAuth flow)
+        if (result.secret && typeof result.secret === 'object') {
+          for (const [key, value] of Object.entries(result.secret)) {
+            setCookie(c, key, value, {
+              httpOnly: true,
+              secure: true,
+              path: '/',
+              sameSite: 'Lax',
+              maxAge: 600, // 10 minutes for OAuth state/verifier
+            });
+          }
+        }
+
+        // Set session cookies if configured
         if (this.adapter.getConfig().cookie) {
           const cookie = this.adapter.getConfig().cookie!;
           const options = cookie.options;
@@ -281,6 +297,11 @@ export class HonoAdapter {
           }
         }
 
+        // Handle redirect responses (OAuth flow)
+        if (result.redirect) {
+          return c.redirect(result.redirect, result.status as any);
+        }
+
         return c.json(result, result.status as any);
       } catch (error) {
         return this.handleErrorResponse(c, error as Error);
@@ -293,7 +314,10 @@ export class HonoAdapter {
       try {
         const httpReq = this.extractRequest(c);
         const deviceInfo = await this.generateDeviceInfoInternal(c);
-        const result = await this.adapter.checkSession(httpReq as any, deviceInfo);
+        const result = await this.adapter.checkSession(
+          httpReq as any,
+          deviceInfo,
+        );
         return c.json(result);
       } catch (error) {
         return this.handleErrorResponse(c, error as Error);

@@ -1,0 +1,6 @@
+{
+  "title": "Engine",
+  "description": "Core ReAuth engine configuration and lifecycle guidance.",
+  "root": true,
+  "pages": ["overview", "configuration"]
+}

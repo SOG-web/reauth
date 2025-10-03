@@ -21,7 +21,7 @@ export const githubOAuthProvider = createOAuthProvider<GitHubOAuthConfig>(
   'regular',
   (config: GitHubOAuthConfig) =>
     new arctic.GitHub(config.clientId, config.clientSecret, config.redirectUri),
-  ['user:email'],
+  ['user:email', 'read:user'],
   {} as GitHubOAuthConfig, // Will be overridden by user config
 );
 

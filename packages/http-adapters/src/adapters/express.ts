@@ -31,7 +31,9 @@ export class ExpressAdapter
   /**
    * Generate device info from request
    */
-  async generateDeviceInfoInternal(request: Request): Promise<Record<string, any>> {
+  async generateDeviceInfoInternal(
+    request: Request,
+  ): Promise<Record<string, any>> {
     if (!this.generateDeviceInfo) {
       return {};
     }
@@ -56,7 +58,10 @@ export class ExpressAdapter
       try {
         const httpReq = this.extractRequest(req);
         const deviceInfo = await this.generateDeviceInfoInternal(req);
-        (req as any).user = await this.adapter.getCurrentUser(httpReq, deviceInfo);
+        (req as any).user = await this.adapter.getCurrentUser(
+          httpReq,
+          deviceInfo,
+        );
         next();
       } catch (error) {
         // Don't fail the request if user lookup fails, just continue with req.user = null
@@ -226,6 +231,74 @@ export class ExpressAdapter
         const deviceInfo = await this.generateDeviceInfoInternal(req);
 
         const result = await this.adapter.executeAuthStep(request, deviceInfo);
+
+        // Set cookies from secret field (OAuth flow)
+        if (result.secret && typeof result.secret === 'object') {
+          for (const [key, value] of Object.entries(result.secret)) {
+            res.cookie(key, value, {
+              httpOnly: true,
+              secure: true,
+              path: '/',
+              sameSite: 'lax',
+              maxAge: 600000, // 10 minutes for OAuth state/verifier
+            });
+          }
+        }
+
+        // Set session cookies if configured
+        if (this.adapter.getConfig().cookie && result.data?.token) {
+          const cookie = this.adapter.getConfig().cookie!;
+          const options = cookie.options;
+          const token = result.data.token;
+
+          if (typeof token === 'string') {
+            res.cookie(cookie.name, token, {
+              domain: options.domain,
+              httpOnly: options.httpOnly,
+              secure: options.secure,
+              path: options.path || '/',
+              sameSite: options.sameSite || 'lax',
+              maxAge: options.maxAge ? options.maxAge * 1000 : undefined,
+              expires: options.expires,
+            });
+          } else {
+            res.cookie(cookie.name, token.accessToken, {
+              domain: options.domain,
+              httpOnly: options.httpOnly,
+              secure: options.secure,
+              path: options.path || '/',
+              sameSite: options.sameSite || 'lax',
+              maxAge: options.maxAge ? options.maxAge * 1000 : undefined,
+              expires: options.expires,
+            });
+
+            if (cookie.refreshOptions && token.refreshToken) {
+              const refreshOptions = cookie.refreshOptions;
+              res.cookie(
+                cookie.refreshTokenName || 'refreshToken',
+                token.refreshToken,
+                {
+                  domain: refreshOptions.domain,
+                  httpOnly: refreshOptions.httpOnly,
+                  secure: refreshOptions.secure,
+                  path: refreshOptions.path || '/',
+                  sameSite: refreshOptions.sameSite || 'lax',
+                  maxAge: refreshOptions.maxAge
+                    ? refreshOptions.maxAge * 1000
+                    : undefined,
+                  expires: refreshOptions.expires,
+                },
+              );
+            }
+          }
+        }
+
+        // Handle redirect responses (OAuth flow)
+        if (result.redirect) {
+          res.redirect(result.status, result.redirect);
+          return;
+        }
+
         this.sendResponse(res, result, result.status);
       } catch (error) {
         this.handleError(res, error as Error);
@@ -244,7 +317,10 @@ export class ExpressAdapter
       try {
         const httpReq = this.extractRequest(req);
         const deviceInfo = await this.generateDeviceInfoInternal(req);
-        const result = await this.adapter.checkSession(httpReq as any, deviceInfo);
+        const result = await this.adapter.checkSession(
+          httpReq as any,
+          deviceInfo,
+        );
         this.sendResponse(res, result);
       } catch (error) {
         this.handleError(res, error as Error);
@@ -367,6 +443,10 @@ export function expressReAuth(
   exposeIntrospection: boolean = false,
   generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
 ): MiddlewareFunction<Request, Response, NextFunction> {
-  const adapter = new ExpressAdapter(config, exposeIntrospection, generateDeviceInfo);
+  const adapter = new ExpressAdapter(
+    config,
+    exposeIntrospection,
+    generateDeviceInfo,
+  );
   return adapter.createMiddleware();
 }

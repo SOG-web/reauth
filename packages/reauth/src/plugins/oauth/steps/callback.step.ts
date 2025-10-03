@@ -17,7 +17,7 @@ export const callbackOAuthValidation = type({
   code: 'string',
   state: 'string',
   oauth_state: 'string',
-  'oauth_code_verifier?': 'string',
+  'oauth_code_verifier?': 'string | undefined',
   oauth_provider: 'string',
 });
 
@@ -57,8 +57,13 @@ export const callbackOAuthStep: AuthStep<
     }),
   }),
   async run(input: CallbackOAuthInput, ctx): Promise<AuthOutput> {
-    const { code, state, oauth_state, oauth_code_verifier, oauth_provider } =
-      input;
+    const {
+      code,
+      state,
+      oauth_state,
+      oauth_code_verifier,
+      oauth_provider: providerName,
+    } = input;
     const orm = await ctx.engine.getOrm();
 
     try {
@@ -66,19 +71,19 @@ export const callbackOAuthStep: AuthStep<
       if (state !== oauth_state) {
         return {
           success: false,
-          message: 'Invalid state parameter',
+          message: 'Invalid request',
           status: 'error',
         };
       }
 
       // Find the provider configuration
       const provider = ctx.config.providers?.find(
-        (p) => p.name === oauth_provider,
+        (p) => p.name === providerName,
       );
       if (!provider) {
         return {
           success: false,
-          message: `OAuth provider '${oauth_provider}' not configured`,
+          message: `OAuth provider '${providerName}' not configured`,
           status: 'ip',
         };
       }
@@ -89,7 +94,7 @@ export const callbackOAuthStep: AuthStep<
         if (!oauth_code_verifier) {
           return {
             success: false,
-            message: 'Code verifier not found',
+            message: 'Invalid request',
             status: 'ip',
           };
         }
@@ -219,7 +224,7 @@ export const callbackOAuthStep: AuthStep<
         status: 'su',
       };
     } catch (error: any) {
-      console.error(`${oauth_provider} OAuth callback error:`, error);
+      console.error(`${providerName} OAuth callback error:`, error);
       return {
         success: false,
         message: `OAuth authentication failed: ${error.message}`,

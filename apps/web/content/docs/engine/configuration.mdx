@@ -1,0 +1,158 @@
+---
+title: Engine Configuration
+description: Detailed reference for configuring the ReAuth engine.
+---
+
+## createReAuthEngine options
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `database` | `DatabaseAdapter` | Required persistence adapter that implements CRUD for users, sessions, and tokens. |
+| `plugins` | `AuthPlugin[]` | List of plugins that register flows (email/password, OTP, OAuth, etc.). |
+| `session` | `SessionConfig` | TTLs, concurrency limits, rotation strategies. |
+| `cookies` | `CookieConfig` | Defaults for cookie-based flows when using HTTP adapters. |
+| `secrets` | `SecretConfig` | Keys for signing tokens and encrypting device secrets. |
+| `events` | `EventConfig` | Optional event handlers or bus integration. |
+
+### Database adapter
+
+A database adapter must implement `AuthDatastore`:
+
+```ts
+export interface AuthDatastore {
+  createUser(input: CreateUserInput): Promise<UserRecord>;
+  findUserById(userId: string): Promise<UserRecord | null>;
+  saveSession(session: SessionRecord): Promise<void>;
+  revokeSession(sessionId: string): Promise<void>;
+  listSessions(userId: string): Promise<SessionRecord[]>;
+  // ...and other methods for plugin extensions
+}
+```
+
+ReAuth ships batteries-included adapters for Kysely and Prisma. To bring your own store, implement this interface and pass it to the engine.
+
+### Session configuration
+
+```ts
+const auth = createReAuthEngine({
+  // ...database, plugins
+  session: {
+    accessTokenTtl: '15m',
+    refreshTokenTtl: '30d',
+    maxConcurrentSessions: 10,
+    rotateRefreshToken: 'rotate-and-invalidate-previous',
+  },
+});
+```
+
+- `accessTokenTtl`: Access token lifetime (string, milliseconds, or number of seconds).
+- `refreshTokenTtl`: Refresh token lifetime.
+- `maxConcurrentSessions`: Drop oldest sessions once the limit is exceeded.
+- `rotateRefreshToken`: Strategy to rotate refresh tokens on reissue.
+
+### Cookie configuration
+
+Adapters that respond with cookies respect these defaults:
+
+```ts
+cookies: {
+  domain: '.example.com',
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+  httpOnly: true,
+}
+```
+
+You can override cookie behavior per adapter (for example, to distinguish between web UI and device flows).
+
+### Secret configuration
+
+Provide symmetric keys or key references for token signing:
+
+```ts
+secrets: {
+  accessToken: process.env.ACCESS_TOKEN_SECRET!,
+  refreshToken: process.env.REFRESH_TOKEN_SECRET!,
+  cookie: process.env.COOKIE_SECRET!,
+}
+```
+
+Rotate secrets carefully—ReAuth keeps a rotation window so old tokens remain valid until expiration.
+
+### Events
+
+Wire an event bus to capture lifecycle notifications:
+
+```ts
+import { createReAuthEngine } from '@re-auth/reauth';
+
+const auth = createReAuthEngine({
+  // ...
+  events: {
+    on(event, payload) {
+      logger.info({ event, payload }, 'reauth event');
+    },
+  },
+});
+```
+
+## Plugin-specific configuration
+
+Each plugin documents its own options. Example: email/password plugin
+
+```ts
+emailPasswordPlugin({
+  requireEmailVerification: true,
+  passwordPolicy: {
+    minLength: 12,
+    requireSymbol: true,
+    checks: [
+      ({ password }) => {
+        if (password.includes('password')) {
+          return 'Password cannot contain the word "password"';
+        }
+        return true;
+      },
+    ],
+  },
+  notifications: {
+    sendVerification: async ({ user, token }) => {
+      await emailClient.send({
+        to: user.email,
+        subject: 'Verify your account',
+        template: 'email-verification',
+        data: { token },
+      });
+    },
+  },
+});
+```
+
+Plugins can expose services that the engine injects into flows (for example, to invite organization members or link OAuth identities).
+
+## Environmental separation
+
+Use distinct engine instances per environment:
+
+```ts
+export const auth = createReAuthEngine({
+  // ...
+  session: {
+    accessTokenTtl: process.env.NODE_ENV === 'production' ? '10m' : '60m',
+  },
+});
+```
+
+Inject environment-aware dependencies (email providers, caches, analytics) when instantiating plugins.
+
+## Validation checklist
+
+- [ ] Database adapter passes the ReAuth datastore test suite.
+- [ ] Secrets loaded from environment or secret manager.
+- [ ] Session limits defined for your threat model.
+- [ ] All mandatory plugins registered.
+- [ ] Events wired to your observability stack.
+- [ ] `pnpm --filter "@re-auth/*" build` succeeds.
+
+Move on to [HTTP adapters](../http-adapters/overview) to expose these flows.

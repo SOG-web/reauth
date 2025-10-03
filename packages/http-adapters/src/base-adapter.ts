@@ -132,6 +132,8 @@ export class ReAuthHttpAdapter {
           timestamp: new Date().toISOString(),
         },
         status,
+        redirect: output.redirect, // Include redirect URL for OAuth flow
+        secret: output.secret, // Include cookies to set for OAuth flow
       };
     } catch (error) {
       throw new HttpAdapterError(
@@ -475,6 +477,7 @@ export class ReAuthHttpAdapter {
       ...req.body,
       ...req.query,
       ...req.params,
+      ...req.cookies, // Add cookies so OAuth flow can read oauth_state, etc.
     };
 
     // Add session token if available

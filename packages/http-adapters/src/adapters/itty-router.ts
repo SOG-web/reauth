@@ -312,34 +312,63 @@ export class IttyRouterAdapter {
 
         // Handle cookies
         const headers: Record<string, string> = {};
+        const cookies: string[] = [];
+
+        // Set cookies from secret field (OAuth flow)
+        if (result.secret && typeof result.secret === 'object') {
+          for (const [key, value] of Object.entries(result.secret)) {
+            cookies.push(
+              this.createCookieHeader(key, value, {
+                httpOnly: true,
+                secure: true,
+                path: '/',
+                sameSite: 'Lax',
+                maxAge: 600, // 10 minutes for OAuth state/verifier
+              }),
+            );
+          }
+        }
+
+        // Set session cookies if configured
         if (this.config.cookie && result.data?.token) {
           const cookie = this.config.cookie;
           const options = cookie.options;
           const token = result.data.token;
 
           if (typeof token === 'string') {
-            headers['Set-Cookie'] = this.createCookieHeader(
-              cookie.name,
-              token,
-              options,
-            );
+            cookies.push(this.createCookieHeader(cookie.name, token, options));
           } else {
-            headers['Set-Cookie'] = this.createCookieHeader(
-              cookie.name,
-              token.accessToken,
-              options,
+            cookies.push(
+              this.createCookieHeader(cookie.name, token.accessToken, options),
             );
 
             if (cookie.refreshOptions && token.refreshToken) {
               const refreshOptions = cookie.refreshOptions;
-              const refreshCookie = this.createCookieHeader(
-                cookie.refreshTokenName || 'refreshToken',
-                token.refreshToken,
-                refreshOptions,
+              cookies.push(
+                this.createCookieHeader(
+                  cookie.refreshTokenName || 'refreshToken',
+                  token.refreshToken,
+                  refreshOptions,
+                ),
               );
-              headers['Set-Cookie'] += '; ' + refreshCookie;
             }
           }
+        }
+
+        // Add all cookies to headers
+        if (cookies.length > 0) {
+          headers['Set-Cookie'] = cookies.join(', ');
+        }
+
+        // Handle redirect responses (OAuth flow)
+        if (result.redirect) {
+          return new Response(null, {
+            status: result.status,
+            headers: {
+              ...headers,
+              Location: result.redirect,
+            },
+          });
         }
 
         return this.sendResponse(result, result.status, headers);

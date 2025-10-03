@@ -30,8 +30,8 @@ export const startOAuthStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'redirect?': 'string',
-    'cookies?': 'object',
+    'redirect?': ' string | undefined',
+    'secret?': 'object | undefined',
   }),
   async run(input: StartOAuthInput, ctx): Promise<AuthOutput> {
     const { provider: providerName } = input;
@@ -69,7 +69,7 @@ export const startOAuthStep: AuthStep<
         message: `Redirecting to ${providerName}`,
         redirect: url,
         status: 'redirect',
-        cookies: cookiesToSet,
+        secret: cookiesToSet,
       };
     } catch (error: any) {
       return {

@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "index",
+    "getting-started",
+    "---Core Engine---",
+    "engine",
+    "---HTTP Adapters---",
+    "http-adapters",
+    "---Automation---",
+    "sdk-generator"
+  ]
+}

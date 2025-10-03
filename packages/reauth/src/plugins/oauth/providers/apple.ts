@@ -17,7 +17,7 @@ export interface AppleOAuthConfig extends BaseOAuthConfig {
   /**
    * Apple private key (required for Apple Sign In)
    */
-  privateKey: string;
+  privateKey: Uint8Array<ArrayBufferLike>;
   /**
    * Additional Apple-specific scopes (optional)
    * Default scopes: 'name', 'email'
@@ -32,13 +32,13 @@ export const appleOAuthProvider = createOAuthProvider<AppleOAuthConfig>(
   'apple',
   'pkce',
   (config: AppleOAuthConfig) =>
-    new arctic.Apple({
-      clientId: config.clientId,
-      teamId: config.teamId,
-      keyId: config.keyId,
-      certificate: config.privateKey,
-      redirectUri: config.redirectUri,
-    }),
+    new arctic.Apple(
+      config.clientId,
+      config.teamId,
+      config.keyId,
+      config.privateKey,
+      config.redirectUri,
+    ),
   ['name', 'email'],
   {} as AppleOAuthConfig, // Will be overridden by user config
 );

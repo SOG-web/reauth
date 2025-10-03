@@ -1,0 +1,126 @@
+---
+title: Express & Fastify Usage
+description: Step-by-step instructions for wiring the ReAuth adapter into common Node servers.
+---
+
+## Express
+
+```ts
+import express from 'express';
+import { createExpressAdapter } from '@re-auth/http-adapters';
+import { auth } from '../auth/engine';
+
+const app = express();
+
+const adapter = createExpressAdapter({
+  engine: auth,
+  basePath: '/auth',
+  middleware: {
+    before: [express.json()],
+  },
+});
+
+app.use('/auth', adapter.createRouter());
+
+app.listen(3000, () => {
+  console.log('Auth API listening on http://localhost:3000/auth');
+});
+```
+
+The express adapter exposes:
+
+- `createRouter()` – returns a configured `Router` instance.
+- `createMiddleware()` – attaches to an existing router for granular control.
+
+### Session cookies
+
+To issue HTTP-only cookies instead of returning tokens in the payload:
+
+```ts
+const adapter = createExpressAdapter({
+  engine: auth,
+  cookies: {
+    session: {
+      name: 'reauth_session',
+      sameSite: 'lax',
+    },
+  },
+});
+```
+
+## Fastify
+
+```ts
+import Fastify from 'fastify';
+import { createFastifyAdapter } from '@re-auth/http-adapters';
+import { auth } from '../auth/engine';
+
+const app = Fastify();
+
+const adapter = createFastifyAdapter({
+  engine: auth,
+  prefix: '/auth',
+});
+
+await app.register(adapter.plugin);
+
+await app.listen({ port: 3000 });
+```
+
+### Hooks
+
+Fastify adapter exposes lifecycle hooks:
+
+```ts
+const adapter = createFastifyAdapter({
+  engine: auth,
+  hooks: {
+    onBeforeHandler: async (request, reply) => {
+      await rateLimiter.consume(request.ip);
+    },
+    onError: (request, reply, error) => {
+      telemetry.capture('reauth.error', { error, path: request.url });
+    },
+  },
+});
+```
+
+## Hono / Edge
+
+```ts
+import { Hono } from 'hono';
+import { HonoAdapter } from '@re-auth/http-adapters';
+import { auth } from '../auth/engine';
+
+const app = new Hono();
+const adapter = new HonoAdapter({ engine: auth });
+
+adapter.registerRoutes(app, '/auth');
+
+export default app;
+```
+
+The Hono adapter runs in Bun, Cloudflare Workers, Vercel Edge, and other fetch-compatible runtimes.
+
+## Error formatting
+
+All adapters support a `transformError` hook:
+
+```ts
+const adapter = createExpressAdapter({
+  engine: auth,
+  transformError(error) {
+    return {
+      status: error.status ?? 400,
+      body: {
+        error: {
+          code: error.code,
+          message: error.message,
+        },
+      },
+    };
+  },
+});
+```
+
+This makes it easy to align error envelopes with the rest of your API.

@@ -1,0 +1,25 @@
+---
+title: ReAuth Documentation
+description: Learn how the ReAuth engine, HTTP adapters, and tooling work together.
+---
+
+ReAuth is a runtime and protocol agnostic authentication engine for TypeScript and JavaScript environments. These docs walk you through the platform's three layers:
+
+1. The core engine that models identities, sessions, and policy enforcement.
+2. Transport adapters that expose the same flows on any server runtime.
+3. Tooling that keeps generated SDKs aligned with the server.
+
+## What you will build
+
+- Compose authentication flows with deterministic behavior across runtimes.
+- Layer protocol-specific adapters (Express, Hono, Next.js handlers, edge runtimes).
+- Generate typed client SDKs that stay in sync with your configuration.
+
+## Where to start
+
+- Read the [Getting Started](./getting-started) guide to install and configure the engine.
+- Explore the [Engine](./engine/overview) section for detailed concepts, lifecycle hooks, and advanced configuration.
+- Jump to [HTTP Adapters](./http-adapters/overview) to expose your flows over frameworks you already run.
+- Use the [SDK Generator](./sdk-generator) to ship consistent clients without manual typing.
+
+Each section includes architecture context, API references, and integration checklists so you can adopt ReAuth incrementally.

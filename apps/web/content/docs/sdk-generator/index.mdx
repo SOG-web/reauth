@@ -1,0 +1,80 @@
+---
+title: SDK Generator
+description: Generate type-safe clients that mirror your ReAuth configuration.
+---
+
+The `@re-auth/sdk-generator` package introspects a running ReAuth instance and emits fully typed TypeScript clients. Ship consistent clients without reimplementing request logic.
+
+## When to use the generator
+
+- You expose ReAuth over HTTP and want frontends to call it via a strongly typed API.
+- You support multiple frontends (web, mobile, CLI) that should share the same auth client.
+- You rotate flows or plugins frequently and do not want to keep manual client code in sync.
+
+## Generate a client
+
+Run the generator after starting your HTTP adapter:
+
+```npm
+pnpm --filter @re-auth/sdk-generator build
+node packages/sdk-generator/dist/index.js \
+  --url http://localhost:3001/test-introspection \
+  --output apps/web/lib/reauth-client \
+  --client axios \
+  --key key
+```
+
+Parameters:
+
+- `--url`: Introspection endpoint exposed by the HTTP adapter.
+- `--output`: Directory to write the generated client.
+- `--client`: HTTP client to target (`axios`, `fetch`, `node-fetch`).
+- `--key`: Optional API key if your introspection route is protected.
+
+## Generated output
+
+The generator creates:
+
+- `index.ts` exposing `createClient` factory functions.
+- Namespaced method groups (e.g., `emailPassword.register`, `sessions.list`).
+- Type definitions for request/response payloads, derived from your engine configuration.
+- Runtime helpers for attaching authorization headers.
+
+Example usage:
+
+```ts
+import { createClient } from './reauth-client';
+
+const authClient = createClient({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  tokenStore: {
+    get: () => localStorage.getItem('reauth_token'),
+    set: (token) => localStorage.setItem('reauth_token', token),
+  },
+});
+
+await authClient.emailPassword.login({
+  email: 'user@example.com',
+  password: 'pa$$w0rd',
+});
+```
+
+## Version control & CI
+
+- Commit generated clients if you want deterministic builds for consumers.
+- Regenerate clients in CI/CD after `pnpm --filter "@re-auth/*" build`.
+- Use the generator in watch mode for local development (coming soon).
+
+## Troubleshooting
+
+| Issue               | Resolution                                                                             |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `404 introspection` | Ensure the adapter exposes the introspection route (`/test-introspection` by default). |
+| Type mismatches     | Re-run the generator after updating plugins or schemas.                                |
+| Unauthorized        | Pass `--key` or configure the introspection route to allow internal networks.          |
+
+## Next steps
+
+- Add auth clients to your web or native apps.
+- Leverage the generated types for end-to-end testing.
+- Pair the generator with CI to detect breaking API changes automatically.

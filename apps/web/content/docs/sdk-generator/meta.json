@@ -1,0 +1,6 @@
+{
+  "title": "SDK Generator",
+  "description": "Generate typed clients from a running ReAuth adapter.",
+  "root": true,
+  "pages": ["index"]
+}

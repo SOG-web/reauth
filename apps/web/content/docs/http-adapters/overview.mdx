@@ -1,0 +1,144 @@
+---
+title: HTTP Adapter Overview
+description: Serve the ReAuth engine over Express, Fastify, Hono, Next.js, and edge runtimes.
+---
+
+ReAuth keeps transport logic out of the core engine. The `@re-auth/http-adapters` package exposes adapters that translate deterministic engine flows into HTTP handlers.
+
+<Callout title="Swap runtimes without rewrites" type="info">
+  Adapters only translate incoming requests and outgoing responses. The engine
+  logic, policies, and persistence stay the same whether you host on Express,
+  Fastify, Hono, or edge workers.
+</Callout>
+
+## Supported runtimes
+
+| Adapter              | Entry point            | Notes                                          |
+| -------------------- | ---------------------- | ---------------------------------------------- |
+| Express              | `createExpressAdapter` | Provides `router` and `middleware` helpers.    |
+| Fastify              | `createFastifyAdapter` | Registers routes with prefix support.          |
+| Hono                 | `HonoAdapter`          | Works on Bun, Cloudflare Workers, Vercel Edge. |
+| Next.js (App Router) | `createNextHandler`    | Returns handlers for `GET`, `POST`, etc.       |
+| Generic Fetch        | `createFetchAdapter`   | Minimal adapter for standard Request/Response. |
+
+All adapters share the same configuration surface:
+
+```ts
+import { createExpressAdapter } from '@re-auth/http-adapters';
+import { auth } from '../auth/engine';
+
+const adapter = createExpressAdapter({
+  engine: auth,
+  basePath: '/auth',
+  exposeHealthz: true,
+  middleware: {
+    before: [
+      (req, res, next) => rateLimiter.consume(req.ip).then(() => next()),
+    ],
+    after: [],
+  },
+});
+```
+
+<Steps>
+  <Step>
+    <h4>1. Wire up your engine</h4>
+    <p>
+      Import the configured ReAuth engine so the adapter can call deterministic
+      flows.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. Choose a base path</h4>
+    <p>
+      Namespace routes like <code>/auth</code> or <code>/api/auth</code> to
+      avoid collisions.
+    </p>
+  </Step>
+  <Step>
+    <h4>3. Layer middleware</h4>
+    <p>
+      Add framework-specific middleware for rate limiting, logging, or tracing
+      before and after ReAuth handlers.
+    </p>
+  </Step>
+</Steps>
+
+### Common options
+
+| Option                | Description                                                             |
+| --------------------- | ----------------------------------------------------------------------- |
+| `engine`              | The ReAuth engine instance.                                             |
+| `basePath`            | URL prefix for all routes (defaults to `/auth`).                        |
+| `exposeHealthz`       | If true, registers `GET /healthz`.                                      |
+| `middleware.before`   | Array of framework-specific middleware that run before ReAuth handlers. |
+| `middleware.after`    | Middleware that run after handlers (logging, error formatting).         |
+| `createSessionCookie` | Toggle cookie issuance for session tokens.                              |
+
+### Custom route guards
+
+Adapters expose hooks to add HTTP-layer policies without breaking engine determinism. For example, to enforce API keys on REST routes:
+
+```ts
+const adapter = createExpressAdapter({
+  engine: auth,
+  middleware: {
+    before: [requireApiKey],
+  },
+});
+```
+
+### Error handling
+
+Every adapter surfaces standardized error shapes:
+
+```json
+{
+  "error": {
+    "code": "EMAIL_ALREADY_REGISTERED",
+    "message": "A user with that email already exists.",
+    "details": {
+      "field": "email"
+    }
+  }
+}
+```
+
+Wrap adapters with your framework's error handling middleware to customize logging or tagging.
+
+## Adapter-specific guides
+
+<Cards>
+  <Card
+    href="./usage"
+    title="Express & Fastify"
+    description="Follow end-to-end setup instructions with routing examples and middleware recipes."
+  />
+  <Card
+    title="Next.js & Edge"
+    description="Guidance for App Router, Edge Runtime, and fetch handlers (coming soon)."
+  />
+  <Card
+    title="GraphQL & RPC Bridges"
+    description="Patterns for piping deterministic flows into typed RPC schemas (coming soon)."
+  />
+</Cards>
+
+## Testing adapters
+
+The `@re-auth/http-adapters` package exports a test harness that spins up a memory datastore and executes the full suite of flows. You can use it to validate your own adapters:
+
+```ts
+import { testAdapter } from '@re-auth/http-adapters/testing';
+
+await testAdapter({
+  adapter: () => createExpressAdapter({ engine: auth }),
+});
+```
+
+Reusable fixtures guarantee parity with official adapters.
+
+<Callout title="Confidence before deployment" type="success">
+  Run the test harness in CI to ensure custom middleware or framework upgrades
+  never change the observable behaviour of your adapter.
+</Callout>

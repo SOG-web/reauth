@@ -1,0 +1,197 @@
+---
+title: Engine Overview
+description: Understand how the ReAuth engine models flows, policies, and persistence.
+---
+
+## Architecture
+
+The engine separates authentication concerns into three layers:
+
+1. **State**: deterministic persistence via pluggable database adapters (Kysely, Prisma, custom SQL/KV).
+2. **Flows**: reusable authentication flows composed from plugins (email/password, OAuth, passkeys, organizations).
+3. **Policies**: hooks and guards that gate every flow the same way regardless of transport.
+
+Because the engine is transport agnostic, the same configuration runs in Node, Deno, Bun, or edge environments.
+
+```
+┌─────────────┐      ┌───────────────┐      ┌────────────────┐
+│  Database   │◄────►│  State Layer  │◄────►│ Engine Runtime │
+└─────────────┘      └───────────────┘      └──────┬─────────┘
+                                             Plugins│
+                                      ┌────────────┴─────────────┐
+                                      │ email/password, OAuth,   │
+                                      │ 2FA, organizations,      │
+                                      │ custom assertions        │
+                                      └──────────────────────────┘
+```
+
+<Callout title="Transport agnostic by design" type="info">
+  Run the same engine configuration across Node, Deno, Bun, or edge runtimes
+  without changing flow logic. Adapters only translate requests, not the
+  business rules.
+</Callout>
+
+## Core concepts
+
+### Engine configuration
+
+The engine accepts a configuration object that nails down persistence, plugins, and security settings:
+
+```ts
+import { createReAuthEngine } from '@re-auth/reauth';
+import { createKyselyAdapter } from '@re-auth/reauth/lib/adapters/kysely';
+import { emailPasswordPlugin } from '@re-auth/reauth/plugins/email-password';
+
+export const auth = createReAuthEngine({
+  database: createKyselyAdapter({ client: db }),
+  plugins: [emailPasswordPlugin({ requireEmailVerification: true })],
+  session: {
+    maxConcurrentSessions: 5,
+    refreshTokenTtl: '30d',
+  },
+  cookies: {
+    domain: '.example.com',
+    secure: process.env.NODE_ENV === 'production',
+  },
+});
+```
+
+Key sections:
+
+- `database`: persistence adapter implementing the ReAuth datastore contract.
+- `plugins`: authentication flows that extend the engine.
+- `session`: limits and TTLs governing access/refresh tokens.
+- `cookies`: defaults for cookie-based credentials when adapters need them.
+
+### Plugins
+
+Plugins encapsulate new flows and can ship their own schema, service layer, and policy hooks. A plugin typically exports:
+
+- **Schema** describing the payloads it accepts and emits.
+- **Controller** logic containing handlers for primary operations (register, login, etc.).
+- **Services** that the engine can reuse (e.g., email verification, MFA device management).
+
+Plugins are composable—order matters when they register overrides or guard rails. ReAuth core ships with:
+
+<Cards>
+  <Card
+    title="Email + Password"
+    description="Form-based sign-in with verification rules"
+  />
+  <Card
+    title="Passwordless"
+    description="Magic links and passcodes without password storage"
+  />
+  <Card
+    title="Organizations"
+    description="Experimental team & workspace support"
+  />
+  <Card
+    title="OAuth Providers"
+    description="Drop-in integrations for popular identity providers"
+  />
+</Cards>
+
+You can also author custom plugins by implementing the `AuthPlugin` interface and registering hooks in `engine.plugins.use()`.
+
+### Lifecycle hooks
+
+Every flow runs through middleware-style hooks:
+
+<Steps>
+  <Step>
+    <h4>1. beforeValidate</h4>
+    <p>
+      Normalize inbound payloads and attach metadata before schema validation
+      runs.
+    </p>
+  </Step>
+  <Step>
+    <h4>2. validate</h4>
+    <p>
+      Apply schema validation plus plugin-level assertions to reject bad input
+      fast.
+    </p>
+  </Step>
+  <Step>
+    <h4>3. beforeExecute</h4>
+    <p>Gate flows with policies or rate limits once the payload is verified.</p>
+  </Step>
+  <Step>
+    <h4>4. execute</h4>
+    <p>
+      Run the plugin controller to mutate state, create sessions, and emit
+      events.
+    </p>
+  </Step>
+  <Step>
+    <h4>5. afterExecute</h4>
+    <p>
+      Perform side effects like audit logging or webhooks after state is
+      consistent.
+    </p>
+  </Step>
+</Steps>
+
+Plugins register handlers for any phase, letting you inject audits, analytics, or custom risks scoring without changing transport code.
+
+### Deterministic policies
+
+Policies express guard rails the same way regardless of transport. For example, to block users with unverified email addresses across every adapter:
+
+```ts
+auth.policies.register('requireVerifiedEmail', ({ user }) => {
+  if (!user.emailVerified) {
+    return {
+      allowed: false,
+      reason: 'Email verification required before accessing org resources.',
+    };
+  }
+  return { allowed: true };
+});
+```
+
+Adapters inspect policy results before responding to the client, so you avoid drift between REST, GraphQL, or edge handlers.
+
+## Data expectations
+
+The engine persists:
+
+- Users with metadata and verification state
+- Sessions plus refresh/access token relationships
+- Linked identities (OAuth providers, passkeys)
+- Plugin-specific tables (e.g., organization membership)
+
+The built-in Kysely adapter ships migrations that capture these tables. Bring your own adapter when you need custom storage—implement the datastore interface and register it in the engine configuration.
+
+## Observability
+
+Use the built-in event bus to log or trace flows:
+
+```ts
+auth.events.on('session.created', (payload) => {
+  telemetry.capture('reauth.session.created', payload);
+});
+```
+
+Events fire for lifecycle edges (session created, token revoked, user invitation sent) to keep external systems in sync.
+
+## Next steps
+
+<Cards>
+  <Card
+    href="../http-adapters/overview"
+    title="Map flows to HTTP"
+    description="See how adapters expose engine routes across Express, Fastify, Hono, and edge runtimes."
+  />
+  <Card
+    href="./configuration"
+    title="Tune the engine"
+    description="Dive deeper into configuration options for plugins, sessions, and storage."
+  />
+  <Card
+    href="../sdk-generator"
+    title="Generate clients"
+    description="Create typed frontend SDKs from live engine introspection endpoints."
+  />
+</Cards>
