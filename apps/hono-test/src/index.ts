@@ -1,56 +1,43 @@
 import { serve } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono } from 'hono';
-import type {
-  AuthOutput,
-  AuthPlugin,
-  AuthToken,
-  Entity,
-} from '@re-auth/reauth';
 import { showRoutes } from 'hono/dev';
 import reAuth from './reauth/auth';
-import { createHonoAdapter } from '@re-auth/http-adapters/adapters/hono/index';
+import { honoReAuth } from '@re-auth/http-adapters';
+import { ConnInfo } from 'hono/conninfo';
 
 const app = new Hono();
 
 // Set the introspection auth key for testing
 process.env.REAUTH_INTROSPECTION_KEY = 'test-key-123';
 
-const authAdapter = createHonoAdapter(reAuth, {
-  cookieName: 'reauth_session',
-  cookieOptions: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
-  },
+app.use('*', async (c, next) => {
+  const info = getConnInfo(c);
+  c.set('connInfo', info);
+  await next();
 });
 
-app.route('/', authAdapter.getApp());
+const authAdapter = honoReAuth(
+  {
+    engine: reAuth,
+  },
+  async (c) => {
+    return {
+      ip: c.get('connInfo')?.remote.address,
+      connInfo: c.get('connInfo'),
+      userAgent: c.req.header('User-Agent'),
+      trusted: c.get('connInfo')?.remote.address,
+    };
+  },
+);
+
+authAdapter.registerRoutes(app, '/auth', true);
+
+app.use('/', authAdapter.createUserMiddleware());
 
 app.get('/', (c) => {
-  const entity = c.get('entity');
-  return c.json({ message: 'Hello Hono!', entity });
-});
-
-// Test introspection endpoint
-app.get('/test-introspection', async (c) => {
-  try {
-    // Call the introspection method directly on the engine
-    const introspectionData = reAuth.getIntrospectionData();
-    return c.json({
-      message: 'Introspection data retrieved successfully',
-      data: introspectionData,
-    });
-  } catch (error) {
-    console.error('Introspection test error:', error);
-    return c.json(
-      {
-        error: 'Failed to get introspection data',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      500,
-    );
-  }
+  const user = c.get('user');
+  return c.json({ message: 'Hello Hono!', user });
 });
 
 showRoutes(app, {
@@ -69,7 +56,7 @@ serve(
 
 declare module 'hono' {
   interface ContextVariableMap {
-    entity: Entity | null;
-    token: AuthToken | null;
+    // Lightweight context variables - no heavy objects attached
+    connInfo: ConnInfo;
   }
 }

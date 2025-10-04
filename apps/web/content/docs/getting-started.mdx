@@ -1,0 +1,81 @@
+---
+title: Getting Started
+description: Install ReAuth, configure the engine, and run your first build.
+---
+
+## Prerequisites
+
+- **Node.js 18** or newer
+- **pnpm** 9 or newer (ReAuth uses pnpm workspaces)
+- Access to the ReAuth monorepo or the published packages on npm
+
+## Install the packages
+
+```npm
+npm i @re-auth/reauth @re-auth/http-adapters
+```
+
+Add development tooling if you plan to emit SDKs:
+
+```npm
+npm i -D @re-auth/sdk-generator
+```
+
+## Configure the engine
+
+Create `auth/engine.ts` in your application and wire the core engine together:
+
+```ts
+import createReAuthEngine from '@re-auth/reauth';
+import { emailPasswordPlugin } from '@re-auth/reauth/plugins/email-password';
+import { createKyselyAdapter } from '@re-auth/reauth/lib/adapters/kysely';
+
+export const auth = createReAuthEngine({
+  database: createKyselyAdapter({ client: db }),
+  plugins: [
+    emailPasswordPlugin({
+      requireEmailVerification: true,
+    }),
+  ],
+});
+```
+
+The engine is runtime agnostic: you bring your database adapter, cache implementation, and plugins that model your policy.
+
+## Expose the API
+
+Pick a transport adapter from `@re-auth/http-adapters`. For example, setting up Express:
+
+```ts
+import express from 'express';
+import { createExpressAdapter } from '@re-auth/http-adapters';
+import { auth } from './auth/engine';
+
+const app = express();
+const adapter = createExpressAdapter({ engine: auth });
+
+app.use('/auth', adapter.createRouter());
+app.listen(3000);
+```
+
+The adapter maps HTTP verbs to the deterministic flows you configured on the engine. ReAuth ships adapters for Express, Fastify, Hono, Next.js app router, and edge runtimes.
+
+## Run the build
+
+After wiring the engine, make sure the packages compile cleanly:
+
+```bash
+pnpm --filter "@re-auth/*" build
+```
+
+This command compiles:
+
+- `@re-auth/reauth` – the engine
+- `@re-auth/http-adapters` – transport integrations
+- `@re-auth/sdk-generator` – typed client generator
+
+## Next steps
+
+- Study the [Engine overview](./engine/overview) to understand core concepts.
+- Review [HTTP adapters](./http-adapters/overview) for framework-specific guidance.
+- Learn how to [generate SDKs](./sdk-generator) and keep clients in sync with your configuration.

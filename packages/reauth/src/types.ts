@@ -7,9 +7,10 @@ import { RelationBuilder, column, idColumn, table } from 'fumadb/schema';
 import { EnhancedJWKSService, ReAuthJWTPayload } from './services';
 
 // Minimal Fuma client interface used by
+// InferFumaDB<typeof ChatDB>
 export interface FumaClient {
-  version(): Promise<string>;
-  orm(version: string): OrmLike;
+  version(): Promise<any>;
+  orm(version: any): OrmLike;
 }
 
 export type JWKSKeys =
@@ -50,6 +51,7 @@ export const tokenType = type({
 // Shared  input/output shapes (entity removed). Keep names the same for cross-package compatibility.
 export interface AuthInput {
   token?: Token;
+  deviceInfo?: Record<string, any>;
   [key: string]: any;
 }
 
@@ -76,13 +78,7 @@ export interface SessionResolvers {
 
 // Additional session metadata for enhanced session management
 export interface SessionMetadata {
-  deviceInfo?: {
-    fingerprint?: string;
-    userAgent?: string;
-    ipAddress?: string;
-    isTrusted?: boolean;
-    deviceName?: string;
-  };
+  deviceInfo?: Record<string, any>; // Flexible device info structure
   metadata?: Record<string, any>;
 }
 
@@ -91,6 +87,13 @@ export interface CreateSessionOptions {
   ttlSeconds?: number;
   deviceInfo?: SessionMetadata['deviceInfo'];
   metadata?: Record<string, any>;
+}
+
+export interface SessionServiceOptions {
+  deviceValidator?: (
+    storedDeviceInfo: Record<string, any>,
+    currentDeviceInfo: Record<string, any>,
+  ) => boolean | Promise<boolean>;
 }
 
 export interface SessionService {
@@ -114,7 +117,10 @@ export interface SessionService {
     subjectId: string,
     options: CreateSessionOptions,
   ): Promise<Token>;
-  verifySession(token: Token): Promise<{
+  verifySession(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';

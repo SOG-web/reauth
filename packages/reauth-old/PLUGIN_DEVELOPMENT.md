@@ -69,7 +69,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
       description: 'Get current session',
       validationSchema: type({
         token: 'string?',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       inputs: ['token', 'others'],
       run: async (input, pluginProperties) => {
@@ -118,7 +118,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
         message: 'string',
         status: 'string',
         entity: 'object',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
     },
   ],
@@ -249,14 +249,14 @@ const loginSchema = type({
   username: 'string',
   password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d@$!%*?&]{8,}$/',
   rememberMe: 'boolean?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 const registerSchema = type({
   username: 'string.regex|/^[a-zA-Z0-9_]{3,20}$/',
   email: 'string.email',
   password: 'string.regex|/^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d@$!%*?&]{8,}$/',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 // Output validation schemas
@@ -266,7 +266,7 @@ const authOutputSchema = type({
   status: 'string',
   'token?': 'string',
   'entity?': 'object',
-  'others?': 'object',
+  'others?': 'object | undefined',
 });
 ```
 
@@ -588,7 +588,7 @@ export const commonSchemas = {
 const loginSchema = type({
   ...commonSchemas.credentials.definition,
   rememberMe: 'boolean?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 ```
 

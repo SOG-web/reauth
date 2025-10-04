@@ -16,7 +16,7 @@ export type ExtendGuestInput = {
 
 export const extendGuestValidation = type({
   token: tokenType,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const extendGuestStep: AuthStep<
@@ -50,7 +50,7 @@ export const extendGuestStep: AuthStep<
     }),
     'newExpiresAt?': 'string',
     'extensionsRemaining?': 'number',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, others } = input;

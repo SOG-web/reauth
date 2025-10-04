@@ -1,5 +1,5 @@
 {
-  "name": "@re-auth/http-adapters-v2",
+  "name": "@re-auth/http-adapters",
   "version": "1.0.0-alpha.1",
   "description": "V2 HTTP protocol adapters for ReAuth - framework-agnostic integration with Express, Fastify, and Hono",
   "type": "module",
@@ -54,6 +54,7 @@
     "test:watch": "vitest --watch"
   },
   "dependencies": {
+    "@better-fetch/fetch": "^1.1.18",
     "@re-auth/reauth": "workspace:*",
     "cors": "^2.8.5",
     "express-rate-limit": "^7.4.1",

@@ -9,7 +9,7 @@ export type ListSessionsInput = {
 
 export const listSessionsValidation = type({
   token: 'string',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export type ListSessionsOutput = AuthOutput & {
@@ -53,7 +53,7 @@ export const listSessionsStep: AuthStep<
       }),
     ],
     'totalSessions?': 'number',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, others } = input;

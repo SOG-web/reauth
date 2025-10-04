@@ -9,7 +9,10 @@ import { sessions, jwtPluginTables } from './services';
  *
  * Note:  ignores extendTables to prevent shared-entity coupling.
  */
-export default function buildSchema(plugins: ReauthSchemaPlugin[] = []) {
+export default function buildSchema(
+  version: string,
+  plugins: ReauthSchemaPlugin[] = [],
+) {
   // Core  tables shared across all providers
   const subjects = table('subjects', {
     id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
@@ -18,6 +21,7 @@ export default function buildSchema(plugins: ReauthSchemaPlugin[] = []) {
   });
 
   const credentials = table('credentials', {
+    id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
     subject_id: column('subject_id', 'varchar(255)'),
     password_hash: column('password_hash', 'varchar(255)'),
     password_algo: column('password_algo', 'varchar(64)').nullable(),
@@ -62,7 +66,6 @@ export default function buildSchema(plugins: ReauthSchemaPlugin[] = []) {
     subjects,
     credentials,
     identities,
-    ...jwtPluginTables,
     ...pluginTables,
   } as Record<string, any>;
 
@@ -85,7 +88,7 @@ export default function buildSchema(plugins: ReauthSchemaPlugin[] = []) {
   );
 
   return schema({
-    version: '2.0.0',
+    version,
     tables,
     relations,
   });

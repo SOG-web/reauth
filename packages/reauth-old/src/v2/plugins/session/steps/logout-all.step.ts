@@ -1,5 +1,9 @@
 import { type } from 'arktype';
-import type { AuthStepV2, AuthOutput, SessionServiceV2 } from '../../../types.v2';
+import type {
+  AuthStepV2,
+  AuthOutput,
+  SessionServiceV2,
+} from '../../../types.v2';
 import type { SessionConfigV2 } from '../types';
 
 export type LogoutAllInput = {
@@ -9,7 +13,7 @@ export type LogoutAllInput = {
 
 export const logoutAllValidation = type({
   token: 'string',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export type LogoutAllOutput = AuthOutput & {
@@ -37,7 +41,7 @@ export const logoutAllStep: AuthStepV2<
     'error?': 'string | object',
     status: 'string',
     'sessionsDestroyed?': 'number',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, others } = input;
@@ -45,7 +49,7 @@ export const logoutAllStep: AuthStepV2<
     try {
       // Verify the session exists and is valid
       const { subject } = await ctx.engine.checkSession(token);
-      
+
       if (!subject) {
         return {
           success: false,
@@ -57,8 +61,9 @@ export const logoutAllStep: AuthStepV2<
       }
 
       // Get the session service via DI container (type-safe)
-      const sessionService = ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
-      
+      const sessionService =
+        ctx.container.resolve<SessionServiceV2>('sessionServiceV2');
+
       if (!sessionService) {
         return {
           success: false,
@@ -74,15 +79,18 @@ export const logoutAllStep: AuthStepV2<
       if (sessionService.listSessionsForSubject) {
         const subjectType = subject.type || 'subject';
         const subjectId = subject.id;
-        
-        const existingSessions = await sessionService.listSessionsForSubject(subjectType, subjectId);
+
+        const existingSessions = await sessionService.listSessionsForSubject(
+          subjectType,
+          subjectId,
+        );
         sessionsDestroyed = existingSessions.length;
       }
 
       // Destroy all sessions for this user
       const subjectType = subject.type || 'subject';
       const subjectId = subject.id;
-      
+
       await sessionService.destroyAllSessions(subjectType, subjectId);
 
       return {

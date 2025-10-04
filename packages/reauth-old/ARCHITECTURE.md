@@ -753,7 +753,7 @@ import { type } from 'arktype';
 const loginSchema = type({
   email: 'string.email',
   password: 'string >= 8',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 ```
 

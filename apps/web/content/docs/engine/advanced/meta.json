@@ -1,0 +1,5 @@
+{
+  "title": "Advanced",
+  "description": "Deep dive into engine internals, plugin development, and API architecture.",
+  "pages": ["plugin-development", "engine-internals", "api-structure"]
+}

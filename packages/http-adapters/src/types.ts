@@ -186,8 +186,9 @@ export interface RouteHandler {
 }
 
 export interface AuthStepRequest extends HttpRequest {
-  params: {
-    plugin: string;
+  params: Record<string, string>;
+  plugin: {
+    name: string;
     step: string;
   };
 }
@@ -237,6 +238,10 @@ export interface AuthStepResponse extends ApiResponse<AuthOutput> {
     sessionToken?: Token;
   };
   status: number;
+  /** Redirect URL for OAuth flows */
+  redirect?: string;
+  /** Secret data (cookies) to set for OAuth flows */
+  secret?: Record<string, string>;
 }
 
 export interface SessionResponse extends ApiResponse {

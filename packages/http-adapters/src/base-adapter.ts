@@ -13,23 +13,30 @@ import type {
   SessionResponse,
   PluginListResponse,
   AuthenticatedUser,
-} from './types.js';
+} from './types';
 import {
   HttpAdapterError,
   ValidationError,
   AuthenticationError,
   NotFoundError,
-} from './types.js';
+} from './types';
 
 export class ReAuthHttpAdapter {
   private engine: ReAuthEngine;
-  private config: HttpAdapterConfig;
+  protected config: HttpAdapterConfig;
   private endpoints: Map<string, PluginEndpoint> = new Map();
 
   constructor(config: HttpAdapterConfig) {
     this.engine = config.engine;
     this.config = config;
     this.buildEndpoints();
+  }
+
+  /**
+   * Get adapter configuration
+   */
+  getConfig(): HttpAdapterConfig {
+    return this.config;
   }
 
   /**
@@ -79,32 +86,39 @@ export class ReAuthHttpAdapter {
   /**
    * Execute authentication step
    */
-  async executeAuthStep(req: AuthStepRequest): Promise<AuthStepResponse> {
-    const { plugin: pluginName, step: stepName } = req.params;
-
-    const endpoint = this.getEndpoint(pluginName, stepName);
+  async executeAuthStep(
+    req: AuthStepRequest,
+    deviceInfo: Record<string, any>,
+  ): Promise<AuthStepResponse> {
+    const endpoint = this.getEndpoint(req.plugin.name, req.plugin.step);
     if (!endpoint) {
-      throw new NotFoundError(`Endpoint not found: ${pluginName}/${stepName}`);
+      throw new NotFoundError(
+        `Endpoint not found: ${req.plugin.name}/${req.plugin.step}`,
+      );
     }
 
     // Check authentication if required
     if (endpoint.requiresAuth) {
-      await this.requireAuthentication(req);
+      await this.requireAuthentication(req, deviceInfo);
     } else {
       //NOTE: this is to ensure token will be auto refresh if needed when a token is availabe
-      await this.getCurrentUser(req);
+      await this.getCurrentUser(req, deviceInfo);
     }
 
     // Extract input from request
-    const input = this.extractStepInput(req, endpoint);
+    const input = this.extractStepInput(req, endpoint, deviceInfo);
 
     try {
       // Execute the step
-      const output = await this.engine.executeStep(pluginName, stepName, input);
+      const output = await this.engine.executeStep(
+        endpoint.pluginName,
+        endpoint.stepName,
+        input,
+      );
 
       // Return standardized response
-      const pl = this.engine.getPlugin(pluginName);
-      const step = pl?.steps?.find((s) => s.name === stepName);
+      const pl = this.engine.getPlugin(endpoint.pluginName);
+      const step = pl?.steps?.find((s) => s.name === endpoint.stepName);
 
       const status = step?.protocol?.http?.codes?.[output.status] || 200;
 
@@ -118,13 +132,15 @@ export class ReAuthHttpAdapter {
           timestamp: new Date().toISOString(),
         },
         status,
+        redirect: output.redirect, // Include redirect URL for OAuth flow
+        secret: output.secret, // Include cookies to set for OAuth flow
       };
     } catch (error) {
       throw new HttpAdapterError(
         `Step execution failed: ${error instanceof Error ? error.message : String(error)}`,
         500,
         'STEP_EXECUTION_ERROR',
-        { pluginName, stepName, error },
+        { pluginName: endpoint.pluginName, stepName: endpoint.stepName, error },
       );
     }
   }
@@ -132,7 +148,10 @@ export class ReAuthHttpAdapter {
   /**
    * Create a new session
    */
-  async createSession(req: SessionRequest): Promise<SessionResponse> {
+  async createSession(
+    req: SessionRequest,
+    deviceInfo: Record<string, any>,
+  ): Promise<SessionResponse> {
     const { subjectType, subjectId, ttlSeconds } = req.body || {};
 
     if (!subjectType || !subjectId) {
@@ -144,6 +163,7 @@ export class ReAuthHttpAdapter {
         subjectType,
         subjectId,
         ttlSeconds,
+        deviceInfo,
       );
 
       return {
@@ -171,7 +191,10 @@ export class ReAuthHttpAdapter {
   /**
    * Check session validity
    */
-  async checkSession(req: SessionRequest): Promise<SessionResponse> {
+  async checkSession(
+    req: SessionRequest,
+    deviceInfo: Record<string, any>,
+  ): Promise<SessionResponse> {
     const token = this.extractSessionToken(req);
 
     if (!token) {
@@ -187,7 +210,7 @@ export class ReAuthHttpAdapter {
     }
 
     try {
-      const result = await this.engine.checkSession(token);
+      const result = await this.engine.checkSession(token, deviceInfo);
 
       if (!result.subject) {
         return {
@@ -324,9 +347,32 @@ export class ReAuthHttpAdapter {
   async getIntrospection(): Promise<ApiResponse> {
     const introspectionData = this.engine.getIntrospectionData();
 
+    // Add HTTP adapter configuration to introspection
+    const httpConfig = {
+      basePath: this.config.basePath || '',
+      tokenConfig: {
+        header: {
+          accessTokenHeader:
+            this.config.headerToken?.accesssTokenHeader || 'authorization',
+          refreshTokenHeader:
+            this.config.headerToken?.refreshTokenHeader || 'x-refresh-token',
+          useBearer: true, // Default to Bearer token in Authorization header
+        },
+        cookie: {
+          accessTokenName: this.config.cookie?.name || 'reauth-session',
+          refreshTokenName:
+            this.config.cookie?.refreshTokenName || 'reauth-refresh',
+          enabled: !!this.config.cookie,
+        },
+      },
+    };
+
     return {
       success: true,
-      data: introspectionData,
+      data: {
+        ...introspectionData,
+        httpConfig,
+      },
       meta: {
         timestamp: new Date().toISOString(),
       },
@@ -425,10 +471,13 @@ export class ReAuthHttpAdapter {
   private extractStepInput(
     req: HttpRequest,
     endpoint: PluginEndpoint,
+    deviceInfo: Record<string, any>,
   ): AuthInput {
     const input: AuthInput = {
       ...req.body,
       ...req.query,
+      ...req.params,
+      ...req.cookies, // Add cookies so OAuth flow can read oauth_state, etc.
     };
 
     // Add session token if available
@@ -437,7 +486,12 @@ export class ReAuthHttpAdapter {
       input.token = token;
     }
 
-    // Add request metadata
+    // Add device info if provided
+    if (deviceInfo) {
+      input.deviceInfo = deviceInfo;
+    }
+
+    // Add request metadata for backward compatibility
     if (req.ip) {
       input.ip = req.ip;
     }
@@ -451,7 +505,10 @@ export class ReAuthHttpAdapter {
   /**
    * Get current authenticated user from request
    */
-  async getCurrentUser(req: HttpRequest): Promise<AuthenticatedUser | null> {
+  async getCurrentUser(
+    req: HttpRequest,
+    deviceInfo: Record<string, any>,
+  ): Promise<AuthenticatedUser | null> {
     const token = this.extractSessionToken(req);
 
     if (!token) {
@@ -459,7 +516,7 @@ export class ReAuthHttpAdapter {
     }
 
     try {
-      const session = await this.engine.checkSession(token);
+      const session = await this.engine.checkSession(token, deviceInfo);
 
       if (!session.valid || !session.subject) {
         return null;
@@ -483,23 +540,17 @@ export class ReAuthHttpAdapter {
   /**
    * Authenticate request and return user or throw error
    */
-  async requireAuthentication(req: HttpRequest): Promise<AuthenticatedUser> {
-    const user = await this.getCurrentUser(req);
+  async requireAuthentication(
+    req: HttpRequest,
+    deviceInfo: Record<string, any>,
+  ): Promise<AuthenticatedUser> {
+    const user = await this.getCurrentUser(req, deviceInfo);
 
     if (!user) {
       throw new AuthenticationError('Authentication required');
     }
 
     return user;
-  }
-
-  /**
-   * Create user authentication middleware that populates request.user
-   */
-  createUserMiddleware() {
-    return async (req: HttpRequest): Promise<void> => {
-      req.user = await this.getCurrentUser(req);
-    };
   }
 
   /**

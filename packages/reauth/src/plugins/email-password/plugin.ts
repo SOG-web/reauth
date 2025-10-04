@@ -63,7 +63,7 @@ export const baseEmailPasswordPlugin: AuthPlugin<EmailPasswordConfig> = {
   config: {
     verifyEmail: false,
     loginOnRegister: true,
-    sessionTtlSeconds: 3600,
+    sessionTtlSeconds: 60 * 15,
     codeType: 'numeric',
     codeLength: 4,
     verificationCodeExpiresIn: 30 * 60 * 1000,

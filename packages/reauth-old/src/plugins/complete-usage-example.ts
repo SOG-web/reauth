@@ -66,7 +66,7 @@ const reAuthDevelopment = createReAuthEngine({
               message: 'string',
               status: 'string',
               entity: 'object',
-              others: 'object?',
+              'others?': 'object | undefined',
               user: 'object',
             }),
           },
@@ -352,7 +352,7 @@ const reAuthProduction = createReAuthEngine({
               message: 'string',
               status: 'string',
               entity: 'object',
-              others: 'object?',
+              'others?': 'object | undefined',
               user: 'object',
             }),
           },
@@ -505,7 +505,7 @@ const loginResult = await reAuth.executeStep('email', 'login', {
   password: 'admin123'
 });
 console.log(loginResult);
-// Output: 
+// Output:
 // {
 //   success: true,
 //   message: 'Login successful (test user)',
@@ -563,7 +563,7 @@ describe('Authentication Tests', () => {
       email: 'e2e@test.com',
       password: 'e2e-password'
     });
-    
+
     expect(result.success).toBe(true);
     expect(result.message).toContain('test user');
   });

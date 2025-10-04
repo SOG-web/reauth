@@ -12,7 +12,7 @@ export const oauthProviders = table('oauth_providers', {
   user_info_url: column('user_info_url', 'varchar(1000)'),
   scopes: column('scopes', 'json'), // Array of default scopes
   redirect_uri: column('redirect_uri', 'varchar(1000)'),
-  is_active: column('is_active', 'boolean').defaultTo$(true),
+  is_active: column('is_active', 'bool').defaultTo$(true),
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
 }).unique('oauth_provider_name_uk', ['name']);
@@ -43,7 +43,10 @@ export const oauthProfiles = table('oauth_profiles', {
   avatar_url: column('avatar_url', 'varchar(1000)').nullable(),
   created_at: column('created_at', 'timestamp').defaultTo$('now'),
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
-}).unique('oauth_profile_provider_user_uk', ['provider_id', 'provider_user_id']);
+}).unique('oauth_profile_provider_user_uk', [
+  'provider_id',
+  'provider_user_id',
+]);
 
 export const oauthSchemaV2: ReauthSchemaPlugin = {
   tables: {

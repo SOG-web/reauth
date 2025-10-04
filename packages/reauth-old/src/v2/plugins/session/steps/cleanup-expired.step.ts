@@ -12,7 +12,7 @@ export type CleanupExpiredInput = {
 export const cleanupExpiredValidation = type({
   retentionDays: 'number?',
   batchSize: 'number?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export type CleanupExpiredOutput = AuthOutput & {
@@ -51,7 +51,7 @@ export const cleanupExpiredStep: AuthStep<
     'retentionDays?': 'number',
     'batchSize?': 'number',
     'cleanupTime?': 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { retentionDays, batchSize, others } = input;

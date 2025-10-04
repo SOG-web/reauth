@@ -23,7 +23,7 @@ export const createGuestValidation = type({
   userAgent: 'string?',
   ip: 'string?',
   metadata: 'object?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const createGuestStep: AuthStep<
@@ -56,7 +56,7 @@ export const createGuestStep: AuthStep<
     }),
     'guestId?': 'string',
     'expiresAt?': 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { fingerprint, userAgent, ip, metadata, others } = input;

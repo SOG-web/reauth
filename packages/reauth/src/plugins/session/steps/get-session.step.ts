@@ -10,12 +10,14 @@ import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
 export type GetSessionInput = {
   token: Token;
+  deviceInfo?: Record<string, any>;
   others?: Record<string, any>;
 };
 
 export const getSessionValidation = type({
   token: tokenType,
-  others: 'object?',
+  'deviceInfo?': 'object',
+  'others?': 'object | undefined',
 });
 
 type Session = {
@@ -24,13 +26,7 @@ type Session = {
   subject: any;
   createdAt: string;
   expiresAt?: string;
-  deviceInfo?: {
-    fingerprint?: string;
-    userAgent?: string;
-    ipAddress?: string;
-    isTrusted: boolean;
-    deviceName?: string;
-  };
+  deviceInfo?: Record<string, any>;
   metadata?: Record<string, any>;
 };
 
@@ -52,7 +48,7 @@ export const getSessionStep: AuthStep<
       codes: { unf: 401, su: 200, ic: 400 },
     },
   },
-  inputs: ['token', 'others'],
+  inputs: ['token', 'deviceInfo', 'others'],
   outputs: type({
     success: 'boolean',
     message: 'string',
@@ -73,26 +69,27 @@ export const getSessionStep: AuthStep<
       }),
       metadata: 'object?',
     }),
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
-    const { token, others } = input;
-
-    // Verify the session and get subject
-    const ses = await ctx.engine.checkSession(token);
-
-    if (!ses.subject) {
-      return {
-        success: false,
-        message: 'Authentication required',
-        status: 'unf',
-        error: 'Invalid or expired session',
-        others,
-      };
-    }
+    const { token, deviceInfo, others } = input;
 
     try {
-      // Get the session service via DI container (type-safe)
+      // Pass deviceInfo through to service
+      const result = await ctx.engine.getSessionService().verifySession(token, deviceInfo);
+
+      if (!result.subject) {
+        return {
+          success: false,
+          message: 'Authentication required',
+          status: 'unf',
+          error: 'Invalid or expired session',
+          others,
+        };
+      }
+
+      const ses = result;
+
       const sessionService = ctx.engine.getSessionService();
 
       if (!sessionService) {
@@ -163,7 +160,7 @@ export const getSessionStep: AuthStep<
           others,
         },
         token,
-        ses.token,
+        token, // Use original token since verification failed
       );
     }
   },

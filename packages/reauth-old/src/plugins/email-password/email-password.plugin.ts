@@ -11,7 +11,7 @@ import { passwordSchema } from '../shared/validation';
 const loginSchema = type({
   email: 'string.email',
   password: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 // Helper function to check if environment supports test users
@@ -361,7 +361,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       validationSchema: type({
         email: 'string.email',
         code: 'number.safe | string',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async (input, pluginProperties) => {
         const { container } = pluginProperties!;
@@ -435,7 +435,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       description: 'Resend verify email',
       validationSchema: type({
         email: 'string.email',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
@@ -513,7 +513,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
       description: 'Send reset password',
       validationSchema: type({
         email: 'string.email',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async (input, pluginProperties) => {
         const { container, config } = pluginProperties!;
@@ -597,7 +597,7 @@ const plugin: AuthPlugin<EmailPasswordConfig> = {
         email: 'string.email',
         password: passwordSchema,
         code: 'number.safe | string',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async (input, pluginProperties) => {
         const { container } = pluginProperties!;

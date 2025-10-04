@@ -1,22 +1,40 @@
 import type {
   HttpAdapterConfig,
-  FrameworkAdapter,
   HttpRequest,
-  HttpResponse,
   AuthenticatedUser,
-} from '../types.js';
-import { ReAuthHttpAdapter } from '../base-adapter.js';
+  AuthStepRequest,
+} from '../types';
+import { ReAuthHttpAdapter } from '../base-adapter';
 import { Context, Hono } from 'hono';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { setCookie } from 'hono/cookie';
 
 export class HonoAdapter {
   public readonly name = 'hono';
   private adapter: ReAuthHttpAdapter;
-  private config: HttpAdapterConfig;
+  private generateDeviceInfo?: (
+    request: Context,
+  ) => Promise<Record<string, any>>;
 
-  constructor(config: HttpAdapterConfig) {
+  constructor(
+    config: HttpAdapterConfig,
+    generateDeviceInfo?: (request: Context) => Promise<Record<string, any>>,
+  ) {
     this.adapter = new ReAuthHttpAdapter(config);
-    this.config = config;
+    this.generateDeviceInfo = generateDeviceInfo;
+  }
+
+  /**
+   * Generate device info from request
+   */
+  async generateDeviceInfoInternal(
+    request: Context,
+  ): Promise<Record<string, any>> {
+    if (!this.generateDeviceInfo) {
+      return {};
+    }
+
+    const deviceInfo = await this.generateDeviceInfo(request);
+    return deviceInfo;
   }
 
   /**
@@ -26,7 +44,8 @@ export class HonoAdapter {
     return async (c: Context, next: any) => {
       try {
         const httpReq = this.extractRequest(c);
-        const user = await this.adapter.getCurrentUser(httpReq);
+        const deviceInfo = await this.generateDeviceInfoInternal(c);
+        const user = await this.adapter.getCurrentUser(httpReq, deviceInfo);
         c.set('user', user);
         c.set('authenticated', !!user);
       } catch (error) {
@@ -50,7 +69,8 @@ export class HonoAdapter {
 
     // Otherwise, check session
     const httpReq = this.extractRequest(c);
-    const u = await this.adapter.getCurrentUser(httpReq);
+    const deviceInfo = await this.generateDeviceInfoInternal(c);
+    const u = await this.adapter.getCurrentUser(httpReq, deviceInfo);
 
     // Store in context for future use
     c.set('user', u);
@@ -129,20 +149,46 @@ export class HonoAdapter {
     app.get(`${basePath}/session`, this.createSessionCheckHandler());
 
     // Authentication step routes
-    app.post(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.get(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.put(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.patch(`${basePath}/:plugin/:step`, this.createStepHandler());
-    app.delete(`${basePath}/:plugin/:step`, this.createStepHandler());
+    const endpoints = this.adapter.getEndpoints();
+    for (const endpoint of endpoints) {
+      if (endpoint.method === 'POST') {
+        app.post(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'GET') {
+        app.get(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'PUT') {
+        app.put(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'PATCH') {
+        app.patch(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      } else if (endpoint.method === 'DELETE') {
+        app.delete(
+          `${basePath}${endpoint.path}`,
+          this.createStepHandler(endpoint.pluginName, endpoint.stepName),
+        );
+      }
+    }
   }
 
   /**
    * Create step execution handler
    */
-  private createStepHandler() {
+  private createStepHandler(pluginName: string, stepName: string) {
     return async (c: Context) => {
       try {
         const httpReq = this.extractRequest(c);
+
+        httpReq;
 
         // parse cookies
         const cookieHeader = c.req.header('cookie');
@@ -168,10 +214,34 @@ export class HonoAdapter {
           }
         }
 
-        const result = await this.adapter.executeAuthStep(httpReq as any);
+        const req: AuthStepRequest = {
+          ...httpReq,
+          plugin: {
+            name: pluginName,
+            step: stepName,
+          },
+        };
 
-        if (this.config.cookie) {
-          const cookie = this.config.cookie;
+        const deviceInfo = await this.generateDeviceInfoInternal(c);
+
+        const result = await this.adapter.executeAuthStep(req, deviceInfo);
+
+        // Set cookies from secret field (OAuth flow)
+        if (result.secret && typeof result.secret === 'object') {
+          for (const [key, value] of Object.entries(result.secret)) {
+            setCookie(c, key, value, {
+              httpOnly: true,
+              secure: true,
+              path: '/',
+              sameSite: 'Lax',
+              maxAge: 600, // 10 minutes for OAuth state/verifier
+            });
+          }
+        }
+
+        // Set session cookies if configured
+        if (this.adapter.getConfig().cookie) {
+          const cookie = this.adapter.getConfig().cookie!;
           const options = cookie.options;
           if (result.data?.token) {
             // Set cookies in response
@@ -227,6 +297,11 @@ export class HonoAdapter {
           }
         }
 
+        // Handle redirect responses (OAuth flow)
+        if (result.redirect) {
+          return c.redirect(result.redirect, result.status as any);
+        }
+
         return c.json(result, result.status as any);
       } catch (error) {
         return this.handleErrorResponse(c, error as Error);
@@ -234,14 +309,15 @@ export class HonoAdapter {
     };
   }
 
-  /**
-   * Create session check handler
-   */
   private createSessionCheckHandler() {
     return async (c: Context) => {
       try {
         const httpReq = this.extractRequest(c);
-        const result = await this.adapter.checkSession(httpReq as any);
+        const deviceInfo = await this.generateDeviceInfoInternal(c);
+        const result = await this.adapter.checkSession(
+          httpReq as any,
+          deviceInfo,
+        );
         return c.json(result);
       } catch (error) {
         return this.handleErrorResponse(c, error as Error);
@@ -334,8 +410,11 @@ export class HonoAdapter {
 /**
  * Hono middleware factory function
  */
-export function honoReAuth(config: HttpAdapterConfig): HonoAdapter {
-  const adapter = new HonoAdapter(config);
+export function honoReAuth(
+  config: HttpAdapterConfig,
+  generateDeviceInfo?: (request: Context) => Promise<Record<string, any>>,
+): HonoAdapter {
+  const adapter = new HonoAdapter(config, generateDeviceInfo);
   return adapter;
 }
 

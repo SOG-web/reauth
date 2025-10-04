@@ -7,19 +7,19 @@ import { usernameSchema, passwordSchema } from '../shared/validation';
 const loginSchema = type({
   username: usernameSchema,
   password: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 const registerSchema = type({
   username: usernameSchema,
   password: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 const changePasswordSchema = type({
   currentPassword: passwordSchema,
   newPassword: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 // Helper function to check if environment supports test users
@@ -80,7 +80,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         status: 'string',
         'token?': 'string',
         'entity?': 'object',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
@@ -187,7 +187,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         status: 'string',
         'token?': 'string',
         'entity?': 'object',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async function (input, pluginProperties) {
         const { container, config } = pluginProperties!;
@@ -302,7 +302,7 @@ const plugin: AuthPlugin<UsernamePasswordConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       run: async (input, pluginProperties) => {
         const { container } = pluginProperties!;

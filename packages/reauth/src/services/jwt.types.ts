@@ -15,6 +15,7 @@ export interface ReAuthClient {
   id: string;
   clientSecretHash?: string; // Only for confidential clients
   clientType: ClientType;
+  subjectId: string;
   name: string;
   description?: string;
   isActive: boolean;
@@ -27,6 +28,7 @@ export interface ReAuthJWTPayload extends JWTPayload {
   sub: string; // subject_id
   subject_type: string; // Custom claim for subject type (e.g., 'user', 'guest')
   userData?: Record<string, any>; // Additional user data
+  deviceInfo?: Record<string, any>; // Flexible device info
 }
 
 // JWKS Key Management
@@ -126,11 +128,7 @@ export interface EnhancedJWKSServiceType {
   // Token pair operations
   createTokenPair(
     payload: ReAuthJWTPayload,
-    deviceInfo?: {
-      fingerprint?: string;
-      ipAddress?: string;
-      userAgent?: string;
-    },
+    deviceInfo?: Record<string, any>,
   ): Promise<TokenPair>;
 
   // Refresh token operations
@@ -170,6 +168,7 @@ export interface EnhancedJWKSServiceType {
     client: ReAuthClient,
   ): Promise<{ client: ReAuthClient; apiKey: string }>;
   getClientById(id: string): Promise<ReAuthClient>;
+  getClientBySubjectId(subjectId: string): Promise<ReAuthClient>;
   getAllClients(): Promise<ReAuthClient[]>;
   getClientByApiKey(apiKey: string): Promise<ReAuthClient>;
   getPublicJWK(): Promise<JWK>;

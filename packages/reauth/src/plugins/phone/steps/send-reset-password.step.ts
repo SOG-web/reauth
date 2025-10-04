@@ -12,7 +12,7 @@ export type SendResetPasswordInput = {
 
 export const sendResetPasswordValidation = type({
   phone: phoneSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const sendResetPasswordStep: AuthStep<
@@ -35,7 +35,7 @@ export const sendResetPasswordStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { phone, others } = input;

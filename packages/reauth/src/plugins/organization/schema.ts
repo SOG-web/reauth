@@ -46,7 +46,7 @@ export const organizationInvitations = table('organization_invitations', {
   updated_at: column('updated_at', 'timestamp').defaultTo$('now'),
 }).unique('org_invitation_token_uk', ['token']);
 
-export const organizationSchemaV2: ReauthSchemaPlugin = {
+export const organizationSchema: ReauthSchemaPlugin = {
   tables: {
     organizations: organizations,
     organization_memberships: organizationMemberships,

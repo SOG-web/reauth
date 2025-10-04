@@ -1,25 +1,27 @@
 import type { AuthPlugin, AuthStep, OrmLike } from '../../types';
 import { createAuthPlugin } from '../../utils/create-plugin';
-import { jwtSchema, type JWTPluginConfig } from '../../services';
+import { type JWTPluginConfig } from '../../services';
 
 // JWT Plugin Steps
 
 import { getJWKSStep } from './steps/get-jwks.step';
+import { registerClientStep } from './steps/register-client.step';
 
 export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
   name: 'jwt',
   initialize(engine) {
     // Enable JWT features in the session service
-    const sessionService = engine.getSessionService() as any;
-    if (sessionService.enableJWTFeatures) {
-      sessionService.enableJWTFeatures(
-        this.config.issuer,
-        this.config.keyRotationIntervalDays,
-        this.config.keyGracePeriodDays,
-        this.config.defaultAccessTokenTtlSeconds,
-        this.config.defaultRefreshTokenTtlSeconds,
-        this.config.enableRefreshTokenRotation,
-      );
+    const sessionService = engine.getSessionService();
+    if (sessionService.enableJWKS) {
+      sessionService.enableJWKS({
+        issuer: this.config.issuer,
+        keyRotationIntervalDays: this.config.keyRotationIntervalDays,
+        keyGracePeriodDays: this.config.keyGracePeriodDays,
+        defaultAccessTokenTtlSeconds: this.config.defaultAccessTokenTtlSeconds,
+        defaultRefreshTokenTtlSeconds:
+          this.config.defaultRefreshTokenTtlSeconds,
+        enableRefreshTokenRotation: this.config.enableRefreshTokenRotation,
+      });
     }
 
     // Register session resolver for JWT subjects
@@ -49,10 +51,10 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
       enabled: true,
       runner: async (orm, pluginConfig) => {
         try {
-          const sessionService = engine.getSessionService() as any;
-          if (sessionService.jwtService) {
-            const cleaned =
-              await sessionService.jwtService.cleanupExpiredKeys();
+          const sessionService = engine.getSessionService();
+          const jwksService = sessionService.getJwkService();
+          if (jwksService !== null) {
+            const cleaned = await jwksService.cleanupExpiredKeys();
             return {
               cleaned,
               expiredKeysDeleted: cleaned,
@@ -80,10 +82,10 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
         enabled: true,
         runner: async (orm, pluginConfig) => {
           try {
-            const sessionService = engine.getSessionService() as any;
-            if (sessionService.jwtService) {
-              const cleaned =
-                await sessionService.jwtService.cleanupBlacklistedTokens();
+            const sessionService = engine.getSessionService();
+            const jwksService = sessionService.getJwkService();
+            if (jwksService !== null) {
+              const cleaned = await jwksService.cleanupBlacklistedTokens();
               return {
                 cleaned,
                 blacklistedTokensDeleted: cleaned,
@@ -111,10 +113,10 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
       enabled: true,
       runner: async (orm, pluginConfig) => {
         try {
-          const sessionService = engine.getSessionService() as any;
-          if (sessionService.jwtService) {
-            const cleaned =
-              await sessionService.jwtService.cleanupExpiredRefreshTokens();
+          const sessionService = engine.getSessionService();
+          const jwksService = sessionService.getJwkService();
+          if (jwksService !== null) {
+            const cleaned = await jwksService.cleanupExpiredRefreshTokens();
             return {
               cleaned,
               expiredRefreshTokensDeleted: cleaned,
@@ -153,19 +155,20 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
     enableLegacyTokenSupport: true,
     issuer: 'reauth',
   },
-  steps: [getJWKSStep],
+  steps: [getJWKSStep, registerClientStep],
   async getProfile(subjectId, ctx) {
-    const sessionService = ctx.engine.getSessionService() as any;
+    const sessionService = ctx.engine.getSessionService();
+    const jwksService = sessionService.getJwkService();
 
     // Get JWT-related information for the subject
     const profile: any = {
-      jwt_enabled: !!sessionService.jwtService,
+      jwt_enabled: !!jwksService,
     };
 
-    if (sessionService.jwtService) {
+    if (jwksService) {
       try {
         // Get JWKS information
-        const jwks = await sessionService.jwtService.getPublicJWKS();
+        const jwks = await jwksService.getPublicJWKS();
         profile.active_keys = jwks.keys.length;
       } catch (error) {
         profile.jwt_error =

@@ -28,7 +28,7 @@ export const updateApiKeyValidation = type({
   permissions: 'string[]?',
   scopes: 'string[]?',
   expires_at: 'Date?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const updateApiKeyStep: AuthStep<
@@ -82,7 +82,7 @@ export const updateApiKeyStep: AuthStep<
         last_used_at: 'Date',
       }),
     }), // Contains updated ApiKeyMetadata
-    'others?': 'object',
+    'others?': 'object | undefined',
     'token?': tokenType,
   }),
 

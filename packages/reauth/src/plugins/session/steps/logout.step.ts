@@ -14,7 +14,7 @@ export type LogoutInput = {
 
 export const logoutValidation = type({
   token: tokenType,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export type LogoutOutput = AuthOutput & {
@@ -39,7 +39,7 @@ export const logoutStep: AuthStep<SessionConfig, LogoutInput, LogoutOutput> = {
     'error?': 'string | object',
     status: 'string',
     'sessionDestroyed?': 'boolean',
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, others } = input;

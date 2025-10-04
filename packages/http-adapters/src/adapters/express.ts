@@ -4,23 +4,42 @@ import type {
   HttpAdapterConfig,
   FrameworkAdapter,
   HttpRequest,
-  HttpResponse,
   MiddlewareFunction,
   AuthenticatedUser,
-} from '../types.js';
-import { ReAuthHttpAdapter } from '../base-adapter.js';
+  AuthStepRequest,
+} from '../types';
+import { ReAuthHttpAdapter } from '../base-adapter';
 
 export class ExpressAdapter
   implements FrameworkAdapter<Request, Response, NextFunction>
 {
   public readonly name = 'express';
   private adapter: ReAuthHttpAdapter;
+  private generateDeviceInfo?: (
+    request: Request,
+  ) => Promise<Record<string, any>>;
 
   constructor(
     config: HttpAdapterConfig,
     private exposeIntrospection: boolean,
+    generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
   ) {
     this.adapter = new ReAuthHttpAdapter(config);
+    this.generateDeviceInfo = generateDeviceInfo;
+  }
+
+  /**
+   * Generate device info from request
+   */
+  async generateDeviceInfoInternal(
+    request: Request,
+  ): Promise<Record<string, any>> {
+    if (!this.generateDeviceInfo) {
+      return {};
+    }
+
+    const deviceInfo = await this.generateDeviceInfo(request);
+    return deviceInfo;
   }
 
   /**
@@ -38,7 +57,11 @@ export class ExpressAdapter
     ): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
-        (req as any).user = await this.adapter.getCurrentUser(httpReq);
+        const deviceInfo = await this.generateDeviceInfoInternal(req);
+        (req as any).user = await this.adapter.getCurrentUser(
+          httpReq,
+          deviceInfo,
+        );
         next();
       } catch (error) {
         // Don't fail the request if user lookup fails, just continue with req.user = null
@@ -139,11 +162,49 @@ export class ExpressAdapter
     router.get(`${basePath}/health`, this.createHealthHandler());
 
     // Authentication step routes
-    router.post(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.get(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.put(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.patch(`${basePath}/:plugin/:step`, this.createStepHandler());
-    router.delete(`${basePath}/:plugin/:step`, this.createStepHandler());
+    const endpoints = this.adapter.getEndpoints();
+    for (const endpoint of endpoints) {
+      if (endpoint.method === 'POST') {
+        router.post(endpoint.path, (req: Request, res: Response) =>
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'GET') {
+        router.get(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'PUT') {
+        router.put(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'PATCH') {
+        router.patch(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      } else if (endpoint.method === 'DELETE') {
+        router.delete(
+          endpoint.path,
+          this.createStepHandler({
+            name: endpoint.pluginName,
+            step: endpoint.stepName,
+          }),
+        );
+      }
+    }
 
     return router;
   }
@@ -151,11 +212,93 @@ export class ExpressAdapter
   /**
    * Create step execution handler
    */
-  private createStepHandler(): (req: Request, res: Response) => Promise<void> {
+  private createStepHandler(plugin: {
+    name: string;
+    step: string;
+  }): (req: Request, res: Response) => Promise<void> {
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
-        const result = await this.adapter.executeAuthStep(httpReq as any);
+
+        const request: AuthStepRequest = {
+          ...httpReq,
+          plugin: {
+            name: plugin.name,
+            step: plugin.step,
+          },
+        };
+
+        const deviceInfo = await this.generateDeviceInfoInternal(req);
+
+        const result = await this.adapter.executeAuthStep(request, deviceInfo);
+
+        // Set cookies from secret field (OAuth flow)
+        if (result.secret && typeof result.secret === 'object') {
+          for (const [key, value] of Object.entries(result.secret)) {
+            res.cookie(key, value, {
+              httpOnly: true,
+              secure: true,
+              path: '/',
+              sameSite: 'lax',
+              maxAge: 600000, // 10 minutes for OAuth state/verifier
+            });
+          }
+        }
+
+        // Set session cookies if configured
+        if (this.adapter.getConfig().cookie && result.data?.token) {
+          const cookie = this.adapter.getConfig().cookie!;
+          const options = cookie.options;
+          const token = result.data.token;
+
+          if (typeof token === 'string') {
+            res.cookie(cookie.name, token, {
+              domain: options.domain,
+              httpOnly: options.httpOnly,
+              secure: options.secure,
+              path: options.path || '/',
+              sameSite: options.sameSite || 'lax',
+              maxAge: options.maxAge ? options.maxAge * 1000 : undefined,
+              expires: options.expires,
+            });
+          } else {
+            res.cookie(cookie.name, token.accessToken, {
+              domain: options.domain,
+              httpOnly: options.httpOnly,
+              secure: options.secure,
+              path: options.path || '/',
+              sameSite: options.sameSite || 'lax',
+              maxAge: options.maxAge ? options.maxAge * 1000 : undefined,
+              expires: options.expires,
+            });
+
+            if (cookie.refreshOptions && token.refreshToken) {
+              const refreshOptions = cookie.refreshOptions;
+              res.cookie(
+                cookie.refreshTokenName || 'refreshToken',
+                token.refreshToken,
+                {
+                  domain: refreshOptions.domain,
+                  httpOnly: refreshOptions.httpOnly,
+                  secure: refreshOptions.secure,
+                  path: refreshOptions.path || '/',
+                  sameSite: refreshOptions.sameSite || 'lax',
+                  maxAge: refreshOptions.maxAge
+                    ? refreshOptions.maxAge * 1000
+                    : undefined,
+                  expires: refreshOptions.expires,
+                },
+              );
+            }
+          }
+        }
+
+        // Handle redirect responses (OAuth flow)
+        if (result.redirect) {
+          res.redirect(result.status, result.redirect);
+          return;
+        }
+
         this.sendResponse(res, result, result.status);
       } catch (error) {
         this.handleError(res, error as Error);
@@ -173,7 +316,11 @@ export class ExpressAdapter
     return async (req: Request, res: Response): Promise<void> => {
       try {
         const httpReq = this.extractRequest(req);
-        const result = await this.adapter.checkSession(httpReq as any);
+        const deviceInfo = await this.generateDeviceInfoInternal(req);
+        const result = await this.adapter.checkSession(
+          httpReq as any,
+          deviceInfo,
+        );
         this.sendResponse(res, result);
       } catch (error) {
         this.handleError(res, error as Error);
@@ -265,7 +412,8 @@ export class ExpressAdapter
 
     // Otherwise, check session
     const httpReq = this.extractRequest(req);
-    return await this.adapter.getCurrentUser(httpReq);
+    const deviceInfo = await this.generateDeviceInfoInternal(req);
+    return await this.adapter.getCurrentUser(httpReq, deviceInfo);
   }
 
   /**
@@ -282,8 +430,9 @@ export class ExpressAdapter
 export function createExpressAdapter(
   config: HttpAdapterConfig,
   exposeIntrospection: boolean = false,
+  generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
 ): ExpressAdapter {
-  return new ExpressAdapter(config, exposeIntrospection);
+  return new ExpressAdapter(config, exposeIntrospection, generateDeviceInfo);
 }
 
 /**
@@ -292,7 +441,12 @@ export function createExpressAdapter(
 export function expressReAuth(
   config: HttpAdapterConfig,
   exposeIntrospection: boolean = false,
+  generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
 ): MiddlewareFunction<Request, Response, NextFunction> {
-  const adapter = new ExpressAdapter(config, exposeIntrospection);
+  const adapter = new ExpressAdapter(
+    config,
+    exposeIntrospection,
+    generateDeviceInfo,
+  );
   return adapter.createMiddleware();
 }

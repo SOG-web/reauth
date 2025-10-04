@@ -1,0 +1,436 @@
+---
+title: Bun Runtime
+description: Deploy ReAuth on Bun for high-performance standalone authentication servers.
+---
+
+Bun is a fast JavaScript runtime with built-in TypeScript support, making it perfect for high-performance ReAuth deployments. The itty-router adapter works seamlessly with Bun's native HTTP server.
+
+## Quick Start
+
+```ts
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'sqlite',
+    db: kysely, // or PostgreSQL, MySQL, etc.
+  }),
+);
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Send email via your provider
+        console.log(`Email to ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Create itty-router adapter
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+    cors: {
+      origin: ['http://localhost:3000'],
+      credentials: true,
+    },
+  },
+  async (request) => {
+    // Extract device info from request
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0] ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
+
+    return {
+      ip,
+      userAgent: request.headers.get('User-Agent'),
+      fingerprint: await generateFingerprint(request),
+    };
+  },
+);
+
+// Create router
+const router = adapter.createRouter('/auth', true);
+
+// Start Bun server
+Bun.serve({
+  port: 3001,
+  fetch: router.fetch,
+});
+
+console.log('ReAuth server running on http://localhost:3001');
+```
+
+## SQLite with Bun
+
+Bun has native SQLite support for excellent performance:
+
+```ts
+import { Database } from 'bun:sqlite';
+import { Kysely } from 'kysely';
+import { BunSqliteDialect } from 'kysely-bun-sqlite';
+
+// Create SQLite database
+const sqlite = new Database('reauth.db');
+
+// Setup Kysely with Bun SQLite
+const db = new Kysely<Database>({
+  dialect: new BunSqliteDialect({
+    database: sqlite,
+  }),
+});
+
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'sqlite',
+    db,
+  }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        console.log(`Code for ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+const adapter = reAuthRouter({ engine }, async (req) => ({
+  ip: req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+  userAgent: req.headers.get('User-Agent'),
+}));
+
+const router = adapter.createRouter('/auth', true);
+
+Bun.serve({
+  port: 3001,
+  fetch: router.fetch,
+  development: Bun.env.NODE_ENV !== 'production',
+});
+```
+
+## Production Configuration
+
+### Environment Variables
+
+```bash
+# .env
+DATABASE_URL=postgresql://user:pass@localhost:5432/reauth
+NODE_ENV=production
+PORT=3001
+ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+JWT_SECRET=your-secret-key
+```
+
+### Production Server
+
+```ts
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine from '@re-auth/reauth';
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Production email service
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${Bun.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'auth@example.com',
+            to: email,
+            subject: type === 'verify' ? 'Verify your email' : 'Reset password',
+            html: `<p>Your verification code: <strong>${code}</strong></p>`,
+          }),
+        });
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+    cors: {
+      origin: Bun.env.ALLOWED_ORIGINS?.split(',') || [],
+      credentials: true,
+    },
+    rateLimit: {
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+    },
+    security: {
+      helmet: true,
+    },
+  },
+  async (request) => ({
+    ip: request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+    userAgent: request.headers.get('User-Agent'),
+  }),
+);
+
+const router = adapter.createRouter('/auth', true);
+
+Bun.serve({
+  port: parseInt(Bun.env.PORT || '3001'),
+  fetch: router.fetch,
+  development: false,
+});
+
+console.log(`ReAuth production server on port ${Bun.env.PORT || 3001}`);
+```
+
+## Custom Middleware
+
+Add custom middleware for logging, authentication, etc.:
+
+```ts
+const router = adapter.createRouter('/auth', true);
+
+// Add logging middleware
+adapter.registerMiddleware(router, {
+  before: [
+    async (request) => {
+      console.log(
+        `[${new Date().toISOString()}] ${request.method} ${request.url}`,
+      );
+      const startTime = Date.now();
+      request.startTime = startTime;
+    },
+  ],
+  finally: [
+    async (response, request) => {
+      const duration = Date.now() - request.startTime;
+      console.log(
+        `[${new Date().toISOString()}] ${request.method} ${request.url} - ${response.status} (${duration}ms)`,
+      );
+    },
+  ],
+});
+```
+
+## Docker Deployment
+
+```dockerfile
+# Dockerfile
+FROM oven/bun:1 as base
+WORKDIR /app
+
+# Install dependencies
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile
+
+# Copy source
+COPY . .
+
+# Expose port
+EXPOSE 3001
+
+# Start server
+CMD ["bun", "run", "src/index.ts"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  reauth:
+    build: .
+    ports:
+      - '3001:3001'
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/reauth
+      - NODE_ENV=production
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=reauth
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+## Performance Optimization
+
+### Database Connection Pooling
+
+```ts
+import { Pool } from 'pg';
+import { Kysely, PostgresDialect } from 'kysely';
+
+const pool = new Pool({
+  host: 'localhost',
+  port: 5432,
+  database: 'reauth',
+  user: 'postgres',
+  password: 'password',
+  max: 20, // Maximum connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+const db = new Kysely<Database>({
+  dialect: new PostgresDialect({ pool }),
+});
+```
+
+### Caching
+
+```ts
+const cache = new Map<string, { data: any; expires: number }>();
+
+const getCached = <T>(key: string, ttl: number, fn: () => Promise<T>) => {
+  const cached = cache.get(key);
+  if (cached && cached.expires > Date.now()) {
+    return cached.data as T;
+  }
+
+  const data = await fn();
+  cache.set(key, { data, expires: Date.now() + ttl });
+  return data;
+};
+
+// Use in routes
+router.get('/auth/plugins', async () => {
+  const plugins = await getCached('plugins', 60000, async () => {
+    return adapter.getAdapter().listPlugins();
+  });
+
+  return Response.json(plugins);
+});
+```
+
+## Testing
+
+```ts
+import { describe, test, expect } from 'bun:test';
+
+describe('ReAuth API', () => {
+  test('POST /auth/email-password/register', async () => {
+    const response = await fetch(
+      'http://localhost:3001/auth/email-password/register',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'SecurePass123!',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.success).toBe(true);
+  });
+
+  test('GET /auth/health', async () => {
+    const response = await fetch('http://localhost:3001/auth/health');
+    expect(response.status).toBe(200);
+  });
+});
+```
+
+## Best Practices
+
+1. **Use native SQLite**: Bun's SQLite is extremely fast for local/embedded databases
+2. **Enable hot reload**: Use `bun --watch src/index.ts` during development
+3. **Connection pooling**: Configure appropriate pool sizes for production
+4. **Error handling**: Implement comprehensive error logging
+5. **Health checks**: Add `/health` endpoint for monitoring
+6. **Graceful shutdown**: Handle SIGTERM/SIGINT properly
+
+## Troubleshooting
+
+### Port Already in Use
+
+```bash
+# Find process using port
+lsof -i :3001
+
+# Kill process
+kill -9 <PID>
+```
+
+### Database Connection Errors
+
+- Verify DATABASE_URL environment variable
+- Check database is running and accessible
+- Ensure migrations are applied
+
+### Memory Leaks
+
+Monitor with Bun's built-in profiler:
+
+```bash
+bun --inspect src/index.ts
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="./cloudflare-workers"
+    title="Cloudflare Workers"
+    description="Deploy ReAuth on Cloudflare's edge network for global authentication."
+  />
+  <Card
+    href="./nodejs"
+    title="Node.js Runtime"
+    description="Run ReAuth on traditional Node.js servers."
+  />
+  <Card
+    href="../usage"
+    title="Usage Examples"
+    description="Explore more usage patterns and examples."
+  />
+</Cards>

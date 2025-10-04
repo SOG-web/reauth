@@ -18,6 +18,22 @@ interface PluginDefinition {
   steps: StepDefinition[];
 }
 
+interface HttpConfig {
+  basePath: string;
+  tokenConfig: {
+    header: {
+      accessTokenHeader: string;
+      refreshTokenHeader: string;
+      useBearer: boolean;
+    };
+    cookie: {
+      accessTokenName: string;
+      refreshTokenName: string;
+      enabled: boolean;
+    };
+  };
+}
+
 type HttpClient = 'axios' | 'fetch';
 
 program
@@ -59,26 +75,17 @@ async function generate(options: {
     });
     const introspectionData = response.data.data;
 
-    const { entity, plugins } = introspectionData;
+    const { plugins, httpConfig } = introspectionData as {
+      plugins: PluginDefinition[];
+      httpConfig: HttpConfig;
+    };
     const outputDir = options.output;
     const pluginsDir = path.join(outputDir, 'plugins');
+    const basePath = httpConfig?.basePath || '';
+    const tokenConfig = httpConfig?.tokenConfig;
 
     // Create directories
     await fs.mkdir(pluginsDir, { recursive: true });
-
-    // Generate entity schema file
-    let entitySchemaCode = `import { z } from 'zod';\n\n`;
-    entitySchemaCode += `export ${jsonSchemaToZod(entity, { name: 'entitySchema' })}\n`;
-    const formattedEntitySchema = await prettier.format(entitySchemaCode, {
-      parser: 'typescript',
-      semi: true,
-      singleQuote: true,
-      trailingComma: 'all',
-    });
-    await fs.writeFile(
-      path.join(outputDir, 'schemas.ts'),
-      formattedEntitySchema,
-    );
 
     const pluginFileNames: string[] = [];
 
@@ -91,9 +98,19 @@ async function generate(options: {
       let pluginCode: string;
 
       if (options.client === 'axios') {
-        pluginCode = generateAxiosPluginCode(plugin, pluginName);
+        pluginCode = generateAxiosPluginCode(
+          plugin,
+          pluginName,
+          basePath,
+          tokenConfig,
+        );
       } else {
-        pluginCode = generateFetchPluginCode(plugin, pluginName);
+        pluginCode = generateFetchPluginCode(
+          plugin,
+          pluginName,
+          basePath,
+          tokenConfig,
+        );
       }
 
       const formattedPluginCode = await prettier.format(pluginCode, {
@@ -108,9 +125,9 @@ async function generate(options: {
     // Generate main index.ts
     let indexCode: string;
     if (options.client === 'axios') {
-      indexCode = generateAxiosIndexCode(pluginFileNames);
+      indexCode = generateAxiosIndexCode(pluginFileNames, tokenConfig);
     } else {
-      indexCode = generateFetchIndexCode(pluginFileNames);
+      indexCode = generateFetchIndexCode(pluginFileNames, tokenConfig);
     }
 
     const formattedIndexCode = await prettier.format(indexCode, {
@@ -133,6 +150,8 @@ async function generate(options: {
 function generateAxiosPluginCode(
   plugin: PluginDefinition,
   pluginName: string,
+  basePath: string,
+  tokenConfig?: HttpConfig['tokenConfig'],
 ): string {
   let pluginCode = `
 		import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
@@ -149,6 +168,7 @@ function generateAxiosPluginCode(
     pluginCode += `export ${jsonSchemaToZod(step.inputs, { name: inputSchemaName })}\n`;
     pluginCode += `export ${jsonSchemaToZod(step.outputs, { name: outputSchemaName })}\n\n`;
 
+    const endpoint = `${basePath}/${plugin.name}/${step.name}`;
     const apiPostLogic = step.requiresAuth
       ? `
 				const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
@@ -159,12 +179,12 @@ function generateAxiosPluginCode(
 				if (token) {
 					requestConfig.headers = { ...requestConfig.headers, Authorization: \`Bearer \${token}\` };
 				}
-				const response = await api.post('/auth/${plugin.name}/${step.name}', payload, requestConfig);`
+				const response = await api.post('${endpoint}', payload, requestConfig);`
       : `const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
 				if (callbacks?.interceptors?.request) {
 					callbacks.interceptors.request(requestConfig);
 				}
-				const response = await api.post('/auth/${plugin.name}/${step.name}', payload, requestConfig);`;
+				const response = await api.post('${endpoint}', payload, requestConfig);`;
 
     stepMethods.push(`
 			${stepName}: async (
@@ -210,6 +230,8 @@ function generateAxiosPluginCode(
 function generateFetchPluginCode(
   plugin: PluginDefinition,
   pluginName: string,
+  basePath: string,
+  tokenConfig?: HttpConfig['tokenConfig'],
 ): string {
   let pluginCode = `
 		import { z } from 'zod';
@@ -226,6 +248,7 @@ function generateFetchPluginCode(
     pluginCode += `export ${jsonSchemaToZod(step.inputs, { name: inputSchemaName })}\n`;
     pluginCode += `export ${jsonSchemaToZod(step.outputs, { name: outputSchemaName })}\n\n`;
 
+    const endpoint = `${basePath}/${plugin.name}/${step.name}`;
     const apiPostLogic = step.requiresAuth
       ? `
 				const token = await getToken();
@@ -248,7 +271,7 @@ function generateFetchPluginCode(
 				if (callbacks?.interceptors?.request) {
 					request = await callbacks.interceptors.request(payload, request);
 				}
-				const response = await fetch(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`,request);`
+				const response = await fetch(\`\${config.baseURL}${endpoint}\`,request);`
       : `
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/json',
@@ -266,7 +289,7 @@ function generateFetchPluginCode(
 				if (callbacks?.interceptors?.request) {
 					request = await callbacks.interceptors.request(payload, request);
 				}
-				const response = await fetch(\`\${config.baseURL}/auth/${plugin.name}/${step.name}\`, request);`;
+				const response = await fetch(\`\${config.baseURL}${endpoint}\`, request);`;
 
     stepMethods.push(`
 			${stepName}: async (
@@ -323,7 +346,10 @@ function generateFetchPluginCode(
   return pluginCode;
 }
 
-function generateAxiosIndexCode(pluginFileNames: string[]): string {
+function generateAxiosIndexCode(
+  pluginFileNames: string[],
+  tokenConfig?: HttpConfig['tokenConfig'],
+): string {
   let indexCode = `
 		import axios from 'axios';
 		import type { AxiosInstance, AxiosRequestConfig } from 'axios';
@@ -394,7 +420,10 @@ function generateAxiosIndexCode(pluginFileNames: string[]): string {
   return indexCode;
 }
 
-function generateFetchIndexCode(pluginFileNames: string[]): string {
+function generateFetchIndexCode(
+  pluginFileNames: string[],
+  tokenConfig?: HttpConfig['tokenConfig'],
+): string {
   let indexCode = `
 		
 	`;

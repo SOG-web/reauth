@@ -1,0 +1,7 @@
+{
+  "title": "HTTP Adapters",
+  "description": "Integrate ReAuth with your transport layer and expose REST endpoints.",
+  "icon": "Router",
+  "root": true,
+  "pages": ["overview", "usage", "runtimes"]
+}

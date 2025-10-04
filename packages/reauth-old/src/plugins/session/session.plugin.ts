@@ -12,7 +12,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
       description: 'Get current session',
       validationSchema: type({
         token: 'string?',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       inputs: ['token', 'others'],
       run: async (input, pluginProperties) => {
@@ -60,7 +60,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
         message: 'string',
         status: 'string',
         entity: 'object',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
     },
     {
@@ -68,7 +68,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
       description: 'Logout current session',
       validationSchema: type({
         token: 'string?',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       inputs: ['token', 'others'],
       run: async (input, pluginProperties) => {
@@ -108,7 +108,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
     },
     {
@@ -116,7 +116,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
       description: 'Logout all sessions',
       validationSchema: type({
         token: 'string?',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
       inputs: ['token', 'others'],
       run: async (input, pluginProperties) => {
@@ -163,7 +163,7 @@ const plugin: AuthPlugin<SessionPluginConfig> = {
         success: 'boolean',
         message: 'string',
         status: 'string',
-        others: 'object?',
+        'others?': 'object | undefined',
       }),
     },
   ],

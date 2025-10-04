@@ -15,7 +15,7 @@ export type LoginInput = {
 export const loginValidation = type({
   email: 'string.email',
   password: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
@@ -39,12 +39,11 @@ export const loginStep: AuthStep<EmailPasswordConfig, LoginInput, AuthOutput> =
       'subject?': type({
         id: 'string',
         email: 'string',
-        name: 'string',
         provider: 'string',
         verified: 'boolean',
-        profile: 'object?',
+        'profile?': 'object',
       }),
-      'others?': 'object',
+      'others?': 'object | undefined',
     }),
     async run(input, ctx) {
       const { email, password, others } = input;

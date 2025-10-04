@@ -24,6 +24,23 @@ import type {
   Token,
 } from './types';
 
+export type ReAuthConfig = {
+  dbClient: FumaClient;
+  plugins?: AuthPlugin[];
+  tokenFactory?: () => string;
+  authHooks?: AuthHook[];
+  sessionHooks?: AuthHook[];
+  enableCleanupScheduler?: boolean; // Default true
+  getUserData: (
+    subjectId: string,
+    orm: OrmLike,
+  ) => Promise<Record<string, any>>;
+  deviceValidator?: (
+    storedDeviceInfo: Record<string, any>,
+    currentDeviceInfo: Record<string, any>,
+  ) => boolean | Promise<boolean>;
+};
+
 export class ReAuthEngine {
   private container: ReAuthCradle;
   private sessionResolvers: SessionResolvers;
@@ -33,34 +50,16 @@ export class ReAuthEngine {
   private pluginMap = new Map<string, AuthPlugin>();
   private authHooks: AuthHook[] = [];
   private sessionHooks: AuthHook[] = [];
-  private getUserData?: (
+  private getUserData: (
     subjectId: string,
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
 
-  constructor(config: {
-    dbClient: FumaClient;
-    plugins?: AuthPlugin[];
-    tokenFactory?: () => string;
-    authHooks?: AuthHook[];
-    sessionHooks?: AuthHook[];
-    enableCleanupScheduler?: boolean; // Default true
-    getUserData?: (
-      subjectId: string,
-      orm: OrmLike,
-    ) => Promise<Record<string, any>>;
-    useJwks?: boolean; // Default false
-  }) {
+  constructor(config: ReAuthConfig) {
     this.container = createContainer({
       injectionMode: InjectionMode.CLASSIC,
       strict: true,
     });
-
-    if (config.useJwks && !config.getUserData) {
-      throw new Error(
-        'getUserData function must be provided when useJwks is enabled',
-      );
-    }
 
     this.sessionResolvers = new InMemorySessionResolvers();
     this.sessionService = new FumaSessionService(
@@ -68,7 +67,9 @@ export class ReAuthEngine {
       this.sessionResolvers,
       config.tokenFactory,
       config.getUserData,
+      { deviceValidator: config.deviceValidator },
     );
+
     this.getUserData = config.getUserData;
     this.cleanupScheduler = new SimpleCleanupScheduler(() => this.getOrm());
 
@@ -76,6 +77,7 @@ export class ReAuthEngine {
       dbClient: asValue(config.dbClient),
       sessionResolvers: asValue(this.sessionResolvers),
       sessionService: asValue(this.sessionService),
+      engine: asValue(this),
     });
 
     for (const plugin of config.plugins || []) this.registerPlugin(plugin);
@@ -145,49 +147,65 @@ export class ReAuthEngine {
     subjectType: string,
     subjectId: string,
     ttlSeconds?: number,
+    deviceInfo?: Record<string, any>,
   ): Promise<Token> {
     await this.executeSessionHooks('before', {
       subjectType,
       subjectId,
       ttlSeconds,
+      deviceInfo,
     });
     try {
-      const token = await this.sessionService.createSession(
-        subjectType,
-        subjectId,
-        ttlSeconds,
-      );
+      let token: Token;
+      if (this.sessionService.createSessionWithMetadata) {
+        token = await this.sessionService.createSessionWithMetadata(
+          subjectType,
+          subjectId,
+          { ttlSeconds, deviceInfo },
+        );
+      } else {
+        token = await this.sessionService.createSession(
+          subjectType,
+          subjectId,
+          ttlSeconds,
+        );
+      }
       await this.executeSessionHooks('after', {
         token,
         subjectType,
         subjectId,
         ttlSeconds,
+        deviceInfo,
       });
       return token;
     } catch (error) {
       await this.executeSessionHooks(
         'onError',
-        { subjectType, subjectId, ttlSeconds },
+        { subjectType, subjectId, ttlSeconds, deviceInfo },
         error,
       );
       throw error;
     }
   }
 
-  async checkSession(token: Token): Promise<{
+  async checkSession(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';
     payload?: ReAuthJWTPayload;
     valid: boolean;
   }> {
-    await this.executeSessionHooks('before', { token });
-    const ses = await this.sessionService.verifySession(token);
+    await this.executeSessionHooks('before', { token, deviceInfo });
+    const ses = await this.sessionService.verifySession(token, deviceInfo);
     await this.executeSessionHooks('after', {
       subject: ses.subject,
       token: ses.token,
       type: ses.type,
       payload: ses.payload,
+      deviceInfo,
     });
     return {
       ...ses,
@@ -415,11 +433,6 @@ export class ReAuthEngine {
   }
 
   getIntrospectionData(): {
-    entity: {
-      type: 'object';
-      properties: Record<string, unknown>;
-      required: string[];
-    };
     plugins: Array<{
       name: string;
       description: string;
@@ -435,26 +448,36 @@ export class ReAuthEngine {
     generatedAt: string;
     version: string;
   } {
-    return {
-      entity: {
-        type: 'object',
-        properties: {},
-        required: [],
-      },
-      plugins: this.plugins.map((p) => ({
-        name: p.name,
-        description: `${p.name} authentication plugin`,
-        steps: (p.steps || []).map((s) => ({
-          name: s.name,
-          description: s.description,
-          inputs: s.validationSchema?.toJsonSchema() || {},
-          outputs: s.outputs?.toJsonSchema() || {},
-          protocol: s.protocol || {},
-          requiresAuth: Boolean(s.protocol?.http?.auth || false),
+    try {
+      return {
+        plugins: this.plugins.map((p) => ({
+          name: p.name,
+          description: `${p.name} authentication plugin`,
+          steps: (p.steps || []).map((s) => {
+            return {
+              name: s.name,
+              description: s.description,
+              inputs: s.validationSchema?.toJsonSchema() || {},
+              outputs: s.outputs?.toJsonSchema() || {},
+              protocol: s.protocol || {},
+              requiresAuth: Boolean(s.protocol?.http?.auth || false),
+            };
+          }),
         })),
-      })),
-      generatedAt: new Date().toISOString(),
-      version: '1.0.0',
-    };
+        generatedAt: new Date().toISOString(),
+        version: '1.0.0',
+      };
+    } catch (error) {
+      console.error(error);
+      return {
+        plugins: [],
+        generatedAt: new Date().toISOString(),
+        version: '1.0.0',
+      };
+    }
   }
+}
+
+export default function createReAuthEngine(config: ReAuthConfig) {
+  return new ReAuthEngine(config);
 }

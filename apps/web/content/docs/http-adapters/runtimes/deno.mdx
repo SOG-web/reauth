@@ -1,0 +1,458 @@
+---
+title: Deno Runtime
+description: Deploy ReAuth on Deno Deploy for secure edge authentication with TypeScript-first runtime.
+---
+
+Deno is a modern JavaScript runtime with built-in TypeScript support, Web API compatibility, and secure-by-default design. ReAuth's itty-router adapter works seamlessly with Deno's native Fetch API.
+
+## Quick Start
+
+```ts
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql', // Use PostgreSQL for production
+    db: kysely,
+  }),
+);
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Send email via your provider
+        console.log(`Email to ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Create itty-router adapter
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+    cors: {
+      origin: ['https://app.example.com'],
+      credentials: true,
+    },
+  },
+  async (request) => {
+    // Extract device info
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded ? forwarded.split(',')[0] : 'unknown';
+
+    return {
+      ip,
+      userAgent: request.headers.get('user-agent'),
+      fingerprint: request.headers.get('x-fingerprint'),
+    };
+  },
+);
+
+// Create router
+const router = adapter.createRouter('/auth', true);
+
+// Start Deno server
+Deno.serve({ port: 3001 }, router.fetch);
+```
+
+## Import Maps
+
+Create an `import_map.json` for dependency management:
+
+```json
+{
+  "imports": {
+    "@re-auth/reauth": "npm:@re-auth/reauth@latest",
+    "@re-auth/http-adapters": "npm:@re-auth/http-adapters@latest",
+    "fumadb": "npm:fumadb@latest",
+    "kysely": "npm:kysely@latest",
+    "pg": "npm:pg@latest"
+  }
+}
+```
+
+Run with:
+
+```bash
+deno run --allow-net --allow-env --import-map=import_map.json server.ts
+```
+
+## PostgreSQL Configuration
+
+Use Deno's native PostgreSQL driver:
+
+```ts
+import { Kysely } from 'kysely';
+import { PostgresDialect } from 'kysely';
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: Deno.env.get('DATABASE_URL'),
+  max: 10,
+  idleTimeoutMillis: 30000,
+});
+
+const db = new Kysely<Database>({
+  dialect: new PostgresDialect({ pool }),
+});
+
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql',
+    db,
+  }),
+);
+```
+
+## Environment Variables
+
+Create a `.env` file:
+
+```bash
+DATABASE_URL=postgresql://user:password@localhost:5432/reauth
+ALLOWED_ORIGINS=https://app.example.com
+SENDGRID_API_KEY=your-api-key
+JWT_SECRET=your-jwt-secret
+```
+
+Load in your application:
+
+```ts
+import { load } from 'https://deno.land/std@0.224.0/dotenv/mod.ts';
+
+const env = await load();
+
+const engine = createReAuthEngine({
+  // ...
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email }] }],
+            from: { email: 'auth@example.com' },
+            subject: type === 'verify' ? 'Verify Email' : 'Reset Password',
+            content: [
+              {
+                type: 'text/plain',
+                value: `Your code: ${code}`,
+              },
+            ],
+          }),
+        });
+      },
+      verifyEmail: true,
+    }),
+  ],
+  // ...
+});
+```
+
+## Custom Middleware
+
+```ts
+const router = adapter.createRouter('/auth', true);
+
+// Logging middleware
+adapter.registerMiddleware(router, {
+  before: [
+    async (request) => {
+      console.log(
+        `[${new Date().toISOString()}] ${request.method} ${request.url}`,
+      );
+    },
+  ],
+  finally: [
+    async (response, request) => {
+      console.log(
+        `[${new Date().toISOString()}] ${request.method} ${request.url} - ${response.status}`,
+      );
+    },
+  ],
+});
+```
+
+## Deno Deploy
+
+### Deploy with GitHub Integration
+
+1. Create a new project on [Deno Deploy](https://dash.deno.com)
+2. Connect your GitHub repository
+3. Configure build settings:
+   - Entry point: `server.ts`
+   - Environment variables: Add your secrets
+
+### Deploy with CLI
+
+```bash
+# Install deployctl
+deno install -Arf https://deno.land/x/deploy/deployctl.ts
+
+# Deploy
+deployctl deploy --project=reauth-app server.ts
+```
+
+### Configuration File
+
+Create `deno.json`:
+
+```json
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read --watch server.ts",
+    "start": "deno run --allow-net --allow-env --allow-read server.ts"
+  },
+  "imports": {
+    "@re-auth/reauth": "npm:@re-auth/reauth@latest",
+    "@re-auth/http-adapters": "npm:@re-auth/http-adapters@latest",
+    "fumadb": "npm:fumadb@latest",
+    "kysely": "npm:kysely@latest"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window"],
+    "strict": true
+  }
+}
+```
+
+Run with:
+
+```bash
+deno task dev
+```
+
+## Production Example
+
+```ts
+// server.ts
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine from '@re-auth/reauth';
+import { load } from 'https://deno.land/std@0.224.0/dotenv/mod.ts';
+
+const env = await load();
+
+// Setup database and engine
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Production email service
+        await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email }] }],
+            from: { email: 'auth@example.com' },
+            subject: type === 'verify' ? 'Verify Email' : 'Reset Password',
+            content: [{ type: 'text/plain', value: `Code: ${code}` }],
+          }),
+        });
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+    cors: {
+      origin: env.ALLOWED_ORIGINS?.split(',') || [],
+      credentials: true,
+    },
+    rateLimit: {
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+    },
+    security: {
+      helmet: true,
+    },
+  },
+  async (request) => ({
+    ip: request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+    userAgent: request.headers.get('user-agent'),
+  }),
+);
+
+const router = adapter.createRouter('/auth', true);
+
+// Health check endpoint
+const server = {
+  fetch: async (request: Request) => {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/health') {
+      return new Response(
+        JSON.stringify({
+          status: 'healthy',
+          timestamp: new Date().toISOString(),
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
+    return router.fetch(request);
+  },
+};
+
+Deno.serve({ port: parseInt(env.PORT || '3001') }, server.fetch);
+```
+
+## Testing
+
+```ts
+// server.test.ts
+import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+
+Deno.test('POST /auth/email-password/register', async () => {
+  const response = await fetch(
+    'http://localhost:3001/auth/email-password/register',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'test@example.com',
+        password: 'SecurePass123!',
+      }),
+    },
+  );
+
+  assertEquals(response.status, 200);
+  const data = await response.json();
+  assertEquals(data.success, true);
+});
+
+Deno.test('GET /auth/health', async () => {
+  const response = await fetch('http://localhost:3001/auth/health');
+  assertEquals(response.status, 200);
+});
+```
+
+Run tests:
+
+```bash
+deno test --allow-net --allow-env
+```
+
+## Performance Monitoring
+
+```ts
+const startTime = Date.now();
+
+adapter.registerMiddleware(router, {
+  before: [
+    async (request) => {
+      request.startTime = Date.now();
+    },
+  ],
+  finally: [
+    async (response, request) => {
+      const duration = Date.now() - request.startTime;
+      console.log(
+        `[${request.method}] ${request.url} - ${response.status} (${duration}ms)`,
+      );
+
+      // Track slow requests
+      if (duration > 1000) {
+        console.warn(`Slow request detected: ${duration}ms`);
+      }
+    },
+  ],
+});
+
+console.log(`Server started in ${Date.now() - startTime}ms`);
+```
+
+## Best Practices
+
+1. **Use Deno KV**: Leverage built-in KV store for session management on Deno Deploy
+2. **Import Maps**: Use import maps for clean dependency management
+3. **Permissions**: Be explicit with `--allow-*` flags for security
+4. **Environment Variables**: Use `.env` files locally and Deno Deploy settings in production
+5. **TypeScript First**: Take advantage of Deno's native TypeScript support
+6. **Web Standards**: Use Web APIs (Fetch, Response, Request) throughout
+7. **Testing**: Write tests with Deno's built-in test runner
+
+## Troubleshooting
+
+### Import Errors
+
+Ensure import map is correctly configured and loaded:
+
+```bash
+deno run --allow-net --import-map=import_map.json server.ts
+```
+
+### Permission Denied
+
+Add required permissions:
+
+```bash
+deno run --allow-net --allow-env --allow-read server.ts
+```
+
+### Database Connection Issues
+
+- Verify DATABASE_URL is accessible
+- Check firewall rules
+- Ensure connection pool is configured
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="./vercel-edge"
+    title="Vercel Edge Functions"
+    description="Deploy ReAuth on Vercel's Edge Runtime."
+  />
+  <Card
+    href="./cloudflare-workers"
+    title="Cloudflare Workers"
+    description="Deploy ReAuth on Cloudflare's global edge network."
+  />
+  <Card
+    href="../overview"
+    title="HTTP Adapter Overview"
+    description="Learn about all available HTTP adapters."
+  />
+</Cards>

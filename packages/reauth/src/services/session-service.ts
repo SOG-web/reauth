@@ -4,6 +4,7 @@ import type {
   OrmLike,
   SessionResolvers,
   SessionService,
+  SessionServiceOptions,
   Subject,
   Token,
 } from '../types';
@@ -25,6 +26,7 @@ export class FumaSessionService implements SessionService {
       subjectId: string,
       orm: OrmLike,
     ) => Promise<Record<string, any>>,
+    private options: SessionServiceOptions = {},
   ) {}
 
   // Enable JWKS functionality
@@ -46,6 +48,7 @@ export class FumaSessionService implements SessionService {
       options.enableRefreshTokenRotation,
     );
     this.useJwks = true;
+    this.jwtService.generateKeyPair();
   }
 
   // Enable enhanced session features (called by session plugin)
@@ -58,13 +61,16 @@ export class FumaSessionService implements SessionService {
   }
 
   // Hybrid token verification - supports both JWT and legacy tokens
-  async verifyToken(token: Token): Promise<{
+  async verifyToken(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type: 'jwt' | 'legacy';
     payload?: ReAuthJWTPayload;
   }> {
-    const result = await this.verifySession(token);
+    const result = await this.verifySession(token, deviceInfo);
     return {
       subject: result.subject,
       token: result.token,
@@ -173,17 +179,14 @@ export class FumaSessionService implements SessionService {
 
     // If enhanced mode is enabled and we have additional data, store it
     if (this.enhancedMode) {
-      const sessionId = session.id || token; // Use session ID or token as fallback
+      const sessionId = session.id; // Use session ID or token as fallback
 
       // Store device information if provided
       if (options.deviceInfo) {
         await orm.create('session_devices', {
           session_id: sessionId,
-          fingerprint: options.deviceInfo.fingerprint,
-          user_agent: options.deviceInfo.userAgent,
-          ip_address: options.deviceInfo.ipAddress,
-          is_trusted: options.deviceInfo.isTrusted || false,
-          device_name: options.deviceInfo.deviceName,
+          device_info: JSON.stringify(options.deviceInfo), // Store as JSON
+          // ... other fields can be removed or kept for compatibility
         });
       }
 
@@ -229,7 +232,7 @@ export class FumaSessionService implements SessionService {
 
     for (const session of sessions) {
       const sessionData: any = {
-        sessionId: session.id || session.token,
+        sessionId: session.id,
         token: session.token,
         createdAt: session.created_at,
         expiresAt: session.expires_at,
@@ -237,7 +240,7 @@ export class FumaSessionService implements SessionService {
 
       // If enhanced mode, fetch additional data
       if (this.enhancedMode) {
-        const sessionId = session.id || session.token;
+        const sessionId = session.id;
 
         // Get device info
         const deviceInfo = await orm.findFirst('session_devices', {
@@ -245,13 +248,13 @@ export class FumaSessionService implements SessionService {
         });
 
         if (deviceInfo) {
-          sessionData.deviceInfo = {
-            fingerprint: (deviceInfo as any).fingerprint,
-            userAgent: (deviceInfo as any).user_agent,
-            ipAddress: (deviceInfo as any).ip_address,
-            isTrusted: (deviceInfo as any).is_trusted,
-            deviceName: (deviceInfo as any).device_name,
-          };
+          try {
+            sessionData.deviceInfo = JSON.parse(
+              (deviceInfo as any).device_info,
+            );
+          } catch {
+            sessionData.deviceInfo = {}; // fallback if JSON invalid
+          }
         }
 
         // Get metadata
@@ -279,7 +282,10 @@ export class FumaSessionService implements SessionService {
     return result;
   }
 
-  async verifySession(token: Token): Promise<{
+  async verifySession(
+    token: Token,
+    deviceInfo?: Record<string, any>,
+  ): Promise<{
     subject: any | null;
     token: Token | null;
     type?: 'jwt' | 'legacy';
@@ -300,30 +306,62 @@ export class FumaSessionService implements SessionService {
     const accessToken = typeof token === 'string' ? token : token.accessToken;
     const refreshToken = typeof token === 'string' ? null : token.refreshToken;
 
+    console.log('accessToken', accessToken);
+
     // Always check session table first for unified management
     let session = await orm.findFirst('sessions', {
       where: (b: any) => b('token', '=', accessToken),
     });
 
+    console.log('session- from db', session);
+
     if (!session) {
       return { subject: null, token: null };
     }
 
+    // Get stored device info for validation
+    let storedDeviceInfo: Record<string, any> | null = null;
+    if (this.enhancedMode && deviceInfo && this.options.deviceValidator) {
+      const sessionId = (session as any).id;
+      if (sessionId) {
+        const deviceData = await orm.findFirst('session_devices', {
+          where: (b: any) => b('session_id', '=', sessionId),
+        });
+
+        if (deviceData) {
+          try {
+            storedDeviceInfo = JSON.parse((deviceData as any).device_info);
+          } catch {
+            storedDeviceInfo = {}; // fallback if JSON invalid
+          }
+        }
+      }
+    }
+
     // Check session expiration and if it's about to expire (within 1 minute)
+    const currentNow = new Date();
     const sessionExpiresAt = (session as any).expires_at;
     if (sessionExpiresAt) {
       const expirationDate = new Date(sessionExpiresAt);
-      const oneMinuteFromNow = new Date(now.getTime() + 1 * 60 * 1000);
+      const oneMinuteFromNow = new Date(currentNow.getTime() + 1 * 60 * 1000);
 
-      if (expirationDate <= now) {
+      if (expirationDate <= currentNow) {
         sessionExpired = true;
       } else if (expirationDate <= oneMinuteFromNow) {
         needsRefresh = true;
       }
     }
 
-    // Try JWT verification if enabled
-    if ((!needsRefresh || !sessionExpired) && this.jwtService && accessToken) {
+    console.log('session- after db', {
+      needsRefresh,
+      sessionExpired,
+      isJWT,
+      payload,
+      storedDeviceInfo: storedDeviceInfo ? 'present' : 'none',
+    });
+
+    // Try JWT verification first (for optimization)
+    if (this.jwtService && accessToken) {
       try {
         payload = await this.jwtService.verifyJWT(accessToken);
         isJWT = true;
@@ -333,8 +371,35 @@ export class FumaSessionService implements SessionService {
       }
     }
 
+    console.log('session- after jwt', {
+      needsRefresh,
+      sessionExpired,
+      isJWT,
+      payload,
+    });
+
+    // Device validation for all token types (JWT uses payload, legacy uses stored device info)
+    if (deviceInfo && this.options.deviceValidator) {
+      let deviceToValidate: Record<string, any> | null = null;
+
+      if (isJWT && payload?.deviceInfo) {
+        // JWT tokens store device info in payload
+        deviceToValidate = payload.deviceInfo;
+      } else if (storedDeviceInfo) {
+        // Legacy tokens store device info in session_devices table
+        deviceToValidate = storedDeviceInfo;
+      }
+
+      if (deviceToValidate) {
+        if (!(await this.options.deviceValidator(deviceToValidate, deviceInfo))) {
+          console.log(`Device validation failed for ${isJWT ? 'JWT' : 'legacy'} token`);
+          return { subject: null, token: null };
+        }
+      }
+    }
+
     // Handle expired session or token that needs refresh
-    if ((sessionExpired || !isJWT) && refreshToken && this.jwtService) {
+    if ((sessionExpired || needsRefresh) && refreshToken && this.jwtService) {
       try {
         // Attempt to refresh the token pair
         const newTokenPair =
@@ -378,11 +443,7 @@ export class FumaSessionService implements SessionService {
 
             await orm.create('session_devices', {
               session_id: newSessionId,
-              fingerprint: (deviceInfo as any).fingerprint,
-              user_agent: (deviceInfo as any).user_agent,
-              ip_address: (deviceInfo as any).ip_address,
-              is_trusted: (deviceInfo as any).is_trusted,
-              device_name: (deviceInfo as any).device_name,
+              device_info: (deviceInfo as any).device_info, // Copy JSON as-is
             });
           }
 
@@ -426,6 +487,7 @@ export class FumaSessionService implements SessionService {
 
         const resolver = this.resolvers.get(finalSubjectType);
         if (!resolver) {
+          console.log('resolver not found', finalSubjectType);
           return {
             subject: null,
             token: updatedToken,
@@ -454,137 +516,22 @@ export class FumaSessionService implements SessionService {
           payload,
         };
       } catch (refreshError) {
+        console.log('refresh failed', refreshError);
+        await orm.deleteMany('sessions', {
+          where: (b: any) => b('token', '=', accessToken),
+        });
+        await this.jwtService.revokeRefreshToken(refreshToken, 'security');
         // Refresh failed, return null (session invalid)
         return { subject: null, token: null };
       }
     }
 
-    // Handle proactive refresh (session valid but about to expire)
-    if (
-      needsRefresh &&
-      !sessionExpired &&
-      refreshToken &&
-      this.jwtService &&
-      isJWT
-    ) {
-      try {
-        const newTokenPair =
-          await this.jwtService.refreshAccessToken(refreshToken);
-        const newPayload = await this.jwtService.verifyJWT(
-          newTokenPair.accessToken,
-        );
-        const newExpiresAt = newPayload.exp
-          ? new Date(newPayload.exp * 1000)
-          : null;
-
-        // Delete old session and create new one
-        await orm.deleteMany('sessions', {
-          where: (b: any) => b('token', '=', accessToken),
-        });
-
-        const newSession = await orm.create('sessions', {
-          subject_type: (session as any).subject_type,
-          subject_id: (session as any).subject_id,
-          token: newTokenPair.accessToken,
-          expires_at: newExpiresAt,
-        });
-
-        // Transfer enhanced session data if needed
-        if (this.enhancedMode) {
-          const oldSessionId = (session as any).id;
-          const newSessionId = newSession.id || newTokenPair.accessToken;
-
-          // Transfer device info and metadata (same logic as above)
-          const deviceInfo = await orm.findFirst('session_devices', {
-            where: (b: any) => b('session_id', '=', oldSessionId),
-          });
-
-          if (deviceInfo) {
-            await orm.deleteMany('session_devices', {
-              where: (b: any) => b('session_id', '=', oldSessionId),
-            });
-
-            await orm.create('session_devices', {
-              session_id: newSessionId,
-              fingerprint: (deviceInfo as any).fingerprint,
-              user_agent: (deviceInfo as any).user_agent,
-              ip_address: (deviceInfo as any).ip_address,
-              is_trusted: (deviceInfo as any).is_trusted,
-              device_name: (deviceInfo as any).device_name,
-            });
-          }
-
-          const metadataRows = await orm.findMany('session_metadata', {
-            where: (b: any) => b('session_id', '=', oldSessionId),
-          });
-
-          if (metadataRows.length > 0) {
-            await orm.deleteMany('session_metadata', {
-              where: (b: any) => b('session_id', '=', oldSessionId),
-            });
-
-            for (const row of metadataRows) {
-              await orm.create('session_metadata', {
-                session_id: newSessionId,
-                key: (row as any).key,
-                value: (row as any).value,
-              });
-            }
-          }
-        }
-
-        // Update variables and continue with normal flow
-        payload = newPayload;
-        session = newSession;
-
-        const updatedToken =
-          typeof token === 'string'
-            ? newTokenPair.accessToken
-            : {
-                accessToken: newTokenPair.accessToken,
-                refreshToken: newTokenPair.refreshToken,
-              };
-
-        const finalSubjectType = payload.subject_type;
-        const finalSubjectId = payload.sub;
-
-        const resolver = this.resolvers.get(finalSubjectType);
-        if (!resolver) {
-          return {
-            subject: null,
-            token: updatedToken,
-            type: 'jwt',
-            payload,
-          };
-        }
-
-        const subject = await resolver.getById(finalSubjectId, orm);
-        if (!subject) {
-          return {
-            subject: null,
-            token: updatedToken,
-            type: 'jwt',
-            payload,
-          };
-        }
-
-        const safeSubject = resolver.sanitize
-          ? resolver.sanitize(subject)
-          : subject;
-        return {
-          subject: safeSubject,
-          token: updatedToken,
-          type: 'jwt',
-          payload,
-        };
-      } catch (refreshError) {
-        // If proactive refresh fails, continue with current token
-        console.warn('Failed to proactively refresh token:', refreshError);
-      }
-    }
-
     // Normal flow - session is valid and not expiring soon
     if (sessionExpired) {
+      // delete the expired session
+      await orm.deleteMany('sessions', {
+        where: (b: any) => b('token', '=', accessToken),
+      });
       return { subject: null, token: null };
     }
 
@@ -600,6 +547,10 @@ export class FumaSessionService implements SessionService {
 
     const resolver = this.resolvers.get(finalSubjectType);
     if (!resolver) {
+      console.log(
+        'resolver not found - after not exp and not ref',
+        finalSubjectType,
+      );
       return {
         subject: null,
         token: token,
@@ -609,7 +560,9 @@ export class FumaSessionService implements SessionService {
     }
 
     const subject = await resolver.getById(finalSubjectId, orm);
+    console.log('subject', subject);
     if (!subject) {
+      console.log('subject not found - after not exp and not ref', subject);
       return { subject: null, token, type: isJWT ? 'jwt' : 'legacy', payload };
     }
 

@@ -140,7 +140,6 @@ ReAuth follows a clean separation of concerns with three distinct layers:
 ### Example Applications
 
 - **`hono-test`** - HTTP protocol integration demonstration with Hono framework
-
   - Shows core engine + HTTP adapter integration
   - SQLite database setup and plugin configuration
   - Authentication flow examples
@@ -163,6 +162,73 @@ All packages support dual ESM/CJS builds for universal compatibility across Java
 - **💉 Dependency Injection** - Clean architecture using Awilix container
 - **✅ Type Safety** - Full TypeScript support with comprehensive type definitions
 - **📋 Standard Schema** - Universal validation using Standard Schema specification
+- **🔄 Schema Versioning** - Built-in support for incremental schema evolution and migrations
+
+## 📚 Schema Versioning
+
+ReAuth supports incremental schema versioning, allowing you to gradually add authentication methods over time without breaking existing implementations.
+
+### Quick Example
+
+```typescript
+import { reauthDb, extendSchemaVersion, reauthDbVersions } from '@re-auth/reauth';
+import { emailPasswordSchema } from '@re-auth/reauth/plugins/email-password';
+import { jwtSchema } from '@re-auth/reauth/services';
+import { sessionSchema } from '@re-auth/reauth/plugins/session';
+import { usernamePasswordSchema } from '@re-auth/reauth/plugins/username';
+
+// Version 1.0.1 - Initial release with email authentication
+const { schema: v1, plugins: v1Plugins } = reauthDb('1.0.1', [emailPasswordSchema, jwtSchema, sessionSchema]);
+
+// Version 1.0.2 - Add username authentication
+// Only specify NEW schemas, existing ones are inherited
+const { schema: v2, plugins: v2Plugins } = extendSchemaVersion(
+  v1Plugins, // Pass the plugins array from v1
+  '1.0.2',
+  [usernamePasswordSchema],
+);
+
+// Register all versions for automatic migration
+export const factory = reauthDbVersions([v1, v2]);
+```
+
+### Running Migrations
+
+ReAuth includes a CLI tool to run database migrations:
+
+```bash
+# Run migrations using the CLI
+npx reauth-migrate --client ./src/reauth/auth.ts
+
+# Or add to your package.json scripts
+{
+  "scripts": {
+    "migrate": "reauth-migrate --client ./src/reauth/auth.ts"
+  }
+}
+
+# Then run
+npm run migrate
+```
+
+The CLI will:
+
+1. Dynamically import your client configuration
+2. Detect the current database version
+3. Run any pending migrations automatically
+
+### Benefits
+
+- **Incremental Changes**: Add new authentication methods without redefining existing ones
+- **Clear History**: Each version shows exactly what was added
+- **Type Safe**: Full TypeScript support for schema definitions
+- **Automatic Migrations**: FumaDB handles database migrations between versions
+- **CLI Integration**: Simple command-line tool for running migrations
+
+For detailed documentation, see:
+
+- [Schema Versioning Guide](./packages/reauth/SCHEMA_VERSIONING.md)
+- [CLI Migration Documentation](./packages/reauth/CLI_MIGRATION.md)
 
 ## 🛠️ Development
 

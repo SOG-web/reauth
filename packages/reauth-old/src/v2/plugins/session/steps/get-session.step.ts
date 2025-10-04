@@ -9,7 +9,7 @@ export type GetSessionInput = {
 
 export const getSessionValidation = type({
   token: 'string',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 type Session = {
@@ -67,7 +67,7 @@ export const getSessionStep: AuthStep<
       }),
       metadata: 'object?',
     }),
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, others } = input;

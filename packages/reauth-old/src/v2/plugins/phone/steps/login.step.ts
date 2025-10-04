@@ -17,7 +17,7 @@ export type LoginInput = {
 export const loginValidation = type({
   phone: phoneSchema,
   password: passwordSchema,
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const loginStep: AuthStep<LoginInput, AuthOutput, PhonePasswordConfig> =
@@ -45,7 +45,7 @@ export const loginStep: AuthStep<LoginInput, AuthOutput, PhonePasswordConfig> =
         verified: 'boolean',
         profile: 'object?',
       }),
-      'others?': 'object',
+      'others?': 'object | undefined',
     }),
     async run(input, ctx) {
       const { phone, password, others } = input;

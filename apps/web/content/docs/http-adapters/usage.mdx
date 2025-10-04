@@ -1,0 +1,444 @@
+---
+title: Express, Hono & Itty-Router Usage
+description: Step-by-step instructions for wiring the ReAuth adapter into Express, Hono, and edge runtimes.
+---
+
+## Express
+
+```ts
+import express from 'express';
+import createReAuthEngine from '@re-auth/reauth';
+import { createExpressAdapter } from '@re-auth/http-adapters';
+import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
+
+const app = express();
+app.use(express.json()); // Required for body parsing
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient,
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        console.log(`Code for ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Create Express adapter with device info extraction
+const adapter = createExpressAdapter(
+  {
+    engine,
+    basePath: '/auth',
+  },
+  false, // exposeIntrospection
+  async (req) => {
+    return {
+      ip: req.ip || req.connection.remoteAddress,
+      userAgent: req.get('User-Agent'),
+      fingerprint: req.get('X-Request-ID'),
+    };
+  },
+);
+
+// Register authentication routes
+app.use('/auth', adapter.createRouter());
+
+// Optional: Enable user middleware for all routes
+app.use(adapter.createUserMiddleware());
+
+// Protected route example
+app.get('/api/profile', (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  res.json({
+    profile: req.user.subject,
+    sessionValid: req.user.valid,
+  });
+});
+
+app.listen(3000, () => {
+  console.log('Server running on http://localhost:3000');
+});
+```
+
+The Express adapter exposes:
+
+- `createRouter(router?, basePath?)` – returns a configured Express `Router` instance
+- `createUserMiddleware()` – middleware that populates `req.user` with current authenticated user
+- `getCurrentUser(req)` – manually check authentication for a specific request
+
+### Session cookies with Express
+
+To issue HTTP-only cookies instead of returning tokens in the response body:
+
+```ts
+const adapter = createExpressAdapter(
+  {
+    engine,
+    cookie: {
+      name: 'reauth-session',
+      refreshTokenName: 'reauth-refresh',
+      options: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 3600, // seconds
+      },
+      refreshOptions: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 86400, // 1 day
+      },
+    },
+  },
+  false,
+  deviceInfoExtractor,
+);
+```
+
+### Security middleware
+
+Add CORS, rate limiting, and security headers:
+
+```ts
+const adapter = createExpressAdapter(
+  {
+    engine,
+    cors: {
+      origin: ['https://app.example.com'],
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'Authorization'],
+    },
+    rateLimit: {
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100,
+      message: 'Too many requests',
+    },
+    security: {
+      helmet: true,
+      sanitizeInput: true,
+    },
+  },
+  false,
+  deviceInfoExtractor,
+);
+```
+
+## Fastify
+
+```ts
+import Fastify from 'fastify';
+import { createFastifyAdapter } from '@re-auth/http-adapters';
+import { auth } from '../auth/engine';
+
+const app = Fastify();
+
+const adapter = createFastifyAdapter({
+  engine: auth,
+  prefix: '/auth',
+});
+
+await app.register(adapter.plugin);
+
+await app.listen({ port: 3000 });
+```
+
+### Hooks
+
+Fastify adapter exposes lifecycle hooks:
+
+```ts
+const adapter = createFastifyAdapter({
+  engine: auth,
+  hooks: {
+    onBeforeHandler: async (request, reply) => {
+      await rateLimiter.consume(request.ip);
+    },
+    onError: (request, reply, error) => {
+      telemetry.capture('reauth.error', { error, path: request.url });
+    },
+  },
+});
+```
+
+## Hono
+
+```ts
+import { Hono } from 'hono';
+import createReAuthEngine from '@re-auth/reauth';
+import { honoReAuth } from '@re-auth/http-adapters';
+import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient,
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        console.log(`Code for ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+const app = new Hono();
+
+// Create Hono adapter with device info extraction
+const adapter = honoReAuth(
+  {
+    engine,
+    basePath: '/auth',
+  },
+  async (c) => {
+    return {
+      ip: c.env?.CF_CONNECTING_IP || c.req.header('x-forwarded-for'),
+      userAgent: c.req.header('user-agent'),
+      fingerprint: c.req.header('cf-ray'),
+      country: c.req.header('cf-ipcountry'),
+    };
+  },
+);
+
+// Register authentication routes
+adapter.registerRoutes(app, '/auth', true); // true = expose introspection
+
+// Optional: Enable user middleware
+app.use('/', adapter.createUserMiddleware());
+
+// Protected route example
+app.get('/api/profile', (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  return c.json({
+    profile: user.subject,
+    sessionValid: user.valid,
+  });
+});
+
+export default app;
+```
+
+The Hono adapter runs in Bun, Cloudflare Workers, Vercel Edge, and other fetch-compatible runtimes.
+
+### Session cookies with Hono
+
+```ts
+const adapter = honoReAuth(
+  {
+    engine,
+    cookie: {
+      name: 'reauth-session',
+      refreshTokenName: 'reauth-refresh',
+      options: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Lax',
+        path: '/',
+        maxAge: 3600,
+      },
+      refreshOptions: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Lax',
+        path: '/',
+        maxAge: 86400,
+      },
+    },
+  },
+  deviceInfoExtractor,
+);
+```
+
+## Itty-Router (Generic Fetch)
+
+Itty-router provides a generic fetch adapter optimized for Cloudflare Workers, edge runtimes, and serverless environments.
+
+```ts
+import { AutoRouter } from 'itty-router';
+import createReAuthEngine from '@re-auth/reauth';
+import { reAuthRouter, createReAuthRouter } from '@re-auth/http-adapters';
+import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient,
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        console.log(`Code for ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Method 1: Create adapter and register on existing router
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+  },
+  async (request) => {
+    return {
+      ip: request.headers.get('CF-Connecting-IP'),
+      userAgent: request.headers.get('User-Agent'),
+      fingerprint: request.headers.get('CF-Ray'),
+      country: request.headers.get('CF-IPCountry'),
+    };
+  },
+);
+
+const router = AutoRouter();
+adapter.configureCORS(router, { origin: true, credentials: true });
+adapter.registerRoutes(router, '/auth', true);
+
+// Method 2: Create router and adapter together
+const { router: authRouter, adapter: authAdapter } = createReAuthRouter(
+  {
+    basePath: '/auth',
+    exposeIntrospection: true,
+    corsOptions: { origin: true, credentials: true },
+  },
+  { engine },
+  async (request) => ({
+    ip: request.headers.get('CF-Connecting-IP'),
+    userAgent: request.headers.get('User-Agent'),
+  }),
+);
+
+// Export for Cloudflare Workers
+export default {
+  fetch: authRouter.fetch,
+};
+```
+
+### Custom middleware with itty-router
+
+```ts
+const adapter = reAuthRouter({ engine }, deviceInfoExtractor);
+const router = AutoRouter();
+
+// Add custom middleware
+adapter.registerMiddleware(router, {
+  before: [
+    // Logging middleware
+    async (request) => {
+      console.log(`${request.method} ${request.url}`);
+    },
+    // Rate limiting
+    async (request) => {
+      // Implement rate limiting
+    },
+  ],
+  finally: [
+    // Response logging
+    async (response) => {
+      console.log(`Response status: ${response.status}`);
+    },
+  ],
+});
+
+// Configure CORS and routes
+adapter.configureCORS(router, { origin: true });
+adapter.registerRoutes(router, '/auth');
+
+export default router;
+```
+
+### User middleware with itty-router
+
+```ts
+const adapter = reAuthRouter({ engine }, deviceInfoExtractor);
+const router = AutoRouter();
+
+// Add user middleware
+const userMiddleware = adapter.createUserMiddleware();
+router.before = router.before || [];
+router.before.unshift(userMiddleware);
+
+// Register routes
+adapter.registerRoutes(router);
+
+// Protected route
+router.get('/profile', async (request) => {
+  if (!request.user) {
+    return error(401, { error: 'Authentication required' });
+  }
+
+  return json({ profile: request.user.subject });
+});
+
+export default router;
+```
+
+## Error formatting
+
+All adapters return standardized error responses. The error format is built-in and consistent across all adapters:
+
+```ts
+// Error response
+const adapter = createExpressAdapter({ engine }, false, deviceInfoExtractor);
+
+// All errors return this format automatically:
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid email format",
+    "details": { "field": "email" }
+  },
+  "meta": {
+    "timestamp": "2025-10-03T12:00:00.000Z"
+  }
+}
+```
+
+For custom error handling, use framework-specific error middleware:
+
+```ts
+// Express
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  // Error is already formatted by adapter
+  res.status(err.statusCode || 500).json(err);
+});
+
+// Hono
+app.onError((err, c) => {
+  console.error('Error:', err);
+  return c.json(
+    {
+      success: false,
+      error: {
+        code: 'ERROR',
+        message: err.message,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    },
+    err.status || 500,
+  );
+});
+
+// Itty-router
+router.finally.push(async (response) => {
+  if (response.status >= 400) {
+    console.error('Error response:', response);
+  }
+  return response;
+});
+```

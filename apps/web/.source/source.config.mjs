@@ -1,0 +1,77 @@
+// source.config.ts
+import { defineDocs, defineConfig } from "fumadocs-mdx/config";
+import { transformerTwoslash } from "fumadocs-twoslash";
+import { createFileSystemTypesCache } from "fumadocs-twoslash/cache-fs";
+import remarkMath from "remark-math";
+import { remarkTypeScriptToJavaScript } from "fumadocs-docgen/remark-ts2js";
+import rehypeKatex from "rehype-katex";
+import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
+import {
+  rehypeCodeDefaultOptions,
+  remarkSteps
+} from "fumadocs-core/mdx-plugins";
+import { remarkAutoTypeTable } from "fumadocs-typescript";
+var docs = defineDocs({
+  dir: "content/docs",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true
+    }
+  }
+});
+var source_config_default = defineConfig({
+  mdxOptions: {
+    rehypeCodeOptions: {
+      lazy: true,
+      experimentalJSEngine: true,
+      langs: ["ts", "js", "html", "tsx", "mdx"],
+      inline: "tailing-curly-colon",
+      themes: {
+        light: "catppuccin-latte",
+        dark: "catppuccin-mocha"
+      },
+      transformers: [
+        ...rehypeCodeDefaultOptions.transformers ?? [],
+        transformerTwoslash({
+          typesCache: createFileSystemTypesCache()
+        }),
+        {
+          name: "@shikijs/transformers:remove-notation-escape",
+          code(hast) {
+            function replace(node) {
+              if (node.type === "text") {
+                node.value = node.value.replace("[\\!code", "[!code");
+              } else if ("children" in node) {
+                for (const child of node.children) {
+                  replace(child);
+                }
+              }
+            }
+            replace(hast);
+            return hast;
+          }
+        }
+      ]
+    },
+    remarkCodeTabOptions: {
+      parseMdx: true
+    },
+    remarkNpmOptions: {
+      persist: {
+        id: "package-manager"
+      }
+    },
+    remarkPlugins: [
+      remarkSteps,
+      remarkMath,
+      remarkAutoTypeTable,
+      remarkTypeScriptToJavaScript,
+      remarkMdxMermaid
+    ],
+    rehypePlugins: (v) => [rehypeKatex, ...v]
+  }
+});
+export {
+  source_config_default as default,
+  docs
+};

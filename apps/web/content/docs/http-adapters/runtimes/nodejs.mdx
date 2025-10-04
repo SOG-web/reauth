@@ -1,0 +1,602 @@
+---
+title: Node.js Runtime
+description: Deploy ReAuth on Node.js servers with itty-router and WHATWG Fetch adapter.
+---
+
+Node.js is the traditional JavaScript runtime that ReAuth fully supports through the `@whatwg-node/server` adapter. This enables you to use itty-router's modern Fetch API with Node.js's built-in HTTP server.
+
+## Quick Start
+
+```ts
+import { createServer } from 'node:http';
+import { createServerAdapter } from '@whatwg-node/server';
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql', // or 'sqlite', 'mysql'
+    db: kysely,
+  }),
+);
+
+// Create ReAuth engine
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Send email via your provider
+        console.log(`Email to ${email}: ${code}`);
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+// Create itty-router adapter
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+    cors: {
+      origin: ['http://localhost:3000'],
+      credentials: true,
+    },
+  },
+  async (request) => {
+    // Extract device info
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded ? forwarded.split(',')[0] : 'unknown';
+
+    return {
+      ip,
+      userAgent: request.headers.get('User-Agent'),
+      fingerprint: request.headers.get('x-fingerprint'),
+    };
+  },
+);
+
+// Create router
+const router = adapter.createRouter('/auth', true);
+
+// Create Node.js server with WHATWG adapter
+const ittyServer = createServerAdapter(router.fetch);
+const httpServer = createServer(ittyServer);
+
+httpServer.listen(3001, () => {
+  console.log('ReAuth server running on http://localhost:3001');
+});
+```
+
+## PostgreSQL with Node.js
+
+PostgreSQL is a popular choice for production Node.js applications:
+
+```ts
+import { Pool } from 'pg';
+import { Kysely, PostgresDialect } from 'kysely';
+
+// Create connection pool
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  database: process.env.DB_NAME || 'reauth',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD,
+  max: 20, // Max connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// Setup Kysely
+const db = new Kysely<Database>({
+  dialect: new PostgresDialect({ pool }),
+});
+
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql',
+    db,
+  }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Production email service
+        await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email }] }],
+            from: { email: 'auth@example.com' },
+            subject: type === 'verify' ? 'Verify Email' : 'Reset Password',
+            content: [
+              {
+                type: 'text/plain',
+                value: `Your verification code: ${code}`,
+              },
+            ],
+          }),
+        });
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+```
+
+## Production Configuration
+
+### Environment Variables
+
+```bash
+# .env
+NODE_ENV=production
+PORT=3001
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=reauth
+DB_USER=postgres
+DB_PASSWORD=your-password
+
+# CORS
+ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+
+# Email
+SENDGRID_API_KEY=your-api-key
+
+# Security
+JWT_SECRET=your-jwt-secret
+SESSION_SECRET=your-session-secret
+```
+
+### Production Server
+
+```ts
+import { createServer } from 'node:http';
+import { createServerAdapter } from '@whatwg-node/server';
+import { reAuthRouter } from '@re-auth/http-adapters';
+import createReAuthEngine from '@re-auth/reauth';
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
+  plugins: [
+    emailPasswordPlugin({
+      sendCode: async (subject, code, email, type) => {
+        // Your email service
+      },
+      verifyEmail: true,
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
+});
+
+const adapter = reAuthRouter(
+  {
+    engine,
+    basePath: '/auth',
+    cors: {
+      origin: process.env.ALLOWED_ORIGINS?.split(',') || [],
+      credentials: true,
+    },
+    rateLimit: {
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+    },
+    security: {
+      helmet: true,
+    },
+  },
+  async (request) => ({
+    ip: request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+    userAgent: request.headers.get('User-Agent'),
+  }),
+);
+
+const router = adapter.createRouter('/auth', true);
+const ittyServer = createServerAdapter(router.fetch);
+const httpServer = createServer(ittyServer);
+
+const PORT = parseInt(process.env.PORT || '3001');
+
+httpServer.listen(PORT, () => {
+  console.log(`ReAuth production server on http://localhost:${PORT}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing server...');
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, closing server...');
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+```
+
+## HTTPS Support
+
+Enable HTTPS for secure production deployments:
+
+```ts
+import { createServer as createHttpsServer } from 'node:https';
+import { readFileSync } from 'node:fs';
+
+const options = {
+  key: readFileSync('./certs/private-key.pem'),
+  cert: readFileSync('./certs/certificate.pem'),
+};
+
+const ittyServer = createServerAdapter(router.fetch);
+const httpsServer = createHttpsServer(options, ittyServer);
+
+httpsServer.listen(443, () => {
+  console.log('ReAuth HTTPS server on https://localhost:443');
+});
+```
+
+## Custom Middleware
+
+Add custom middleware for logging, monitoring, etc.:
+
+```ts
+const router = adapter.createRouter('/auth', true);
+
+// Request logging
+adapter.registerMiddleware(router, {
+  before: [
+    async (request) => {
+      const startTime = Date.now();
+      console.log(
+        `[${new Date().toISOString()}] ${request.method} ${request.url}`,
+      );
+      request.startTime = startTime;
+    },
+  ],
+  finally: [
+    async (response, request) => {
+      const duration = Date.now() - request.startTime;
+      console.log(
+        `[${new Date().toISOString()}] ${request.method} ${request.url} - ${response.status} (${duration}ms)`,
+      );
+    },
+  ],
+});
+
+// Error tracking
+adapter.registerMiddleware(router, {
+  finally: [
+    async (response, request) => {
+      if (response.status >= 500) {
+        // Send to error tracking service
+        await fetch('https://error-tracking.example.com/api/errors', {
+          method: 'POST',
+          body: JSON.stringify({
+            status: response.status,
+            url: request.url,
+            method: request.method,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+    },
+  ],
+});
+```
+
+## Docker Deployment
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy source
+COPY . .
+
+# Expose port
+EXPOSE 3001
+
+# Start server
+CMD ["node", "dist/index.js"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  reauth:
+    build: .
+    ports:
+      - '3001:3001'
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=reauth
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=reauth
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+```
+
+## Process Management with PM2
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start server
+pm2 start dist/index.js --name reauth
+
+# Monitor
+pm2 monit
+
+# Logs
+pm2 logs reauth
+
+# Restart
+pm2 restart reauth
+```
+
+```js
+// ecosystem.config.js
+module.exports = {
+  apps: [
+    {
+      name: 'reauth',
+      script: './dist/index.js',
+      instances: 'max',
+      exec_mode: 'cluster',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3001,
+      },
+      error_file: './logs/err.log',
+      out_file: './logs/out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+  ],
+};
+```
+
+## Load Balancing
+
+### Nginx Reverse Proxy
+
+```nginx
+upstream reauth_backend {
+    least_conn;
+    server localhost:3001;
+    server localhost:3002;
+    server localhost:3003;
+}
+
+server {
+    listen 80;
+    server_name auth.example.com;
+
+    location /auth {
+        proxy_pass http://reauth_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+## Testing
+
+```ts
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+import { createServer } from 'node:http';
+
+let server;
+
+beforeAll(() => {
+  const ittyServer = createServerAdapter(router.fetch);
+  server = createServer(ittyServer);
+  server.listen(3002);
+});
+
+afterAll(() => {
+  server.close();
+});
+
+describe('ReAuth API', () => {
+  test('POST /auth/email-password/register', async () => {
+    const response = await fetch(
+      'http://localhost:3002/auth/email-password/register',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'test@example.com',
+          password: 'SecurePass123!',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.success).toBe(true);
+  });
+});
+```
+
+## Monitoring
+
+### Health Check Endpoint
+
+```ts
+router.get('/auth/health', async () => {
+  try {
+    // Check database connection
+    await db.selectFrom('users').select('id').limit(1).execute();
+
+    return Response.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        status: 'unhealthy',
+        error: error.message,
+      },
+      { status: 503 },
+    );
+  }
+});
+```
+
+### Metrics
+
+```ts
+let requestCount = 0;
+let errorCount = 0;
+
+adapter.registerMiddleware(router, {
+  before: [async () => requestCount++],
+  finally: [
+    async (response) => {
+      if (response.status >= 400) errorCount++;
+    },
+  ],
+});
+
+router.get('/auth/metrics', () => {
+  return Response.json({
+    requests: requestCount,
+    errors: errorCount,
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+  });
+});
+```
+
+## Best Practices
+
+1. **Connection pooling**: Configure appropriate pool sizes for your database
+2. **Graceful shutdown**: Handle SIGTERM/SIGINT signals properly
+3. **Process management**: Use PM2 or similar for clustering and auto-restart
+4. **Reverse proxy**: Use Nginx or similar for SSL termination and load balancing
+5. **Health checks**: Implement comprehensive health check endpoints
+6. **Monitoring**: Add logging, metrics, and error tracking
+7. **Security**: Use HTTPS, secure headers, and rate limiting
+
+## Troubleshooting
+
+### Port Already in Use
+
+```bash
+# Find process
+lsof -i :3001
+
+# Kill process
+kill -9 <PID>
+```
+
+### Database Connection Pool Exhausted
+
+Increase pool size or check for connection leaks:
+
+```ts
+const pool = new Pool({
+  max: 50, // Increase max connections
+  idleTimeoutMillis: 10000,
+});
+```
+
+### Memory Leaks
+
+Monitor with Node.js profiler:
+
+```bash
+node --inspect dist/index.js
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="./bun"
+    title="Bun Runtime"
+    description="Deploy ReAuth on Bun for improved performance."
+  />
+  <Card
+    href="./nextjs"
+    title="Next.js Integration"
+    description="Integrate ReAuth into Next.js applications."
+  />
+  <Card
+    href="../usage"
+    title="Usage Examples"
+    description="Explore more framework-specific examples."
+  />
+</Cards>

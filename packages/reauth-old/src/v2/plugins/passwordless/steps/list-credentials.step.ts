@@ -11,7 +11,7 @@ export type ListCredentialsInput = {
 export const listCredentialsValidation = type({
   token: 'string',
   include_inactive: 'boolean?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const listCredentialsStep: AuthStep<
@@ -53,7 +53,7 @@ export const listCredentialsStep: AuthStep<
         expires_at: 'string',
       }),
     ],
-    'others?': 'object',
+    'others?': 'object | undefined',
   }),
   async run(input, ctx) {
     const { token, include_inactive = false, others } = input;

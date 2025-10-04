@@ -26,7 +26,7 @@ export const registerWebAuthnValidation = type({
   counter: 'number?',
   transports: 'string[]?',
   name: 'string?',
-  others: 'object?',
+  'others?': 'object | undefined',
 });
 
 export const registerWebAuthnStep: AuthStep<
@@ -65,7 +65,7 @@ export const registerWebAuthnStep: AuthStep<
       created_at: 'string',
       transports: 'string[]',
     }),
-    'others?': 'object',
+    'others?': 'object | undefined',
     'token?': tokenType,
   }),
   async run(input, ctx) {
