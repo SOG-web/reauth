@@ -23,6 +23,7 @@ export type LogoutAllOutput = AuthOutput & {
 
 export const logoutAllStep: AuthStep<
   SessionConfig,
+  'logout-all',
   LogoutAllInput,
   LogoutAllOutput
 > = {

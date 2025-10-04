@@ -18,6 +18,7 @@ export const verifyPhoneValidation = type({
 
 export const verifyPhoneStep: AuthStep<
   PhonePasswordConfig,
+  'verify-phone',
   VerifyPhoneInput,
   AuthOutput
 > = {

@@ -23,6 +23,7 @@ export const resetPasswordValidation = type({
 
 export const resetPasswordStep: AuthStep<
   EmailPasswordConfig,
+  'reset-password',
   ResetPasswordInput,
   AuthOutput
 > = {

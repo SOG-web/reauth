@@ -25,6 +25,7 @@ export type GetJWKSOutput = {
 
 export const getJWKSStep: AuthStep<
   JWTPluginConfig,
+  'get-jwks',
   GetJWKSInput,
   GetJWKSOutput
 > = {

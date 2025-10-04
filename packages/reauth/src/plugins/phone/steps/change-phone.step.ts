@@ -27,6 +27,7 @@ export const changePhoneValidation = type({
 
 export const changePhoneStep: AuthStep<
   PhonePasswordConfig,
+  'change-phone',
   ChangePhoneInput,
   AuthOutput
 > = {

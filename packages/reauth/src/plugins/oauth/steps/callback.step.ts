@@ -23,6 +23,7 @@ export const callbackOAuthValidation = type({
 
 export const callbackOAuthStep: AuthStep<
   OAuthPluginConfig,
+  'callback',
   CallbackOAuthInput,
   AuthOutput
 > = {

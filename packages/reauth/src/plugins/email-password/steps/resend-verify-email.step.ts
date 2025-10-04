@@ -15,6 +15,7 @@ export const resendVerificationValidation = type({
 
 export const resendVerificationStep: AuthStep<
   EmailPasswordConfig,
+  'resend-verify-email',
   ResendVerificationInput,
   AuthOutput
 > = {

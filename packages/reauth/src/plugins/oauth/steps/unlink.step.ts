@@ -14,6 +14,7 @@ export const unlinkOAuthValidation = type({
 
 export const unlinkOAuthStep: AuthStep<
   OAuthPluginConfig,
+  'unlink',
   UnlinkOAuthInput,
   AuthOutput
 > = {
@@ -52,7 +53,7 @@ export const unlinkOAuthStep: AuthStep<
         where: (b) =>
           b.and(
             b('subject_id', '=', entity.id),
-            b('provider', '=', `${providerName}-oauth`)
+            b('provider', '=', `${providerName}-oauth`),
           ),
       });
 
@@ -79,10 +80,12 @@ export const unlinkOAuthStep: AuthStep<
         where: (b) => b('id', '=', entity.id),
       });
 
-      const serializedEntity = updatedEntity ? {
-        id: updatedEntity.id,
-        ...updatedEntity,
-      } : entity;
+      const serializedEntity = updatedEntity
+        ? {
+            id: updatedEntity.id,
+            ...updatedEntity,
+          }
+        : entity;
 
       return {
         success: true,

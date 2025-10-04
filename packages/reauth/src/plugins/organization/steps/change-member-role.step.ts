@@ -18,6 +18,7 @@ export const changeMemberRoleValidation = type({
 
 export const changeMemberRoleStep: AuthStep<
   OrganizationConfig,
+  'change-member-role',
   ChangeMemberRoleInput,
   ChangeMemberRoleOutput
 > = {

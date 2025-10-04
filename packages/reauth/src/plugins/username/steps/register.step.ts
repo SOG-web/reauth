@@ -25,6 +25,7 @@ export const registerValidation = type({
 
 export const registerStep: AuthStep<
   UsernamePasswordConfig,
+  'register',
   RegisterInput,
   AuthOutput
 > = {

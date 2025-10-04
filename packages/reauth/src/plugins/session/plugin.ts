@@ -47,7 +47,7 @@ function validateSessionConfig(config: Partial<SessionConfig>): string[] {
   return errors;
 }
 
-export const baseSessionPlugin: AuthPlugin<SessionConfig> = {
+export const baseSessionPlugin: AuthPlugin<SessionConfig, 'session'> = {
   name: 'session',
   initialize(engine) {
     // Enable enhanced session features in the core session service
@@ -167,13 +167,13 @@ const sessionPlugin = (
     name: string;
     override: Partial<AuthStep<SessionConfig>>;
   }>,
-): AuthPlugin<SessionConfig> =>
-  createAuthPlugin<SessionConfig>(baseSessionPlugin, {
+): AuthPlugin<SessionConfig, 'session'> =>
+  createAuthPlugin<SessionConfig, 'session'>(baseSessionPlugin, {
     config,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
       return validateSessionConfig(config);
     },
-  });
+  }) as AuthPlugin<SessionConfig, 'session'>;
 
 export default sessionPlugin;

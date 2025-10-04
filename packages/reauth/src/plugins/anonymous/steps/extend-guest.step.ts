@@ -21,6 +21,7 @@ export const extendGuestValidation = type({
 
 export const extendGuestStep: AuthStep<
   AnonymousConfig,
+  'extend-guest',
   ExtendGuestInput,
   AuthOutput
 > = {

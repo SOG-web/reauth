@@ -17,6 +17,7 @@ export const sendResetPasswordValidation = type({
 
 export const sendResetPasswordStep: AuthStep<
   PhonePasswordConfig,
+  'send-reset-password',
   SendResetPasswordInput,
   AuthOutput
 > = {

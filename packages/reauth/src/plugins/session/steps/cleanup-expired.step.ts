@@ -28,6 +28,7 @@ export type CleanupExpiredOutput = AuthOutput & {
 
 export const cleanupExpiredStep: AuthStep<
   SessionConfig,
+  'cleanup-expired',
   CleanupExpiredInput,
   CleanupExpiredOutput
 > = {

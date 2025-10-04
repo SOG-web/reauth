@@ -37,6 +37,7 @@ export const createApiKeyValidation = type({
 
 export const createApiKeyStep: AuthStep<
   ApiKeyConfig,
+  'create-api-key',
   CreateApiKeyStepInput,
   AuthOutput & { data?: CreateApiKeyOutput }
 > = {

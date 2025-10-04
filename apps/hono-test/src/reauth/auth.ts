@@ -9,6 +9,7 @@ import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import SQLite from 'better-sqlite3';
 import { Kysely, SqliteDialect } from 'kysely';
 import emailPasswordPlugin, {
+  baseEmailPasswordPlugin,
   emailPasswordSchema,
 } from '@re-auth/reauth/plugins/email-password';
 import jwtPlugin from '@re-auth/reauth/plugins/jwt';
@@ -71,22 +72,23 @@ export default createReAuthEngine({
     },
   },
   plugins: [
+    baseEmailPasswordPlugin,
     sessionPlugin({}),
-    emailPasswordPlugin({
-      sendCode(subject, code, email, type) {
-        console.log(subject, code, email, type);
-        return Promise.resolve();
-      },
-      verifyEmail: true,
-    }),
-    jwtPlugin({
-      issuer: 'https://example.com',
-      keyRotationIntervalDays: 30,
-      keyGracePeriodDays: 7,
-      defaultAccessTokenTtlSeconds: 3600,
-      defaultRefreshTokenTtlSeconds: 86400,
-      enableRefreshTokenRotation: true,
-    }),
+    // emailPasswordPlugin({
+    //   sendCode(subject, code, email, type) {
+    //     console.log(subject, code, email, type);
+    //     return Promise.resolve();
+    //   },
+    //   verifyEmail: true,
+    // }),
+    // jwtPlugin({
+    //   issuer: 'https://example.com',
+    //   keyRotationIntervalDays: 30,
+    //   keyGracePeriodDays: 7,
+    //   defaultAccessTokenTtlSeconds: 3600,
+    //   defaultRefreshTokenTtlSeconds: 86400,
+    //   enableRefreshTokenRotation: true,
+    // }),
   ],
   authHooks: [
     // {
@@ -140,4 +142,5 @@ export default createReAuthEngine({
         storedDeviceInfo.trusted === true,
     );
   },
+  sessionHooks: [],
 });

@@ -26,6 +26,7 @@ export const convertGuestValidation = type({
 
 export const convertGuestStep: AuthStep<
   AnonymousConfig,
+  'convert-guest',
   ConvertGuestInput,
   AuthOutput
 > = {
@@ -249,7 +250,7 @@ export const convertGuestStep: AuthStep<
       try {
         regOut = await ctx.engine.executeStep(
           targetPlugin,
-          targetDef.step,
+          targetDef.step as never,
           mappedInput,
         );
       } catch (error) {

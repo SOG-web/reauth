@@ -9,11 +9,11 @@ import { sendResetStep } from './steps/send-reset-password.step';
 import { resetPasswordStep } from './steps/reset-password.step';
 import { changePasswordStep } from './steps/change-password.step';
 import { changeEmailStep } from './steps/change-email.step';
-import { createAuthPlugin } from '../../utils/create-plugin';
+import { createAuthPlugin, createAuthPlugin2 } from '../../utils/create-plugin';
 import { cleanupExpiredCodes } from './utils';
 
-export const baseEmailPasswordPlugin: AuthPlugin<EmailPasswordConfig> = {
-  name: 'email-password',
+export const baseEmailPasswordPlugin = {
+  name: 'email-password' as const,
   initialize(engine) {
     engine.registerSessionResolver('subject', {
       async getById(id: string, orm: OrmLike) {
@@ -79,7 +79,7 @@ export const baseEmailPasswordPlugin: AuthPlugin<EmailPasswordConfig> = {
     resetPasswordStep,
     changePasswordStep,
     changeEmailStep,
-  ],
+  ] as const,
   async getProfile(subjectId, ctx) {
     const orm = await ctx.engine.getOrm();
     // Gather email identities for the subject
@@ -141,7 +141,7 @@ export const baseEmailPasswordPlugin: AuthPlugin<EmailPasswordConfig> = {
     };
   },
   // Background cleanup now handles expired code removal via SimpleCleanupScheduler
-};
+} satisfies AuthPlugin<EmailPasswordConfig, 'email-password'>;
 
 // Export a factory function that creates a configured plugin
 const emailPasswordPlugin = (
@@ -150,8 +150,12 @@ const emailPasswordPlugin = (
     name: string;
     override: Partial<AuthStep<EmailPasswordConfig>>;
   }>,
-): AuthPlugin<EmailPasswordConfig> =>
-  createAuthPlugin<EmailPasswordConfig>(baseEmailPasswordPlugin, {
+) => {
+  const pl = createAuthPlugin2<
+    EmailPasswordConfig,
+    'email-password',
+    AuthPlugin<EmailPasswordConfig, 'email-password'>
+  >(baseEmailPasswordPlugin, {
     config,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -181,6 +185,9 @@ const emailPasswordPlugin = (
 
       return errs.length ? errs : null;
     },
-  });
+  }) satisfies AuthPlugin<EmailPasswordConfig, 'email-password'>;
+
+  return pl;
+};
 
 export default emailPasswordPlugin;

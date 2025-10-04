@@ -22,6 +22,7 @@ export const registerValidation = type({
 
 export const registerStep: AuthStep<
   EmailOrUsernameConfig,
+  'register',
   RegisterInput,
   AuthOutput
 > = {

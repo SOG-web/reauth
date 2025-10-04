@@ -13,7 +13,10 @@ import { getRolesPermissionsStep } from './steps/get-roles-permissions.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredInvitations, cleanupExpiredMemberships } from './utils';
 
-export const baseOrganizationPlugin: AuthPlugin<OrganizationConfig> = {
+export const baseOrganizationPlugin: AuthPlugin<
+  OrganizationConfig,
+  'organization'
+> = {
   name: 'organization',
   initialize(engine) {
     const config = this.config;
@@ -186,8 +189,8 @@ const organizationPlugin = (
     name: string;
     override: Partial<AuthStep<OrganizationConfig>>;
   }>,
-): AuthPlugin<OrganizationConfig> =>
-  createAuthPlugin<OrganizationConfig>(baseOrganizationPlugin, {
+): AuthPlugin<OrganizationConfig, 'organization'> =>
+  createAuthPlugin<OrganizationConfig, 'organization'>(baseOrganizationPlugin, {
     config,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -256,6 +259,6 @@ const organizationPlugin = (
 
       return errs.length ? errs : null;
     },
-  });
+  }) as AuthPlugin<OrganizationConfig, 'organization'>;
 
 export default organizationPlugin;

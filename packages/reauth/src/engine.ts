@@ -22,14 +22,19 @@ import type {
   CleanupTask,
   CleanupScheduler,
   Token,
+  PluginNames,
+  PluginByName,
+  StepsForPlugin,
+  StepInput,
+  StepOutput,
 } from './types';
 
-export type ReAuthConfig = {
+export type ReAuthConfig<P extends AuthPlugin[] = AuthPlugin[]> = {
   dbClient: FumaClient;
-  plugins?: AuthPlugin[];
+  plugins?: P;
   tokenFactory?: () => string;
-  authHooks?: AuthHook[];
-  sessionHooks?: AuthHook[];
+  authHooks: Array<AuthHook<P>>;
+  sessionHooks: Array<AuthHook<P>>;
   enableCleanupScheduler?: boolean; // Default true
   getUserData: (
     subjectId: string,
@@ -41,21 +46,21 @@ export type ReAuthConfig = {
   ) => boolean | Promise<boolean>;
 };
 
-export class ReAuthEngine {
+export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
   private container: ReAuthCradle;
   private sessionResolvers: SessionResolvers;
   private sessionService: SessionService;
   private cleanupScheduler: CleanupScheduler;
-  private plugins: AuthPlugin[] = [];
-  private pluginMap = new Map<string, AuthPlugin>();
-  private authHooks: AuthHook[] = [];
-  private sessionHooks: AuthHook[] = [];
+  private plugins: P[number][] = [];
+  private pluginMap = new Map<PluginNames<P>, P[number]>();
+  private authHooks: Array<AuthHook<P>> = [];
+  private sessionHooks: Array<AuthHook<P>> = [];
   private getUserData: (
     subjectId: string,
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
 
-  constructor(config: ReAuthConfig) {
+  constructor(config: ReAuthConfig<P>) {
     this.container = createContainer({
       injectionMode: InjectionMode.CLASSIC,
       strict: true,
@@ -90,9 +95,9 @@ export class ReAuthEngine {
     }
   }
 
-  private registerPlugin(plugin: AuthPlugin) {
+  private registerPlugin(plugin: P[number]) {
     this.plugins.push(plugin);
-    this.pluginMap.set(plugin.name, plugin);
+    this.pluginMap.set(plugin.name as PluginNames<P>, plugin);
 
     // Set plugin config in cleanup scheduler for task access
     if (plugin.config) {
@@ -213,11 +218,18 @@ export class ReAuthEngine {
     };
   }
 
-  async executeStep(
-    pluginName: string,
-    stepName: string,
-    input: AuthInput,
-  ): Promise<AuthOutput> {
+  getNames() {
+    return Array.from(this.pluginMap.keys());
+  }
+
+  async executeStep<
+    const PN extends PluginNames<P>,
+    const SN extends StepsForPlugin<P, PN>,
+  >(
+    pluginName: PN, // one of the AuthPlugin names in plugin meta array
+    stepName: SN,
+    input: StepInput<P, PN, SN>,
+  ): Promise<StepOutput<P, PN, SN>> {
     const plugin = this.pluginMap.get(pluginName);
     if (!plugin) throw new Error(`Plugin not found: ${pluginName}`);
     const step = (plugin.steps || []).find((s) => s.name === stepName);
@@ -239,27 +251,33 @@ export class ReAuthEngine {
       config: plugin.config,
     };
 
+    let currentInput = input as any;
+
     try {
       // Engine-level before hooks (root hooks)
-      input = await this.executeAuthHooks(
+      currentInput = await this.executeAuthHooks(
         'before',
         pluginName,
         stepName,
-        input,
+        currentInput,
       );
 
       // Plugin root-level before hook
       if (plugin.rootHooks?.before) {
-        const maybeNewInput = await plugin.rootHooks.before(input, ctx, step);
-        if (typeof maybeNewInput !== 'undefined') input = maybeNewInput;
+        const maybeNewInput = await plugin.rootHooks.before(
+          currentInput,
+          ctx,
+          step,
+        );
+        if (typeof maybeNewInput !== 'undefined') currentInput = maybeNewInput;
       }
 
-      await step.hooks?.before?.(input, ctx);
-      const output = await step.run(input, ctx);
+      await step.hooks?.before?.(currentInput, ctx);
+      const output = await step.run(currentInput, ctx);
 
       await step.hooks?.after?.(output, ctx);
       // Plugin root-level after hook
-      let postRootOutput = output;
+      let postRootOutput = output as any;
       if (plugin.rootHooks?.after) {
         const maybeNewOutput = await plugin.rootHooks.after(output, ctx, step);
         if (typeof maybeNewOutput !== 'undefined')
@@ -284,17 +302,17 @@ export class ReAuthEngine {
         }
       }
 
-      return finalOutput as AuthOutput;
+      return finalOutput as StepOutput<P, PN, SN>;
     } catch (err) {
       await step.hooks?.onError?.(err, ctx);
       if (plugin.rootHooks?.onError) {
-        await plugin.rootHooks.onError(err, input, ctx, step);
+        await plugin.rootHooks.onError(err, currentInput, ctx, step);
       }
       await this.executeAuthHooks(
         'onError',
         pluginName,
         stepName,
-        input as unknown as AuthInput,
+        currentInput,
         err,
       );
       throw err;
@@ -302,29 +320,32 @@ export class ReAuthEngine {
   }
 
   // ---------------- Engine-level Hooks APIs ----------------
-  registerAuthHook(hook: AuthHook): this {
+  registerAuthHook(hook: AuthHook<P>): this {
     this.authHooks.push(hook);
     return this;
   }
 
   // Alias for compatibility
-  registerHook(hook: AuthHook): this {
+  registerHook(hook: AuthHook<P>): this {
     return this.registerAuthHook(hook);
   }
 
-  registerSessionHook(hook: AuthHook): this {
+  registerSessionHook(hook: AuthHook<P>): this {
     this.sessionHooks.push(hook);
     return this;
   }
 
-  async executeAuthHooks(
+  async executeAuthHooks<
+    const PN extends PluginNames<P>,
+    const SN extends StepsForPlugin<P, PN>,
+  >(
     type: HooksType,
-    pluginName: string,
-    stepName: string,
-    data: AuthInput | AuthOutput,
+    pluginName: PN,
+    stepName: SN,
+    data: StepInput<P, PN, SN> | StepOutput<P, PN, SN>,
     error?: unknown,
-  ): Promise<AuthInput | AuthOutput> {
-    let current: AuthInput | AuthOutput = data;
+  ): Promise<StepInput<P, PN, SN> | StepOutput<P, PN, SN>> {
+    let current: StepInput<P, PN, SN> | StepOutput<P, PN, SN> = data;
     for (const h of this.authHooks) {
       const matchesType = h.type === type;
       const matchesPlugin =
@@ -347,31 +368,40 @@ export class ReAuthEngine {
     const hooks = this.sessionHooks.filter((h) => h.type === type);
     if (type === 'onError' && error) {
       for (const h of hooks) {
-        const res = await h.fn(current, this.container, error);
+        const res = (await h.fn(current, this.container, error)) as
+          | AuthInput
+          | AuthOutput;
         if (typeof res !== 'undefined') current = res;
       }
       return current;
     }
     for (const h of hooks) {
-      const res = await h.fn(current, this.container);
+      const res = (await h.fn(current, this.container)) as
+        | AuthInput
+        | AuthOutput;
       if (typeof res !== 'undefined') current = res;
     }
     return current;
   }
 
   // ---------------- Introspection & Utilities ----------------
-  getStepInputs(pluginName: string, stepName: string): string[] {
+  getStepInputs<const PN extends PluginNames<P>>(
+    pluginName: PN,
+    stepName: StepsForPlugin<P, PN>,
+  ): ReadonlyArray<string> {
     const plugin = this.pluginMap.get(pluginName);
     const step = plugin?.steps?.find((s) => s.name === stepName);
     return step?.inputs ?? [];
   }
 
-  getAllPlugins(): AuthPlugin[] {
+  getAllPlugins(): P[number][] {
     return [...this.plugins];
   }
 
-  getPlugin(name: string): AuthPlugin | undefined {
-    return this.pluginMap.get(name);
+  getPlugin<const PN extends PluginNames<P>>(
+    name: PN,
+  ): PluginByName<P, PN> | undefined {
+    return this.pluginMap.get(name) as PluginByName<P, PN> | undefined;
   }
 
   // The DI container may store heterogeneous services; unknown is the safest accurate return type.
@@ -381,12 +411,15 @@ export class ReAuthEngine {
   }
 
   // Convenience wrapper to mirror V1's executeStep signature
-  async runStep(
-    pluginName: string,
-    stepName: string,
-    input: AuthInput,
-  ): Promise<AuthOutput> {
-    return (await this.executeStep(pluginName, stepName, input)) as AuthOutput;
+  async runStep<
+    const PN extends PluginNames<P>,
+    const SN extends StepsForPlugin<P, PN>,
+  >(
+    pluginName: PN,
+    stepName: SN,
+    input: StepInput<P, PN, SN>,
+  ): Promise<StepOutput<P, PN, SN>> {
+    return await this.executeStep(pluginName, stepName, input);
   }
 
   // Aggregate profile information across all plugins that implement getProfile
@@ -478,6 +511,8 @@ export class ReAuthEngine {
   }
 }
 
-export default function createReAuthEngine(config: ReAuthConfig) {
-  return new ReAuthEngine(config);
+export default function createReAuthEngine<
+  P extends AuthPlugin[] = AuthPlugin[],
+>(config: ReAuthConfig<P>) {
+  return new ReAuthEngine<P>(config);
 }

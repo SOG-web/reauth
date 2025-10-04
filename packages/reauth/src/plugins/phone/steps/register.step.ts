@@ -21,6 +21,7 @@ export const registerValidation = type({
 
 export const registerStep: AuthStep<
   PhonePasswordConfig,
+  'register',
   RegisterInput,
   AuthOutput
 > = {

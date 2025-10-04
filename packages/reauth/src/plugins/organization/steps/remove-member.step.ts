@@ -17,6 +17,7 @@ export const removeMemberValidation = type({
 
 export const removeMemberStep: AuthStep<
   OrganizationConfig,
+  'remove-member',
   RemoveMemberInput,
   RemoveMemberOutput
 > = {

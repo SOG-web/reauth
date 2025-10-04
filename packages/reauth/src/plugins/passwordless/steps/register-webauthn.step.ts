@@ -31,6 +31,7 @@ export const registerWebAuthnValidation = type({
 
 export const registerWebAuthnStep: AuthStep<
   PasswordlessConfig,
+  'register-webauthn',
   RegisterWebAuthnInput,
   AuthOutput
 > = {

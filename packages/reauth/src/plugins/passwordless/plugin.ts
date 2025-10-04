@@ -13,7 +13,10 @@ import {
   cleanupExpiredMagicLinksScheduled,
 } from './utils';
 
-export const basePasswordlessPlugin: AuthPlugin<PasswordlessConfig> = {
+export const basePasswordlessPlugin: AuthPlugin<
+  PasswordlessConfig,
+  'passwordless'
+> = {
   name: 'passwordless',
   initialize(engine) {
     const config = this.config;
@@ -167,8 +170,8 @@ const passwordlessPlugin = (
     name: string;
     override: Partial<AuthStep<PasswordlessConfig>>;
   }>,
-): AuthPlugin<PasswordlessConfig> =>
-  createAuthPlugin<PasswordlessConfig>(basePasswordlessPlugin, {
+): AuthPlugin<PasswordlessConfig, 'passwordless'> =>
+  createAuthPlugin<PasswordlessConfig, 'passwordless'>(basePasswordlessPlugin, {
     config: config as PasswordlessConfig,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -241,13 +244,6 @@ const passwordlessPlugin = (
 
       return errs.length ? errs : null;
     },
-  });
-
-// Keep the old helper for explicit creation style
-export function createPasswordlessPlugin(
-  config: PasswordlessConfig,
-): AuthPlugin<PasswordlessConfig> {
-  return passwordlessPlugin(config, []);
-}
+  }) as AuthPlugin<PasswordlessConfig, 'passwordless'>;
 
 export default passwordlessPlugin;

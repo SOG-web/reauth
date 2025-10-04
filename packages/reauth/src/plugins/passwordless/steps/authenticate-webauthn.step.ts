@@ -19,6 +19,7 @@ export const authenticateWebAuthnValidation = type({
 
 export const authenticateWebAuthnStep: AuthStep<
   PasswordlessConfig,
+  'authenticate-webauthn',
   AuthenticateWebAuthnInput,
   AuthOutput
 > = {

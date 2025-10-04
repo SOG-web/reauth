@@ -9,7 +9,7 @@ import { updateApiKeyStep } from './steps/update-api-key.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredApiKeys, cleanupOldUsageLogs } from './utils';
 
-export const baseApiKeyPlugin: AuthPlugin<ApiKeyConfig> = {
+export const baseApiKeyPlugin: AuthPlugin<ApiKeyConfig, 'api-key'> = {
   name: 'api-key',
   initialize(engine) {
     // Register session resolver for API key subjects
@@ -164,8 +164,8 @@ const apiKeyPlugin = (
     name: string;
     override: Partial<AuthStep<ApiKeyConfig>>;
   }>,
-): AuthPlugin<ApiKeyConfig> =>
-  createAuthPlugin<ApiKeyConfig>(baseApiKeyPlugin, {
+): AuthPlugin<ApiKeyConfig, 'api-key'> =>
+  createAuthPlugin<ApiKeyConfig, 'api-key'>(baseApiKeyPlugin, {
     config,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -199,6 +199,6 @@ const apiKeyPlugin = (
 
       return errs.length ? errs : null;
     },
-  });
+  }) as AuthPlugin<ApiKeyConfig, 'api-key'>;
 
 export default apiKeyPlugin;

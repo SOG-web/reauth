@@ -17,6 +17,8 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+reAuth.executeStep('email-password', '', {});
+
 const authAdapter = honoReAuth(
   {
     engine: reAuth,

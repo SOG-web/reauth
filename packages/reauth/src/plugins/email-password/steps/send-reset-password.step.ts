@@ -12,6 +12,7 @@ export const sendResetValidation = type({
 
 export const sendResetStep: AuthStep<
   EmailPasswordConfig,
+  'send-reset-password',
   SendResetInput,
   AuthOutput
 > = {

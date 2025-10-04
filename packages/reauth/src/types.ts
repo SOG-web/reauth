@@ -147,6 +147,104 @@ export interface SessionService {
 }
 
 // ---------------- Step/Plugin Types () ----------------
+
+export type PluginNames<P extends AuthPlugin[]> = Extract<
+  P[number]['name'],
+  string
+>;
+
+export type PluginByName<
+  P extends AuthPlugin[],
+  PluginName extends PluginNames<P>,
+> = Extract<P[number], { name: PluginName }>;
+
+export type StepsForPlugin<
+  P extends AuthPlugin[],
+  PluginName extends PluginNames<P>,
+> =
+  Extract<P[number], { name: PluginName }> extends { steps: Array<infer S> }
+    ? S extends { name: infer N }
+      ? N
+      : never
+    : never;
+
+// Extract the step object for a specific plugin and step
+type GetStep<
+  P extends AuthPlugin[],
+  PluginName extends PluginNames<P>,
+  StepName extends string,
+> =
+  Extract<P[number], { name: PluginName }> extends { steps: Array<infer S> }
+    ? Extract<S, { name: StepName }>
+    : never;
+
+// Extract input type for a specific step
+export type StepInput<
+  P extends AuthPlugin[],
+  PluginName extends PluginNames<P>,
+  StepName extends StepsForPlugin<P, PluginName>,
+> =
+  GetStep<P, PluginName, StepName> extends AuthStep<any, any, infer I, any>
+    ? I
+    : AuthInput;
+
+// Extract output type for a specific step
+export type StepOutput<
+  P extends AuthPlugin[],
+  PluginName extends PluginNames<P>,
+  StepName extends StepsForPlugin<P, PluginName>,
+> =
+  GetStep<P, PluginName, StepName> extends AuthStep<any, any, any, infer O>
+    ? O
+    : AuthOutput;
+
+// Typed list of input keys allowed for a step definition
+export type StepInputKeys<I = AuthInput> = ReadonlyArray<
+  Extract<keyof I, string>
+>;
+
+// extract the keys of O (output)
+export type StepOutputKeys<O = AuthOutput> = ReadonlyArray<
+  Extract<keyof O, string>
+>;
+
+export interface AuthPlugin<Cfg = any, Name extends string = string> {
+  name: Name;
+  initialize?: (engine: ReAuthEngine, config: Cfg) => Promise<void> | void;
+  steps: Array<AuthStep<Cfg, any, any, any>>;
+  getSensitiveFields?: () => string[];
+  config: Cfg;
+  rootHooks?: RootStepHooks<Cfg>;
+  getProfile?: (
+    subjectId: string,
+    ctx: PluginProfileContext,
+  ) => Promise<any> | any;
+}
+
+// ---------------- Hook Types () ----------------
+export type HooksType = 'before' | 'after' | 'onError';
+
+export interface AuthHook<
+  P extends AuthPlugin[] = AuthPlugin[],
+  PN extends PluginNames<P> = PluginNames<P>,
+  SN extends StepsForPlugin<P, PN> = StepsForPlugin<P, PN>,
+> {
+  type: HooksType;
+  pluginName?: PN; // if provided, limits to a specific plugin
+  steps?: SN[]; // if provided, limits to specific steps
+  session?: boolean; // marks this as a session-level hook
+  universal?: boolean; // applies to all plugins/steps
+  fn: (
+    data: StepInput<P, PN, SN> | StepOutput<P, PN, SN> | AuthInput | AuthOutput,
+    container: ReAuthCradle,
+    error?: unknown,
+  ) =>
+    | Promise<StepInput<P, PN, SN> | StepOutput<P, PN, SN> | void>
+    | StepInput<P, PN, SN>
+    | StepOutput<P, PN, SN>
+    | void;
+}
+
 export type StepStatus = string; // e.g., 'su', 'ip', 'ic', 'unf', 'eq', 'ev'
 
 export interface StepProtocolHttp {
@@ -171,69 +269,58 @@ export interface StepContext<Cfg> {
   config: Cfg;
 }
 
-export interface AuthStep<Cfg, I = AuthInput | any, O = AuthOutput | any> {
-  name: string;
+export interface AuthStep<
+  Cfg,
+  StepName extends string = string,
+  I = AuthInput,
+  O = AuthOutput,
+> {
+  name: StepName;
   description?: string;
   validationSchema?: Type<any>; // arktype runtime (assert/toJsonSchema)
   outputs?: Type<any>; // arktype runtime for outputs (optional)
-  run: (input: I, ctx: StepContext<Cfg>) => Promise<O> | AuthOutput;
-  hooks?: StepHooks<Cfg>;
-  inputs?: string[];
+  run: (input: I, ctx: StepContext<Cfg>) => Promise<O>;
+  hooks?: StepHooks<Cfg, I, O>;
+  inputs?: StepInputKeys<I>; // keys of expected inputs
   protocol?: StepProtocolMeta;
 }
 
 export interface RootStepHooks<Cfg> {
-  before?: (
-    input: AuthInput,
+  before?: <I = AuthInput, O = AuthOutput>(
+    input: I,
     ctx: StepContext<Cfg>,
-    step: AuthStep<Cfg>,
-  ) => Promise<AuthInput> | AuthInput;
-  after?: (
-    output: AuthOutput,
+    step: AuthStep<Cfg, any, I, O>,
+  ) => Promise<I> | I;
+  after?: <I = AuthInput, O = AuthOutput>(
+    output: O,
     ctx: StepContext<Cfg>,
-    step: AuthStep<Cfg>,
-  ) => Promise<AuthOutput> | AuthOutput;
-  onError?: (
+    step: AuthStep<Cfg, any, I, O>,
+  ) => Promise<O> | O;
+  onError?: <I = AuthInput>(
     error: unknown,
-    input: AuthInput,
+    input: I,
     ctx: StepContext<Cfg>,
     step: AuthStep<Cfg>,
   ) => Promise<void> | void;
+}
+
+export interface UniversalAuthHook {
+  type: HooksType;
+  universal: true;
+  pluginName?: never;
+  steps?: never;
+  session?: boolean;
+  fn: (
+    data: AuthInput | AuthOutput,
+    container: ReAuthCradle,
+    error?: unknown,
+  ) => Promise<AuthInput | AuthOutput | void> | AuthInput | AuthOutput | void;
 }
 
 // Context passed to plugin-level utility functions (non-HTTP, non-step)
 export interface PluginProfileContext {
   engine: ReAuthEngine;
   config?: any;
-}
-
-export interface AuthPlugin<Cfg = any> {
-  name: string;
-  initialize?: (engine: ReAuthEngine, config: Cfg) => Promise<void> | void;
-  steps?: Array<AuthStep<Cfg>>;
-  getSensitiveFields?: () => string[];
-  config: Cfg;
-  rootHooks?: RootStepHooks<Cfg>;
-  getProfile?: (
-    subjectId: string,
-    ctx: PluginProfileContext,
-  ) => Promise<any> | any;
-}
-
-// ---------------- Hook Types () ----------------
-export type HooksType = 'before' | 'after' | 'onError';
-
-export interface AuthHook {
-  type: HooksType;
-  pluginName?: string; // if provided, limits to a specific plugin
-  steps?: string[]; // if provided, limits to specific steps
-  session?: boolean; // marks this as a session-level hook
-  universal?: boolean; // applies to all plugins/steps
-  fn: (
-    data: AuthInput | AuthOutput,
-    container: ReAuthCradle,
-    error?: unknown,
-  ) => Promise<AuthInput | AuthOutput | void> | AuthInput | AuthOutput | void;
 }
 
 export interface ReAuthCradleExtension {

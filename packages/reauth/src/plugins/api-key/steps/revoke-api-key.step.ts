@@ -24,6 +24,7 @@ export const revokeApiKeyValidation = type({
 
 export const revokeApiKeyStep: AuthStep<
   ApiKeyConfig,
+  'revoke-api-key',
   RevokeApiKeyInput,
   AuthOutput
 > = {

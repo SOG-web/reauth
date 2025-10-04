@@ -7,7 +7,10 @@ import { changePasswordStep } from './steps/change-password.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredCodes } from './utils';
 
-export const baseUsernamePasswordPlugin: AuthPlugin<UsernamePasswordConfig> = {
+export const baseUsernamePasswordPlugin: AuthPlugin<
+  UsernamePasswordConfig,
+  'username-password'
+> = {
   name: 'username-password',
   initialize(engine) {
     engine.registerSessionResolver('subject', {
@@ -112,32 +115,38 @@ const usernamePasswordPlugin = (
     name: string;
     override: Partial<AuthStep<UsernamePasswordConfig>>;
   }>,
-): AuthPlugin<UsernamePasswordConfig> =>
-  createAuthPlugin<UsernamePasswordConfig>(baseUsernamePasswordPlugin, {
-    config,
-    stepOverrides: overrideStep,
-    validateConfig: (config) => {
-      const errs: string[] = [];
+): AuthPlugin<UsernamePasswordConfig, 'username-password'> =>
+  createAuthPlugin<UsernamePasswordConfig, 'username-password'>(
+    baseUsernamePasswordPlugin,
+    {
+      config,
+      stepOverrides: overrideStep,
+      validateConfig: (config) => {
+        const errs: string[] = [];
 
-      // Username plugin has minimal config validation requirements
-      // Future: Add validation for enableResetByUsername if implemented
+        // Username plugin has minimal config validation requirements
+        // Future: Add validation for enableResetByUsername if implemented
 
-      // Validate cleanup configuration
-      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
-        errs.push('cleanupIntervalMinutes must be at least 1 minute');
-      }
+        // Validate cleanup configuration
+        if (
+          config.cleanupIntervalMinutes &&
+          config.cleanupIntervalMinutes < 1
+        ) {
+          errs.push('cleanupIntervalMinutes must be at least 1 minute');
+        }
 
-      if (
-        config.cleanupIntervalMinutes &&
-        config.cleanupIntervalMinutes > 1440
-      ) {
-        errs.push(
-          'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
-        );
-      }
+        if (
+          config.cleanupIntervalMinutes &&
+          config.cleanupIntervalMinutes > 1440
+        ) {
+          errs.push(
+            'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
+          );
+        }
 
-      return errs.length ? errs : null;
+        return errs.length ? errs : null;
+      },
     },
-  });
+  ) as AuthPlugin<UsernamePasswordConfig, 'username-password'>;
 
 export default usernamePasswordPlugin;

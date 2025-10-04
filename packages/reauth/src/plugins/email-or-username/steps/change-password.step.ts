@@ -26,6 +26,7 @@ export const changePasswordValidation = type({
 
 export const changePasswordStep: AuthStep<
   EmailOrUsernameConfig,
+  'change-password',
   ChangePasswordInput,
   AuthOutput
 > = {

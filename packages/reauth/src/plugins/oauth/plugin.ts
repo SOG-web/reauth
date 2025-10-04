@@ -1,15 +1,16 @@
-import type { AuthPlugin } from '../../types';
+import type { AuthPlugin, AuthStep } from '../../types';
 import type { OAuthPluginConfig } from './types';
 import { startOAuthStep } from './steps/start.step';
 import { callbackOAuthStep } from './steps/callback.step';
 import { linkOAuthStep } from './steps/link.step';
 import { unlinkOAuthStep } from './steps/unlink.step';
 import { oauthSchema } from './schema';
+import { createAuthPlugin } from '../../utils/create-plugin';
 
 /**
  * Base OAuth plugin
  */
-export const baseOAuthPlugin: AuthPlugin<OAuthPluginConfig> = {
+export const baseOAuthPlugin: AuthPlugin<OAuthPluginConfig, 'oauth'> = {
   name: 'oauth',
   initialize(engine) {
     // Register session resolver for OAuth subjects
@@ -29,12 +30,7 @@ export const baseOAuthPlugin: AuthPlugin<OAuthPluginConfig> = {
   config: {
     sessionTtlSeconds: 3600, // 1 hour
   },
-  steps: [
-    startOAuthStep,
-    callbackOAuthStep,
-    linkOAuthStep,
-    unlinkOAuthStep,
-  ],
+  steps: [startOAuthStep, callbackOAuthStep, linkOAuthStep, unlinkOAuthStep],
   getSensitiveFields() {
     return ['access_token', 'refresh_token', 'provider_data'];
   },
@@ -45,18 +41,22 @@ export const baseOAuthPlugin: AuthPlugin<OAuthPluginConfig> = {
  */
 const createOAuthPlugin = (
   config: OAuthPluginConfig,
-): AuthPlugin<OAuthPluginConfig> => {
+  overrideStep?: Array<{
+    name: string;
+    override: Partial<AuthStep<OAuthPluginConfig>>;
+  }>,
+): AuthPlugin<OAuthPluginConfig, 'oauth'> => {
   // Initialize clients for providers
   if (config.providers) {
-    config.providers.forEach(provider => {
+    config.providers.forEach((provider) => {
       provider.client = provider.clientFactory(provider.config);
     });
   }
 
-  return {
-    ...baseOAuthPlugin,
+  return createAuthPlugin<OAuthPluginConfig, 'oauth'>(baseOAuthPlugin, {
     config,
-  };
+    stepOverrides: overrideStep,
+  }) as AuthPlugin<OAuthPluginConfig, 'oauth'>;
 };
 
 export default createOAuthPlugin;

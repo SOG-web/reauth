@@ -22,6 +22,7 @@ export const listCredentialsValidation = type({
 
 export const listCredentialsStep: AuthStep<
   PasswordlessConfig,
+  'list-credentials',
   ListCredentialsInput,
   AuthOutput
 > = {

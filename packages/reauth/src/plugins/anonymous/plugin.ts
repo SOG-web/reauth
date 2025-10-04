@@ -7,7 +7,7 @@ import { convertGuestStep } from './steps/convert-guest.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredSessions } from './utils';
 
-export const baseAnonymousPlugin: AuthPlugin<AnonymousConfig> = {
+export const baseAnonymousPlugin: AuthPlugin<AnonymousConfig, 'anonymous'> = {
   name: 'anonymous',
   initialize(engine) {
     // Register session resolver for guest subjects
@@ -134,8 +134,8 @@ const anonymousPlugin = (
     name: string;
     override: Partial<AuthStep<AnonymousConfig>>;
   }>,
-): AuthPlugin<AnonymousConfig> =>
-  createAuthPlugin<AnonymousConfig>(baseAnonymousPlugin, {
+): AuthPlugin<AnonymousConfig, 'anonymous'> =>
+  createAuthPlugin<AnonymousConfig, 'anonymous'>(baseAnonymousPlugin, {
     config,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -200,6 +200,6 @@ const anonymousPlugin = (
 
       return errs.length ? errs : null;
     },
-  });
+  }) as AuthPlugin<AnonymousConfig, 'anonymous'>;
 
 export default anonymousPlugin;

@@ -20,7 +20,6 @@ const navItems = [
   { label: 'Features', href: '#features' },
   { label: 'Adapters', href: '#adapters' },
   { label: 'Showcase', href: '#showcase' },
-  { label: 'Pricing', href: 'https://github.com/SOG-web/reauth' },
 ];
 
 function ThemeToggle() {
@@ -70,10 +69,7 @@ export function Header() {
           <span className="flex size-7 items-center justify-center border border-border/60 bg-gradient-to-br from-primary via-sky-500/60 to-emerald-400/70 text-primary-foreground">
             <Sparkles className="size-3.5" />
           </span>
-          <span className="hidden sm:inline">
-            ReAuth{' '}
-            <span className="text-muted-foreground">/ Universal Auth</span>
-          </span>
+          <span className="hidden sm:inline">ReAuth</span>
           <span className="sm:hidden">ReAuth</span>
         </Link>
 

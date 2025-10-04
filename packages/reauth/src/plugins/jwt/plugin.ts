@@ -7,7 +7,7 @@ import { type JWTPluginConfig } from '../../services';
 import { getJWKSStep } from './steps/get-jwks.step';
 import { registerClientStep } from './steps/register-client.step';
 
-export const baseJWTPlugin: AuthPlugin<JWTPluginConfig> = {
+export const baseJWTPlugin: AuthPlugin<JWTPluginConfig, 'jwt'> = {
   name: 'jwt',
   initialize(engine) {
     // Enable JWT features in the session service
@@ -187,8 +187,8 @@ const jwtPlugin = (
     name: string;
     override: Partial<AuthStep<JWTPluginConfig>>;
   }>,
-): AuthPlugin<JWTPluginConfig> =>
-  createAuthPlugin<JWTPluginConfig>(baseJWTPlugin, {
+): AuthPlugin<JWTPluginConfig, 'jwt'> =>
+  createAuthPlugin<JWTPluginConfig, 'jwt'>(baseJWTPlugin, {
     config,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -231,6 +231,6 @@ const jwtPlugin = (
 
       return errs.length ? errs : null;
     },
-  });
+  }) as AuthPlugin<JWTPluginConfig, 'jwt'>;
 
 export default jwtPlugin;

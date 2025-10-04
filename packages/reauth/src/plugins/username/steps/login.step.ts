@@ -20,6 +20,7 @@ export const loginValidation = type({
 
 export const loginStep: AuthStep<
   UsernamePasswordConfig,
+  'login',
   LoginInput,
   AuthOutput
 > = {

@@ -13,6 +13,7 @@ export const listOrganizationsValidation = type({
 
 export const listOrganizationsStep: AuthStep<
   OrganizationConfig,
+  'list-organizations',
   ListOrganizationsInput,
   ListOrganizationsOutput
 > = {

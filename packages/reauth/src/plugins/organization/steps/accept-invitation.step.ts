@@ -14,6 +14,7 @@ export const acceptInvitationValidation = type({
 
 export const acceptInvitationStep: AuthStep<
   OrganizationConfig,
+  'accept-invitation',
   AcceptInvitationInput,
   AcceptInvitationOutput
 > = {

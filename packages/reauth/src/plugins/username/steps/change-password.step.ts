@@ -30,6 +30,7 @@ export const changePasswordValidation = type({
 
 export const changePasswordStep: AuthStep<
   UsernamePasswordConfig,
+  'change-password',
   ChangePasswordInput,
   AuthOutput
 > = {

@@ -33,6 +33,7 @@ export const updateApiKeyValidation = type({
 
 export const updateApiKeyStep: AuthStep<
   ApiKeyConfig,
+  'update-api-key',
   UpdateApiKeyInput,
   AuthOutput & { data?: { api_key: ApiKeyMetadata } }
 > = {

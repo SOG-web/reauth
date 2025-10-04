@@ -29,6 +29,7 @@ export type ListSessionsOutput = AuthOutput & {
 
 export const listSessionsStep: AuthStep<
   SessionConfig,
+  'list-sessions',
   ListSessionsInput,
   ListSessionsOutput
 > = {

@@ -22,6 +22,7 @@ export const inviteMemberValidation = type({
 
 export const inviteMemberStep: AuthStep<
   OrganizationConfig,
+  'invite-member',
   InviteMemberInput,
   InviteMemberOutput
 > = {

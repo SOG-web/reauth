@@ -36,6 +36,7 @@ export type GetSessionOutput = AuthOutput & {
 
 export const getSessionStep: AuthStep<
   SessionConfig,
+  'get-session',
   GetSessionInput,
   GetSessionOutput
 > = {
@@ -76,7 +77,9 @@ export const getSessionStep: AuthStep<
 
     try {
       // Pass deviceInfo through to service
-      const result = await ctx.engine.getSessionService().verifySession(token, deviceInfo);
+      const result = await ctx.engine
+        .getSessionService()
+        .verifySession(token, deviceInfo);
 
       if (!result.subject) {
         return {

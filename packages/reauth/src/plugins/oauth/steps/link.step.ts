@@ -24,6 +24,7 @@ export const linkOAuthValidation = type({
 
 export const linkOAuthStep: AuthStep<
   OAuthPluginConfig,
+  'link',
   LinkOAuthInput,
   AuthOutput
 > = {
@@ -37,7 +38,14 @@ export const linkOAuthStep: AuthStep<
       codes: { su: 200, ip: 400, cf: 409 },
     },
   },
-  inputs: ['code', 'state', 'oauth_state', 'oauth_code_verifier', 'oauth_provider', 'entity'],
+  inputs: [
+    'code',
+    'state',
+    'oauth_state',
+    'oauth_code_verifier',
+    'oauth_provider',
+    'entity',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',

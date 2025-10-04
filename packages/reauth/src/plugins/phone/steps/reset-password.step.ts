@@ -24,6 +24,7 @@ export const resetPasswordValidation = type({
 
 export const resetPasswordStep: AuthStep<
   PhonePasswordConfig,
+  'reset-password',
   ResetPasswordInput,
   AuthOutput
 > = {

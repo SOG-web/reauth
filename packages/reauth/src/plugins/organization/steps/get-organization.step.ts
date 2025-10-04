@@ -15,6 +15,7 @@ export const getOrganizationValidation = type({
 
 export const getOrganizationStep: AuthStep<
   OrganizationConfig,
+  'get-organization',
   GetOrganizationInput,
   GetOrganizationOutput
 > = {

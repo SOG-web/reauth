@@ -33,6 +33,7 @@ export type RegisterClientOutput = {
 
 export const registerClientStep: AuthStep<
   JWTPluginConfig,
+  'register-client',
   RegisterClientInput,
   RegisterClientOutput
 > = {

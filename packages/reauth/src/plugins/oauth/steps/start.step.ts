@@ -13,6 +13,7 @@ export const startOAuthValidation = type({
 
 export const startOAuthStep: AuthStep<
   OAuthPluginConfig,
+  'start',
   StartOAuthInput,
   AuthOutput
 > = {

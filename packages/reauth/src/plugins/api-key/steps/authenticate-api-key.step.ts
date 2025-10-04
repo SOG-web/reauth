@@ -24,6 +24,7 @@ export const authenticateApiKeyValidation = type({
 
 export const authenticateApiKeyStep: AuthStep<
   ApiKeyConfig,
+  'authenticate-api-key',
   AuthenticateApiKeyInput,
   AuthOutput
 > = {

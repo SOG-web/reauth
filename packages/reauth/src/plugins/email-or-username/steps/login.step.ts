@@ -21,6 +21,7 @@ export const loginValidation = type({
 
 export const loginStep: AuthStep<
   EmailOrUsernameConfig,
+  'login',
   LoginInput,
   AuthOutput
 > = {

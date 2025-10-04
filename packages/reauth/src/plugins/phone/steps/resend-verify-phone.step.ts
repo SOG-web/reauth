@@ -17,6 +17,7 @@ export const resendVerifyPhoneValidation = type({
 
 export const resendVerifyPhoneStep: AuthStep<
   PhonePasswordConfig,
+  'resend-verify-phone',
   ResendVerifyPhoneInput,
   AuthOutput
 > = {

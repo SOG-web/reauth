@@ -16,6 +16,7 @@ export const verifyEmailValidation = type({
 
 export const verifyEmailStep: AuthStep<
   EmailPasswordConfig,
+  'verify-email',
   VerifyEmailInput,
   AuthOutput
 > = {

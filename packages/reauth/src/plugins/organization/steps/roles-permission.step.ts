@@ -21,6 +21,7 @@ export const setRolesPermissionsValidation = type({
 
 export const setRolesPermissionsStep: AuthStep<
   OrganizationConfig,
+  'set-roles-permissions',
   SetRolesPermissionsInput,
   SetRolesPermissionsOutput
 > = {

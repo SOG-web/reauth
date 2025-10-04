@@ -23,6 +23,7 @@ export const listApiKeysValidation = type({
 
 export const listApiKeysStep: AuthStep<
   ApiKeyConfig,
+  'list-api-keys',
   ListApiKeysInput,
   AuthOutput & { data?: { api_keys: ApiKeyMetadata[] } }
 > = {

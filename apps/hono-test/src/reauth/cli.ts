@@ -1,4 +1,5 @@
 import { createCli } from 'fumadb/cli';
+import { client } from './auth';
 
 export function runMigrations(db: any) {
   const { main } = createCli({
@@ -10,3 +11,5 @@ export function runMigrations(db: any) {
 
   return main();
 }
+
+runMigrations(client);

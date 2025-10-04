@@ -25,6 +25,7 @@ export const verifyMagicLinkValidation = type({
 
 export const verifyMagicLinkStep: AuthStep<
   PasswordlessConfig,
+  'verify-magic-link',
   VerifyMagicLinkInput,
   AuthOutput
 > = {

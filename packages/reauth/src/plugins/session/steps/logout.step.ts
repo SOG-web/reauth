@@ -21,7 +21,12 @@ export type LogoutOutput = AuthOutput & {
   sessionDestroyed?: boolean;
 };
 
-export const logoutStep: AuthStep<SessionConfig, LogoutInput, LogoutOutput> = {
+export const logoutStep: AuthStep<
+  SessionConfig,
+  'logout',
+  LogoutInput,
+  LogoutOutput
+> = {
   name: 'logout',
   description: 'Destroy the current session (logout)',
   validationSchema: logoutValidation,

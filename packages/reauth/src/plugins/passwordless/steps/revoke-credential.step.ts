@@ -22,6 +22,7 @@ export const revokeCredentialValidation = type({
 
 export const revokeCredentialStep: AuthStep<
   PasswordlessConfig,
+  'revoke-credential',
   RevokeCredentialInput,
   AuthOutput
 > = {

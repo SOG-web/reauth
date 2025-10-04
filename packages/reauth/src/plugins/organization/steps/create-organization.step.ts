@@ -24,6 +24,7 @@ export const createOrganizationValidation = type({
 
 export const createOrganizationStep: AuthStep<
   OrganizationConfig,
+  'create-organization',
   CreateOrganizationInput,
   CreateOrganizationOutput
 > = {

@@ -20,6 +20,7 @@ export const sendMagicLinkValidation = type({
 
 export const sendMagicLinkStep: AuthStep<
   PasswordlessConfig,
+  'send-magic-link',
   SendMagicLinkInput,
   AuthOutput
 > = {

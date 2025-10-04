@@ -28,6 +28,7 @@ export const createGuestValidation = type({
 
 export const createGuestStep: AuthStep<
   AnonymousConfig,
+  'create-guest',
   CreateGuestInput,
   AuthOutput
 > = {
