@@ -9,11 +9,11 @@ import { sendResetStep } from './steps/send-reset-password.step';
 import { resetPasswordStep } from './steps/reset-password.step';
 import { changePasswordStep } from './steps/change-password.step';
 import { changeEmailStep } from './steps/change-email.step';
-import { createAuthPlugin, createAuthPlugin2 } from '../../utils/create-plugin';
+import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredCodes } from './utils';
 
 export const baseEmailPasswordPlugin = {
-  name: 'email-password' as const,
+  name: 'email-password',
   initialize(engine) {
     engine.registerSessionResolver('subject', {
       async getById(id: string, orm: OrmLike) {
@@ -79,7 +79,7 @@ export const baseEmailPasswordPlugin = {
     resetPasswordStep,
     changePasswordStep,
     changeEmailStep,
-  ] as const,
+  ],
   async getProfile(subjectId, ctx) {
     const orm = await ctx.engine.getOrm();
     // Gather email identities for the subject
@@ -151,10 +151,10 @@ const emailPasswordPlugin = (
     override: Partial<AuthStep<EmailPasswordConfig>>;
   }>,
 ) => {
-  const pl = createAuthPlugin2<
+  const pl = createAuthPlugin<
     EmailPasswordConfig,
     'email-password',
-    AuthPlugin<EmailPasswordConfig, 'email-password'>
+    typeof baseEmailPasswordPlugin
   >(baseEmailPasswordPlugin, {
     config,
     stepOverrides: overrideStep,
@@ -185,7 +185,7 @@ const emailPasswordPlugin = (
 
       return errs.length ? errs : null;
     },
-  }) satisfies AuthPlugin<EmailPasswordConfig, 'email-password'>;
+  }) satisfies typeof baseEmailPasswordPlugin;
 
   return pl;
 };

@@ -12,10 +12,7 @@ import { changePhoneStep } from './steps/change-phone.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredCodes } from './utils';
 
-export const basePhonePasswordPlugin: AuthPlugin<
-  PhonePasswordConfig,
-  'phone-password'
-> = {
+export const basePhonePasswordPlugin = {
   name: 'phone-password',
   initialize(engine) {
     engine.registerSessionResolver('subject', {
@@ -140,7 +137,7 @@ export const basePhonePasswordPlugin: AuthPlugin<
     };
   },
   // Background cleanup now handles expired code removal via SimpleCleanupScheduler
-};
+} satisfies AuthPlugin<PhonePasswordConfig, 'phone-password'>;
 
 // Export a factory function that creates a configured plugin
 const phonePasswordPlugin = (
@@ -149,43 +146,44 @@ const phonePasswordPlugin = (
     name: string;
     override: Partial<AuthStep<PhonePasswordConfig>>;
   }>,
-): AuthPlugin<PhonePasswordConfig, 'phone-password'> =>
-  createAuthPlugin<PhonePasswordConfig, 'phone-password'>(
-    basePhonePasswordPlugin,
-    {
-      config,
-      stepOverrides: overrideStep,
-      validateConfig: (config) => {
-        const errs: string[] = [];
-        if (
-          config.verifyPhone &&
-          typeof (config as any).sendCode !== 'function'
-        ) {
-          errs.push(
-            "verifyPhone is true but 'sendCode' is not provided. Supply sendCode(subject, code, phone, type) in plugin config.",
-          );
-        }
+) => {
+  const pl = createAuthPlugin<
+    PhonePasswordConfig,
+    'phone-password',
+    typeof basePhonePasswordPlugin
+  >(basePhonePasswordPlugin, {
+    config,
+    stepOverrides: overrideStep,
+    validateConfig: (config) => {
+      const errs: string[] = [];
+      if (
+        config.verifyPhone &&
+        typeof (config as any).sendCode !== 'function'
+      ) {
+        errs.push(
+          "verifyPhone is true but 'sendCode' is not provided. Supply sendCode(subject, code, phone, type) in plugin config.",
+        );
+      }
 
-        // Validate cleanup configuration
-        if (
-          config.cleanupIntervalMinutes &&
-          config.cleanupIntervalMinutes < 1
-        ) {
-          errs.push('cleanupIntervalMinutes must be at least 1 minute');
-        }
+      // Validate cleanup configuration
+      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
+        errs.push('cleanupIntervalMinutes must be at least 1 minute');
+      }
 
-        if (
-          config.cleanupIntervalMinutes &&
-          config.cleanupIntervalMinutes > 1440
-        ) {
-          errs.push(
-            'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
-          );
-        }
+      if (
+        config.cleanupIntervalMinutes &&
+        config.cleanupIntervalMinutes > 1440
+      ) {
+        errs.push(
+          'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
+        );
+      }
 
-        return errs.length ? errs : null;
-      },
+      return errs.length ? errs : null;
     },
-  ) as AuthPlugin<PhonePasswordConfig, 'phone-password'>;
+  }) satisfies typeof basePhonePasswordPlugin;
+
+  return pl;
+};
 
 export default phonePasswordPlugin;

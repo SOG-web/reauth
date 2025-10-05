@@ -10,7 +10,7 @@ import { createAuthPlugin } from '../../utils/create-plugin';
 /**
  * Base OAuth plugin
  */
-export const baseOAuthPlugin: AuthPlugin<OAuthPluginConfig, 'oauth'> = {
+export const baseOAuthPlugin = {
   name: 'oauth',
   initialize(engine) {
     // Register session resolver for OAuth subjects
@@ -34,7 +34,7 @@ export const baseOAuthPlugin: AuthPlugin<OAuthPluginConfig, 'oauth'> = {
   getSensitiveFields() {
     return ['access_token', 'refresh_token', 'provider_data'];
   },
-};
+} satisfies AuthPlugin<OAuthPluginConfig, 'oauth'>;
 
 /**
  * Create OAuth plugin factory
@@ -45,7 +45,7 @@ const createOAuthPlugin = (
     name: string;
     override: Partial<AuthStep<OAuthPluginConfig>>;
   }>,
-): AuthPlugin<OAuthPluginConfig, 'oauth'> => {
+) => {
   // Initialize clients for providers
   if (config.providers) {
     config.providers.forEach((provider) => {
@@ -53,10 +53,16 @@ const createOAuthPlugin = (
     });
   }
 
-  return createAuthPlugin<OAuthPluginConfig, 'oauth'>(baseOAuthPlugin, {
+  const pl = createAuthPlugin<
+    OAuthPluginConfig,
+    'oauth',
+    typeof baseOAuthPlugin
+  >(baseOAuthPlugin, {
     config,
     stepOverrides: overrideStep,
-  }) as AuthPlugin<OAuthPluginConfig, 'oauth'>;
+  }) satisfies typeof baseOAuthPlugin;
+
+  return pl;
 };
 
 export default createOAuthPlugin;

@@ -18,12 +18,7 @@ export const loginValidation = type({
   'others?': 'object | undefined',
 });
 
-export const loginStep: AuthStep<
-  EmailPasswordConfig,
-  'login',
-  LoginInput,
-  AuthOutput
-> = {
+export const loginStep = {
   name: 'login' as const,
   description: 'Authenticate user with email and password',
   validationSchema: loginValidation,
@@ -196,4 +191,4 @@ export const loginStep: AuthStep<
 
     return attachNewTokenIfDifferent(baseResult, undefined, token);
   },
-};
+} satisfies AuthStep<EmailPasswordConfig, 'login', LoginInput, AuthOutput>;

@@ -7,7 +7,7 @@ import { type JWTPluginConfig } from '../../services';
 import { getJWKSStep } from './steps/get-jwks.step';
 import { registerClientStep } from './steps/register-client.step';
 
-export const baseJWTPlugin: AuthPlugin<JWTPluginConfig, 'jwt'> = {
+export const baseJWTPlugin = {
   name: 'jwt',
   initialize(engine) {
     // Enable JWT features in the session service
@@ -178,7 +178,7 @@ export const baseJWTPlugin: AuthPlugin<JWTPluginConfig, 'jwt'> = {
 
     return profile;
   },
-};
+} satisfies AuthPlugin<JWTPluginConfig, 'jwt'>;
 
 // Export a factory function that creates a configured plugin
 const jwtPlugin = (
@@ -187,50 +187,59 @@ const jwtPlugin = (
     name: string;
     override: Partial<AuthStep<JWTPluginConfig>>;
   }>,
-): AuthPlugin<JWTPluginConfig, 'jwt'> =>
-  createAuthPlugin<JWTPluginConfig, 'jwt'>(baseJWTPlugin, {
-    config,
-    stepOverrides: overrideStep,
-    validateConfig: (config) => {
-      const errs: string[] = [];
+) => {
+  const pl = createAuthPlugin<JWTPluginConfig, 'jwt', typeof baseJWTPlugin>(
+    baseJWTPlugin,
+    {
+      config,
+      stepOverrides: overrideStep,
+      validateConfig: (config) => {
+        const errs: string[] = [];
 
-      if (!config.issuer || config.issuer.trim().length === 0) {
-        errs.push('issuer is required and cannot be empty');
-      }
+        if (!config.issuer || config.issuer.trim().length === 0) {
+          errs.push('issuer is required and cannot be empty');
+        }
 
-      if (
-        config.defaultAccessTokenTtlSeconds &&
-        config.defaultAccessTokenTtlSeconds < 60
-      ) {
-        errs.push('defaultAccessTokenTtlSeconds must be at least 60 seconds');
-      }
+        if (
+          config.defaultAccessTokenTtlSeconds &&
+          config.defaultAccessTokenTtlSeconds < 60
+        ) {
+          errs.push('defaultAccessTokenTtlSeconds must be at least 60 seconds');
+        }
 
-      if (
-        config.defaultRefreshTokenTtlSeconds &&
-        config.defaultRefreshTokenTtlSeconds < 3600
-      ) {
-        errs.push(
-          'defaultRefreshTokenTtlSeconds must be at least 1 hour (3600 seconds)',
-        );
-      }
+        if (
+          config.defaultRefreshTokenTtlSeconds &&
+          config.defaultRefreshTokenTtlSeconds < 3600
+        ) {
+          errs.push(
+            'defaultRefreshTokenTtlSeconds must be at least 1 hour (3600 seconds)',
+          );
+        }
 
-      if (
-        config.keyRotationIntervalDays &&
-        config.keyRotationIntervalDays < 1
-      ) {
-        errs.push('keyRotationIntervalDays must be at least 1 day');
-      }
+        if (
+          config.keyRotationIntervalDays &&
+          config.keyRotationIntervalDays < 1
+        ) {
+          errs.push('keyRotationIntervalDays must be at least 1 day');
+        }
 
-      if (config.keyGracePeriodDays && config.keyGracePeriodDays < 0) {
-        errs.push('keyGracePeriodDays cannot be negative');
-      }
+        if (config.keyGracePeriodDays && config.keyGracePeriodDays < 0) {
+          errs.push('keyGracePeriodDays cannot be negative');
+        }
 
-      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
-        errs.push('cleanupIntervalMinutes must be at least 1 minute');
-      }
+        if (
+          config.cleanupIntervalMinutes &&
+          config.cleanupIntervalMinutes < 1
+        ) {
+          errs.push('cleanupIntervalMinutes must be at least 1 minute');
+        }
 
-      return errs.length ? errs : null;
+        return errs.length ? errs : null;
+      },
     },
-  }) as AuthPlugin<JWTPluginConfig, 'jwt'>;
+  ) satisfies typeof baseJWTPlugin;
+
+  return pl;
+};
 
 export default jwtPlugin;

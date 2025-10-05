@@ -72,23 +72,22 @@ export default createReAuthEngine({
     },
   },
   plugins: [
-    baseEmailPasswordPlugin,
     sessionPlugin({}),
-    // emailPasswordPlugin({
-    //   sendCode(subject, code, email, type) {
-    //     console.log(subject, code, email, type);
-    //     return Promise.resolve();
-    //   },
-    //   verifyEmail: true,
-    // }),
-    // jwtPlugin({
-    //   issuer: 'https://example.com',
-    //   keyRotationIntervalDays: 30,
-    //   keyGracePeriodDays: 7,
-    //   defaultAccessTokenTtlSeconds: 3600,
-    //   defaultRefreshTokenTtlSeconds: 86400,
-    //   enableRefreshTokenRotation: true,
-    // }),
+    emailPasswordPlugin({
+      sendCode(subject, code, email, type) {
+        console.log(subject, code, email, type);
+        return Promise.resolve();
+      },
+      verifyEmail: true,
+    }),
+    jwtPlugin({
+      issuer: 'https://example.com',
+      keyRotationIntervalDays: 30,
+      keyGracePeriodDays: 7,
+      defaultAccessTokenTtlSeconds: 3600,
+      defaultRefreshTokenTtlSeconds: 86400,
+      enableRefreshTokenRotation: true,
+    }),
   ],
   authHooks: [
     // {

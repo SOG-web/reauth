@@ -13,10 +13,7 @@ import { getRolesPermissionsStep } from './steps/get-roles-permissions.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredInvitations, cleanupExpiredMemberships } from './utils';
 
-export const baseOrganizationPlugin: AuthPlugin<
-  OrganizationConfig,
-  'organization'
-> = {
+export const baseOrganizationPlugin = {
   name: 'organization',
   initialize(engine) {
     const config = this.config;
@@ -180,7 +177,7 @@ export const baseOrganizationPlugin: AuthPlugin<
 
     return { organizations: items };
   },
-};
+} satisfies AuthPlugin<OrganizationConfig, 'organization'>;
 
 // Export a factory function that creates a configured plugin
 const organizationPlugin = (
@@ -189,8 +186,12 @@ const organizationPlugin = (
     name: string;
     override: Partial<AuthStep<OrganizationConfig>>;
   }>,
-): AuthPlugin<OrganizationConfig, 'organization'> =>
-  createAuthPlugin<OrganizationConfig, 'organization'>(baseOrganizationPlugin, {
+) => {
+  const pl = createAuthPlugin<
+    OrganizationConfig,
+    'organization',
+    typeof baseOrganizationPlugin
+  >(baseOrganizationPlugin, {
     config,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -259,6 +260,9 @@ const organizationPlugin = (
 
       return errs.length ? errs : null;
     },
-  }) as AuthPlugin<OrganizationConfig, 'organization'>;
+  }) satisfies typeof baseOrganizationPlugin;
+
+  return pl;
+};
 
 export default organizationPlugin;

@@ -13,10 +13,7 @@ import {
   cleanupExpiredMagicLinksScheduled,
 } from './utils';
 
-export const basePasswordlessPlugin: AuthPlugin<
-  PasswordlessConfig,
-  'passwordless'
-> = {
+export const basePasswordlessPlugin = {
   name: 'passwordless',
   initialize(engine) {
     const config = this.config;
@@ -161,7 +158,7 @@ export const basePasswordlessPlugin: AuthPlugin<
     return profile;
   },
   // Background cleanup now handles expired magic links via SimpleCleanupScheduler
-};
+} satisfies AuthPlugin<PasswordlessConfig, 'passwordless'>;
 
 // Export a factory function that creates a configured plugin
 const passwordlessPlugin = (
@@ -170,8 +167,12 @@ const passwordlessPlugin = (
     name: string;
     override: Partial<AuthStep<PasswordlessConfig>>;
   }>,
-): AuthPlugin<PasswordlessConfig, 'passwordless'> =>
-  createAuthPlugin<PasswordlessConfig, 'passwordless'>(basePasswordlessPlugin, {
+) => {
+  const pl = createAuthPlugin<
+    PasswordlessConfig,
+    'passwordless',
+    typeof basePasswordlessPlugin
+  >(basePasswordlessPlugin, {
     config: config as PasswordlessConfig,
     stepOverrides: overrideStep,
     validateConfig: (config) => {
@@ -244,6 +245,9 @@ const passwordlessPlugin = (
 
       return errs.length ? errs : null;
     },
-  }) as AuthPlugin<PasswordlessConfig, 'passwordless'>;
+  }) satisfies typeof basePasswordlessPlugin;
+
+  return pl;
+};
 
 export default passwordlessPlugin;

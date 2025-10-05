@@ -7,10 +7,7 @@ import { changePasswordStep } from './steps/change-password.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredCodes } from './utils';
 
-export const baseUsernamePasswordPlugin: AuthPlugin<
-  UsernamePasswordConfig,
-  'username-password'
-> = {
+export const baseUsernamePasswordPlugin = {
   name: 'username-password',
   initialize(engine) {
     engine.registerSessionResolver('subject', {
@@ -106,7 +103,7 @@ export const baseUsernamePasswordPlugin: AuthPlugin<
     };
   },
   // Background cleanup now handles expired reset codes via SimpleCleanupScheduler
-};
+} satisfies AuthPlugin<UsernamePasswordConfig, 'username-password'>;
 
 // Export a factory function that creates a configured plugin
 const usernamePasswordPlugin = (
@@ -115,38 +112,39 @@ const usernamePasswordPlugin = (
     name: string;
     override: Partial<AuthStep<UsernamePasswordConfig>>;
   }>,
-): AuthPlugin<UsernamePasswordConfig, 'username-password'> =>
-  createAuthPlugin<UsernamePasswordConfig, 'username-password'>(
-    baseUsernamePasswordPlugin,
-    {
-      config,
-      stepOverrides: overrideStep,
-      validateConfig: (config) => {
-        const errs: string[] = [];
+) => {
+  const pl = createAuthPlugin<
+    UsernamePasswordConfig,
+    'username-password',
+    typeof baseUsernamePasswordPlugin
+  >(baseUsernamePasswordPlugin, {
+    config,
+    stepOverrides: overrideStep,
+    validateConfig: (config) => {
+      const errs: string[] = [];
 
-        // Username plugin has minimal config validation requirements
-        // Future: Add validation for enableResetByUsername if implemented
+      // Username plugin has minimal config validation requirements
+      // Future: Add validation for enableResetByUsername if implemented
 
-        // Validate cleanup configuration
-        if (
-          config.cleanupIntervalMinutes &&
-          config.cleanupIntervalMinutes < 1
-        ) {
-          errs.push('cleanupIntervalMinutes must be at least 1 minute');
-        }
+      // Validate cleanup configuration
+      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
+        errs.push('cleanupIntervalMinutes must be at least 1 minute');
+      }
 
-        if (
-          config.cleanupIntervalMinutes &&
-          config.cleanupIntervalMinutes > 1440
-        ) {
-          errs.push(
-            'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
-          );
-        }
+      if (
+        config.cleanupIntervalMinutes &&
+        config.cleanupIntervalMinutes > 1440
+      ) {
+        errs.push(
+          'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
+        );
+      }
 
-        return errs.length ? errs : null;
-      },
+      return errs.length ? errs : null;
     },
-  ) as AuthPlugin<UsernamePasswordConfig, 'username-password'>;
+  }) satisfies typeof baseUsernamePasswordPlugin;
+
+  return pl;
+};
 
 export default usernamePasswordPlugin;

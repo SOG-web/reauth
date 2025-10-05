@@ -17,7 +17,10 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-reAuth.executeStep('email-password', '', {});
+reAuth.executeStep('email-password', 'login', {
+  email: '',
+  password: '',
+});
 
 const authAdapter = honoReAuth(
   {

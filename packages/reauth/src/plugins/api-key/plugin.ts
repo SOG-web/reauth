@@ -9,7 +9,7 @@ import { updateApiKeyStep } from './steps/update-api-key.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredApiKeys, cleanupOldUsageLogs } from './utils';
 
-export const baseApiKeyPlugin: AuthPlugin<ApiKeyConfig, 'api-key'> = {
+export const baseApiKeyPlugin = {
   name: 'api-key',
   initialize(engine) {
     // Register session resolver for API key subjects
@@ -155,7 +155,7 @@ export const baseApiKeyPlugin: AuthPlugin<ApiKeyConfig, 'api-key'> = {
     return { api_keys: items };
   },
   // Background cleanup now handles expired keys and usage logs via SimpleCleanupScheduler
-};
+} satisfies AuthPlugin<ApiKeyConfig, 'api-key'>;
 
 // Export a factory function that creates a configured plugin
 const apiKeyPlugin = (
@@ -164,41 +164,50 @@ const apiKeyPlugin = (
     name: string;
     override: Partial<AuthStep<ApiKeyConfig>>;
   }>,
-): AuthPlugin<ApiKeyConfig, 'api-key'> =>
-  createAuthPlugin<ApiKeyConfig, 'api-key'>(baseApiKeyPlugin, {
-    config,
-    stepOverrides: overrideStep,
-    validateConfig: (config) => {
-      const errs: string[] = [];
+) => {
+  const pl = createAuthPlugin<ApiKeyConfig, 'api-key', typeof baseApiKeyPlugin>(
+    baseApiKeyPlugin,
+    {
+      config,
+      stepOverrides: overrideStep,
+      validateConfig: (config) => {
+        const errs: string[] = [];
 
-      if (config.keyLength && config.keyLength < 16) {
-        errs.push('keyLength must be at least 16 characters for security');
-      }
+        if (config.keyLength && config.keyLength < 16) {
+          errs.push('keyLength must be at least 16 characters for security');
+        }
 
-      if (config.maxKeysPerUser && config.maxKeysPerUser < 1) {
-        errs.push('maxKeysPerUser must be at least 1');
-      }
+        if (config.maxKeysPerUser && config.maxKeysPerUser < 1) {
+          errs.push('maxKeysPerUser must be at least 1');
+        }
 
-      if (config.defaultTtlDays && config.defaultTtlDays < 1) {
-        errs.push('defaultTtlDays must be at least 1 day');
-      }
+        if (config.defaultTtlDays && config.defaultTtlDays < 1) {
+          errs.push('defaultTtlDays must be at least 1 day');
+        }
 
-      // Validate cleanup configuration
-      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
-        errs.push('cleanupIntervalMinutes must be at least 1 minute');
-      }
+        // Validate cleanup configuration
+        if (
+          config.cleanupIntervalMinutes &&
+          config.cleanupIntervalMinutes < 1
+        ) {
+          errs.push('cleanupIntervalMinutes must be at least 1 minute');
+        }
 
-      if (
-        config.cleanupIntervalMinutes &&
-        config.cleanupIntervalMinutes > 1440
-      ) {
-        errs.push(
-          'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
-        );
-      }
+        if (
+          config.cleanupIntervalMinutes &&
+          config.cleanupIntervalMinutes > 1440
+        ) {
+          errs.push(
+            'cleanupIntervalMinutes cannot exceed 1440 minutes (24 hours)',
+          );
+        }
 
-      return errs.length ? errs : null;
+        return errs.length ? errs : null;
+      },
     },
-  }) as AuthPlugin<ApiKeyConfig, 'api-key'>;
+  ) satisfies typeof baseApiKeyPlugin;
+
+  return pl;
+};
 
 export default apiKeyPlugin;
