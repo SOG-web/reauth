@@ -352,7 +352,13 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
         h.universal || !h.pluginName || h.pluginName === pluginName;
       const matchesStep = h.universal || !h.steps || h.steps.includes(stepName);
       if (matchesType && matchesPlugin && matchesStep) {
-        const res = await h.fn(current, this.container, error);
+        const res = await h.fn(
+          current,
+          this.container,
+          error,
+          pluginName,
+          stepName,
+        );
         if (typeof res !== 'undefined') current = res;
       }
     }

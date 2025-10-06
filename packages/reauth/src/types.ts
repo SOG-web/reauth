@@ -238,6 +238,8 @@ export interface AuthHook<
     data: StepInput<P, PN, SN> | StepOutput<P, PN, SN> | AuthInput | AuthOutput,
     container: ReAuthCradle,
     error?: unknown,
+    pluginName?: string,
+    stepName?: string,
   ) =>
     | Promise<StepInput<P, PN, SN> | StepOutput<P, PN, SN> | void>
     | StepInput<P, PN, SN>
