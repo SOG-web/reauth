@@ -119,6 +119,17 @@ export function Hero() {
                 className="h-12 rounded-none border-border/70 px-6"
                 asChild
               >
+                <Link href="/login">
+                  Test Auth
+                  <ShieldCheck className="ml-2 size-4" />
+                </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 rounded-none border-border/70 px-6"
+                asChild
+              >
                 <Link href="https://github.com/SOG-web/reauth">
                   <Code2 className="mr-2 size-4" />
                   View on GitHub
