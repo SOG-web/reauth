@@ -1,5 +1,16 @@
 # @re-auth/http-adapters
 
+## 1.0.0-alpha.18
+
+### Minor Changes
+
+- [`ee764c6`](https://github.com/SOG-web/reauth/commit/ee764c698ac4c476bd119f7e6e7f7a523e774a20) Thanks [@SOG-web](https://github.com/SOG-web)! - feat: add new changeset "whole-nights-yell" and update http-adapters version to 1.0.0-alpha.17
+
+### Patch Changes
+
+- Updated dependencies [[`ee764c6`](https://github.com/SOG-web/reauth/commit/ee764c698ac4c476bd119f7e6e7f7a523e774a20)]:
+  - @re-auth/reauth@0.1.0-alpha.21
+
 ## 1.0.0-alpha.3
 
 ### Minor Changes
