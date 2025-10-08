@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.22
+
+### Patch Changes
+
+- [`9adc36d`](https://github.com/SOG-web/reauth/commit/9adc36d8680cba77dcdc0f814e92993821a48e1a) Thanks [@SOG-web](https://github.com/SOG-web)! - feat: add root hooks support to various plugins and types
+
 ## 0.1.0-alpha.21
 
 ### Minor Changes
