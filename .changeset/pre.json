@@ -8,7 +8,8 @@
     "@repo/typescript-config": "0.0.0",
     "@repo/ui": "0.0.0",
     "@re-auth/http-adapters": "0.1.0-alpha.0",
-    "@re-auth/sdk-generator": "0.0.1"
+    "@re-auth/sdk-generator": "0.0.1",
+    "@re-auth/reauth-old": "0.1.0-alpha.19"
   },
   "changesets": [
     "all-chairs-poke",
@@ -35,6 +36,7 @@
     "quick-yaks-melt",
     "sixty-oranges-judge",
     "spicy-bugs-punch",
+    "spotty-snakes-jog",
     "tall-moons-see",
     "thin-turkeys-punch",
     "tiny-ghosts-know",
