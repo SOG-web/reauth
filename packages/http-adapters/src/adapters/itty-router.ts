@@ -14,6 +14,7 @@ import {
   cors,
   CorsOptions,
 } from 'itty-router';
+
 export class IttyRouterAdapter {
   public readonly name = 'itty-router';
   private adapter: ReAuthHttpAdapter;

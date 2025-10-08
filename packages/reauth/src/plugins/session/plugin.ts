@@ -178,6 +178,7 @@ const sessionPlugin = (
     validateConfig: (config) => {
       return validateSessionConfig(config);
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof baseSessionPlugin;
 
   return pl;

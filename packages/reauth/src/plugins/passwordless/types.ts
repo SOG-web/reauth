@@ -1,3 +1,4 @@
+import { RootStepHooks } from '../../types';
 import { SendMagicLinkInput } from './steps/send-magic-link.step';
 
 export type PasswordlessConfig = {
@@ -8,6 +9,16 @@ export type PasswordlessConfig = {
 
   useEmailPlugin: boolean;
   getEmail?: (input: SendMagicLinkInput) => Promise<string>;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<PasswordlessConfig>;
 } & (
   | {
       // Magic links enabled

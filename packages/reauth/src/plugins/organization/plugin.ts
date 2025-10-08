@@ -260,6 +260,7 @@ const organizationPlugin = (
 
       return errs.length ? errs : null;
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof baseOrganizationPlugin;
 
   return pl;

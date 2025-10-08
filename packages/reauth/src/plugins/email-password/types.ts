@@ -1,3 +1,5 @@
+import { RootStepHooks } from '../../types';
+
 export type EmailPasswordConfig = {
   loginOnRegister?: boolean; // default true
   sessionTtlSeconds?: number; // default 3600
@@ -17,6 +19,15 @@ export type EmailPasswordConfig = {
     checkEnvironment: (environment: string) => boolean;
   };
   cleanupIntervalMinutes?: number; // default 60 (1 hour)
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<EmailPasswordConfig>;
 } & (
   | {
       verifyEmail: true;

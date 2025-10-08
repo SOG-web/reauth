@@ -1,5 +1,5 @@
 import type { Type } from 'arktype';
-import type { StepContext } from '../../types';
+import type { RootStepHooks, StepContext } from '../../types';
 
 export type ConversionTargetDefinition = {
   // Name of the step to call for conversion in the target plugin (e.g., 'register').
@@ -32,4 +32,14 @@ export type AnonymousConfig = {
   // Configuration for each target plugin defining how conversion should be performed.
   // Key is the target plugin name.
   conversionTargets?: Record<string, ConversionTargetDefinition>;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<AnonymousConfig>;
 };

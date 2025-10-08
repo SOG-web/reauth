@@ -1,3 +1,5 @@
+import { RootStepHooks } from '../../types';
+
 export type SessionConfig = {
   // Session management
   maxConcurrentSessions?: number; // default: unlimited (0)
@@ -14,4 +16,14 @@ export type SessionConfig = {
   requireDeviceFingerprint?: boolean; // default: false
   enableGeoLocation?: boolean; // default: false (privacy-conscious)
   maxSessionsPerDevice?: number; // default: unlimited (0)
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<SessionConfig>;
 };

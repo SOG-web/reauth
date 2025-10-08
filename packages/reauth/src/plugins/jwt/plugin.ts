@@ -236,6 +236,7 @@ const jwtPlugin = (
 
         return errs.length ? errs : null;
       },
+      rootHooks: config.rootHooks,
     },
   ) satisfies typeof baseJWTPlugin;
 

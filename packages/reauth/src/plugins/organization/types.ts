@@ -1,4 +1,4 @@
-import { Token } from '../../types';
+import { RootStepHooks, Token } from '../../types';
 
 export interface OrganizationConfig {
   // Organization limits
@@ -17,6 +17,16 @@ export interface OrganizationConfig {
 
   useEmailPlugin: boolean;
   getEmail?: (email: string) => Promise<string>;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<OrganizationConfig>;
 }
 
 // Input/Output types for organization steps

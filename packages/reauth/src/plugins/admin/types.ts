@@ -1,3 +1,5 @@
+import { RootStepHooks } from '../../types';
+
 export interface AdminConfig {
   // Role configuration
   adminRole: string;
@@ -29,6 +31,16 @@ export interface AdminConfig {
 
   // Additional permissions
   customPermissions?: Record<string, string[]>;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<AdminConfig>;
 }
 
 export interface AdminAction {

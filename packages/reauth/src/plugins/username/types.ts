@@ -1,3 +1,5 @@
+import { RootStepHooks } from '../../types';
+
 export type UsernamePasswordConfig = {
   loginOnRegister?: boolean; // default true
   sessionTtlSeconds?: number; // default 3600
@@ -26,4 +28,14 @@ export type UsernamePasswordConfig = {
   ) => Promise<void>;
   // Cleanup configuration
   cleanupIntervalMinutes?: number; // default 60 (1 hour)
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<UsernamePasswordConfig>;
 };

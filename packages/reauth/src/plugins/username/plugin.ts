@@ -142,6 +142,7 @@ const usernamePasswordPlugin = (
 
       return errs.length ? errs : null;
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof baseUsernamePasswordPlugin;
 
   return pl;

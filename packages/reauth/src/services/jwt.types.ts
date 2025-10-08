@@ -1,4 +1,5 @@
 import type { JWK, JWTPayload } from 'jose';
+import { RootStepHooks } from '../types';
 
 // Client Types
 export type ClientType = 'public' | 'confidential';
@@ -179,4 +180,14 @@ export interface JWTPluginConfig extends JWTServiceConfig {
   // Plugin-specific settings
   enableLegacyTokenSupport: boolean;
   issuer: string; // JWT issuer claim
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<JWTPluginConfig>;
 }

@@ -1,3 +1,5 @@
+import { RootStepHooks } from '../../types';
+
 export type PhonePasswordConfig = {
   loginOnRegister?: boolean; // default true
   sessionTtlSeconds?: number; // default 3600
@@ -18,6 +20,16 @@ export type PhonePasswordConfig = {
   };
 
   cleanupIntervalMinutes?: number; // default 60 (1 hour)
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<PhonePasswordConfig>;
 } & (
   | {
       verifyPhone: true;

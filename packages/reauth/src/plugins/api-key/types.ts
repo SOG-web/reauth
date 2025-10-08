@@ -1,3 +1,5 @@
+import { RootStepHooks } from '../../types';
+
 export type ApiKeyConfig = {
   keyLength?: number; // Length of generated API key (default: 32)
   keyPrefix?: string; // Prefix for generated keys (default: 'ak_')
@@ -9,6 +11,16 @@ export type ApiKeyConfig = {
 
   // Cleanup options
   cleanupIntervalMinutes?: number; // Cleanup frequency in minutes (default: 60)
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<ApiKeyConfig>;
 };
 
 // Supported scopes for API key permissions

@@ -29,7 +29,7 @@ export const baseAdminPlugin = {
             b.and(b('subject_id', '=', id), b('role', '=', 'admin')),
         });
 
-        return adminRole ? subject as Subject : null;
+        return adminRole ? (subject as Subject) : null;
       },
       sanitize(subject: any) {
         // Remove sensitive admin data
@@ -44,7 +44,12 @@ export const baseAdminPlugin = {
       universal: true, // Applies to all plugins and steps
       async fn(input, container, error, pluginName, stepName) {
         // Skip if no input or no token
-        if (!input || typeof input !== 'object' || !('token' in input) || !input.token) {
+        if (
+          !input ||
+          typeof input !== 'object' ||
+          !('token' in input) ||
+          !input.token
+        ) {
           return input;
         }
 
@@ -57,13 +62,14 @@ export const baseAdminPlugin = {
 
             // Check for active bans
             const activeBan = await orm.findFirst('user_bans', {
-              where: (b) => b.and(
-                b('subject_id', '=', session.subject!.id),
-                b.or(
-                  b('expires_at', '>', new Date()),
-                  b('expires_at', '=', null)
-                )
-              ),
+              where: (b) =>
+                b.and(
+                  b('subject_id', '=', session.subject!.id),
+                  b.or(
+                    b('expires_at', '>', new Date()),
+                    b('expires_at', '=', null),
+                  ),
+                ),
             });
 
             if (activeBan) {
@@ -86,15 +92,20 @@ export const baseAdminPlugin = {
               const isStepAllowed = allowedSteps.includes(currentStep);
 
               // Allow access if reason OR plugin OR step is allowed
-              const isAllowed = isReasonAllowed || isPluginAllowed || isStepAllowed;
+              const isAllowed =
+                isReasonAllowed || isPluginAllowed || isStepAllowed;
 
               if (!isAllowed) {
                 // User is banned and this configuration doesn't allow access
-                const banMessage = String(activeBan.reason || 'Your account has been banned');
+                const banMessage = String(
+                  activeBan.reason || 'Your account has been banned',
+                );
                 const error = new Error(banMessage);
                 (error as any).status = 'aut';
                 (error as any).code = 'ACCOUNT_BANNED';
-                (error as any).banExpiresAt = (activeBan.expires_at as Date)?.toISOString();
+                (error as any).banExpiresAt = (
+                  activeBan.expires_at as Date
+                )?.toISOString();
                 (error as any).banReason = activeBan.reason;
                 (error as any).pluginName = currentPlugin;
                 (error as any).stepName = currentStep;
@@ -256,6 +267,7 @@ const adminPlugin = (
 
         return errs.length ? errs : null;
       },
+      rootHooks: config.rootHooks,
     },
   ) satisfies typeof baseAdminPlugin;
 

@@ -60,6 +60,14 @@ const createOAuthPlugin = (
   >(baseOAuthPlugin, {
     config,
     stepOverrides: overrideStep,
+    validateConfig: (config) => {
+      const errs: string[] = [];
+      if (!config.providers || config.providers.length === 0) {
+        errs.push('At least one OAuth provider must be configured');
+      }
+      return errs;
+    },
+    rootHooks: config.rootHooks,
   }) satisfies typeof baseOAuthPlugin;
 
   return pl;

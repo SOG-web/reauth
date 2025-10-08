@@ -200,6 +200,7 @@ const emailOrUsernamePlugin = (
 
       return errs.length ? errs : null;
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof baseEmailOrUsernamePlugin;
 
   return pl;

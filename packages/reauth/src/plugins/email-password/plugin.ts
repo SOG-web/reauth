@@ -185,6 +185,7 @@ const emailPasswordPlugin = (
 
       return errs.length ? errs : null;
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof baseEmailPasswordPlugin;
 
   return pl;

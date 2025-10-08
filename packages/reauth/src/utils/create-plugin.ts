@@ -9,6 +9,7 @@ export interface PluginFactoryConfig<Cfg> {
   config?: Partial<Cfg>;
   stepOverrides?: StepOverride<Cfg>[];
   validateConfig?: (config: Partial<Cfg>) => string[] | null;
+  rootHooks?: RootStepHooks<Cfg>;
 }
 
 /**
@@ -22,7 +23,12 @@ export function createAuthPlugin<
   basePlugin: BasePlugin,
   factoryConfig: PluginFactoryConfig<Cfg> = {},
 ): BasePlugin {
-  const { config = {}, stepOverrides = [], validateConfig } = factoryConfig;
+  const {
+    config = {},
+    stepOverrides = [],
+    validateConfig,
+    rootHooks,
+  } = factoryConfig;
 
   if (!basePlugin) throw new Error('basePlugin is required');
   if (!Array.isArray(basePlugin.steps))
@@ -54,7 +60,7 @@ export function createAuthPlugin<
       ...(config as Cfg),
     },
     steps,
-    rootHooks: basePlugin.rootHooks,
+    rootHooks: rootHooks || basePlugin.rootHooks,
   };
 
   return plugin as BasePlugin;

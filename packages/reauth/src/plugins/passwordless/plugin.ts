@@ -245,6 +245,7 @@ const passwordlessPlugin = (
 
       return errs.length ? errs : null;
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof basePasswordlessPlugin;
 
   return pl;

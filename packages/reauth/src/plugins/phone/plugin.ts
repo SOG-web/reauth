@@ -181,6 +181,7 @@ const phonePasswordPlugin = (
 
       return errs.length ? errs : null;
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof basePhonePasswordPlugin;
 
   return pl;

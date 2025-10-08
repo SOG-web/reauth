@@ -1,3 +1,4 @@
+import { RootStepHooks } from '../../types';
 import type { EmailPasswordConfig } from '../email-password/types';
 import type { UsernamePasswordConfig } from '../username/types';
 
@@ -54,4 +55,14 @@ export type EmailOrUsernameConfig = {
     environment: string;
     checkEnvironment: (environment: string) => boolean;
   };
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<EmailOrUsernameConfig>;
 };

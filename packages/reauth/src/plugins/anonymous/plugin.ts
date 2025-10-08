@@ -204,6 +204,7 @@ const anonymousPlugin = (
 
       return errs.length ? errs : null;
     },
+    rootHooks: config.rootHooks,
   }) satisfies typeof baseAnonymousPlugin;
 
   return pl;

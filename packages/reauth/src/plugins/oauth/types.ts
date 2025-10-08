@@ -1,4 +1,9 @@
-import type { AuthInput, AuthOutput, AuthPlugin } from '../../types';
+import type {
+  AuthInput,
+  AuthOutput,
+  AuthPlugin,
+  RootStepHooks,
+} from '../../types';
 
 /**
  * OAuth ID token claims structure
@@ -76,7 +81,9 @@ export type OAuthClientFactory<T extends BaseOAuthConfig> = (config: T) => any;
 /**
  * OAuth provider configuration
  */
-export interface OAuthProviderConfig<T extends BaseOAuthConfig = BaseOAuthConfig> {
+export interface OAuthProviderConfig<
+  T extends BaseOAuthConfig = BaseOAuthConfig,
+> {
   name: string;
   type: OAuthProviderType;
   clientFactory: OAuthClientFactory<T>;
@@ -91,6 +98,16 @@ export interface OAuthProviderConfig<T extends BaseOAuthConfig = BaseOAuthConfig
 export interface OAuthPluginConfig {
   providers?: OAuthProviderConfig[];
   sessionTtlSeconds?: number;
+
+  /**
+   * Root hooks
+   * @example
+   * rootHooks: {
+   *  before: async (input, pluginProperties) => {
+   *    // do something before the plugin runs
+   *  }
+   */
+  rootHooks?: RootStepHooks<OAuthPluginConfig>;
 }
 
 /**
@@ -99,6 +116,9 @@ export interface OAuthPluginConfig {
 export interface OAuthStepContext {
   provider: OAuthProviderConfig;
   client: any;
-  getUserInfo: (accessToken: string, idToken?: string) => Promise<OAuthUserInfo>;
+  getUserInfo: (
+    accessToken: string,
+    idToken?: string,
+  ) => Promise<OAuthUserInfo>;
   linkField: string;
 }
