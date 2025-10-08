@@ -1,5 +1,11 @@
 # @re-auth/http-adapters
 
+## 1.0.0-alpha.3
+
+### Minor Changes
+
+- [`eb7c66b`](https://github.com/SOG-web/reauth/commit/eb7c66beab019cc8a79d576a854dbfa72a2b7a61) Thanks [@SOG-web](https://github.com/SOG-web)! - updating
+
 ## 1.0.0-alpha.2
 
 ### Minor Changes
