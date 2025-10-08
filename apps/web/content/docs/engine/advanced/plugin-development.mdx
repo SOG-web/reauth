@@ -48,92 +48,146 @@ flowchart TB
 
 ### Basic Structure
 
-Every plugin implements the `AuthPlugin<Cfg>` interface:
+Every plugin implements the `AuthPlugin<Cfg>` interface. ReAuth uses a base plugin + factory pattern:
 
 ```typescript
-import { type AuthPlugin, type AuthStep } from '@re-auth/reauth';
+import {
+  type AuthPlugin,
+  type AuthStep,
+  createAuthPlugin,
+} from '@re-auth/reauth';
 import { type } from 'arktype';
 
 export interface MyPluginConfig {
   sessionTtlSeconds: number;
   requireVerification: boolean;
+  sendCode?: (
+    subject: any,
+    code: string,
+    email: string,
+    type: string,
+  ) => Promise<void>;
   // ... other config
 }
 
+// 1. Define the base plugin structure
+export const baseMyAuthPlugin = {
+  name: 'my-auth-plugin' as const,
+
+  // Initialize hook - register session resolvers, cleanup tasks
+  initialize(engine) {
+    // Register session resolver for this plugin's subject type
+    engine.registerSessionResolver('subject', {
+      async getById(id: string, orm) {
+        const subject = await orm.findFirst('subjects', {
+          where: (b: any) => b('id', '=', id),
+        });
+        return (subject ?? null) as unknown as
+          | import('@re-auth/reauth').Subject
+          | null;
+      },
+      sanitize(subject: any) {
+        // Remove sensitive fields
+        return subject;
+      },
+    });
+
+    // Register background cleanup task
+    const config = this.config || {};
+    const cleanupIntervalMs = (config.cleanupIntervalMinutes || 60) * 60 * 1000;
+
+    engine.registerCleanupTask({
+      name: 'my-cleanup',
+      pluginName: 'my-auth-plugin',
+      intervalMs: cleanupIntervalMs,
+      enabled: true,
+      runner: async (orm, pluginConfig) => {
+        try {
+          // Cleanup logic here
+          return { cleaned: 0 };
+        } catch (error) {
+          return {
+            cleaned: 0,
+            errors: [
+              `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+            ],
+          };
+        }
+      },
+    });
+  },
+
+  // Default configuration
+  config: {
+    sessionTtlSeconds: 3600,
+    requireVerification: false,
+    cleanupIntervalMinutes: 60,
+  },
+
+  // Array of authentication steps
+  steps: [registerStep, loginStep],
+
+  // Optional: retrieve profile data for a subject
+  async getProfile(subjectId, ctx) {
+    const orm = await ctx.engine.getOrm();
+    // Fetch and return profile data
+    return {
+      /* profile data */
+    };
+  },
+
+  // Optional: return sensitive field names for introspection filtering
+  getSensitiveFields() {
+    return ['password', 'passwordHash', 'verificationCode'];
+  },
+} satisfies AuthPlugin<MyPluginConfig, 'my-auth-plugin'>;
+
+// 2. Create factory function that merges config and allows step overrides
 export const myAuthPlugin = (
   config: Partial<MyPluginConfig>,
-): AuthPlugin<MyPluginConfig> => {
-  return {
-    name: 'my-auth-plugin',
-    config: {
-      sessionTtlSeconds: 3600,
-      requireVerification: true,
-      ...config,
+  options?: {
+    stepOverrides?: Array<{
+      name: string;
+      override: Partial<AuthStep<MyPluginConfig>>;
+    }>;
+    rootHooks?: {
+      before?: (input: any, ctx: any, step: any) => Promise<any> | any;
+      after?: (output: any, ctx: any, step: any) => Promise<any> | any;
+      onError?: (
+        error: unknown,
+        input: any,
+        ctx: any,
+        step: any,
+      ) => Promise<void> | void;
+    };
+  },
+) => {
+  const pl = createAuthPlugin(baseMyAuthPlugin, {
+    config,
+    stepOverrides: options?.stepOverrides,
+    validateConfig: (config) => {
+      const errs: string[] = [];
+
+      if (config.requireVerification && !config.sendCode) {
+        errs.push(
+          'requireVerification is true but sendCode function is not provided',
+        );
+      }
+
+      if (config.cleanupIntervalMinutes && config.cleanupIntervalMinutes < 1) {
+        errs.push('cleanupIntervalMinutes must be at least 1 minute');
+      }
+
+      return errs.length ? errs : null;
     },
+    rootHooks: options?.rootHooks,
+  });
 
-    // Initialize hook - register session resolvers, cleanup tasks
-    initialize(engine) {
-      // Register session resolver for this plugin's subject type
-      engine.registerSessionResolver('mySubjectType', {
-        async getById(id: string, orm) {
-          const subject = await orm.findFirst('subjects', {
-            where: (b: any) => b('id', '=', id),
-          });
-          return subject;
-        },
-        sanitize(subject: any) {
-          // Remove sensitive fields
-          return subject;
-        },
-      });
-
-      // Register background cleanup task
-      engine.registerCleanupTask({
-        name: 'my-cleanup',
-        pluginName: 'my-auth-plugin',
-        intervalMs: 60000, // 1 minute
-        enabled: true,
-        runner: async (orm, config) => {
-          // Cleanup logic
-          return { cleaned: 0 };
-        },
-      });
-    },
-
-    // Array of authentication steps
-    steps: [registerStep, loginStep],
-
-    // Root-level hooks (apply to all steps in this plugin)
-    rootHooks: {
-      before: async (input, ctx, step) => {
-        // Pre-process input before step validation
-        return input;
-      },
-      after: async (output, ctx, step) => {
-        // Post-process output after step execution
-        return output;
-      },
-      onError: async (error, input, ctx, step) => {
-        // Handle errors for all steps
-        console.error(`Error in ${step.name}:`, error);
-      },
-    },
-
-    // Optional: retrieve profile data for a subject
-    async getProfile(subjectId, ctx) {
-      const orm = await ctx.engine.getOrm();
-      // Fetch and return profile data
-      return {
-        /* profile data */
-      };
-    },
-
-    // Optional: return sensitive field names for introspection filtering
-    getSensitiveFields() {
-      return ['password', 'passwordHash', 'verificationCode'];
-    },
-  };
+  return pl;
 };
+
+// 3. Export default factory
+export default myAuthPlugin;
 ```
 
 ### Step Structure
@@ -145,12 +199,19 @@ import {
   type AuthStep,
   type StepContext,
   type AuthOutput,
+  tokenType,
 } from '@re-auth/reauth';
 import { type } from 'arktype';
 
 export interface MyPluginConfig {
   sessionTtlSeconds: number;
   requireVerification: boolean;
+  sendCode?: (
+    subject: any,
+    code: string,
+    email: string,
+    type: string,
+  ) => Promise<void>;
 }
 
 export type RegisterInput = {
@@ -165,73 +226,150 @@ const registerValidation = type({
   'others?': 'object | undefined',
 });
 
-export const registerStep: AuthStep<MyPluginConfig, RegisterInput, AuthOutput> =
-  {
-    name: 'register',
-    description: 'Register a new user with email and password',
+export const registerStep: AuthStep<
+  MyPluginConfig,
+  'register',
+  RegisterInput,
+  AuthOutput
+> = {
+  name: 'register',
+  description: 'Register a new user with email and password',
 
-    // ArkType validation schema for inputs
-    validationSchema: registerValidation,
+  // ArkType validation schema for inputs
+  validationSchema: registerValidation,
 
-    // Optional: ArkType validation schema for outputs
-    outputs: type({
-      success: 'boolean',
-      message: 'string',
-      status: 'string',
-      'subject?': type({
-        id: 'string',
-        email: 'string',
-      }),
+  // Optional: ArkType validation schema for outputs
+  outputs: type({
+    success: 'boolean',
+    message: 'string',
+    status: 'string',
+    'token?': tokenType,
+    'subject?': type({
+      id: 'string',
+      email: 'string',
+      provider: 'string',
+      verified: 'boolean',
     }),
+    'others?': 'object | undefined',
+  }),
 
-    // Protocol metadata for adapters (HTTP codes, auth requirements)
-    protocol: {
-      http: {
-        method: 'POST',
-        codes: { su: 200, ip: 400, ic: 400 },
-        auth: false,
-      },
+  // Protocol metadata for adapters (HTTP codes, auth requirements)
+  protocol: {
+    http: {
+      method: 'POST',
+      codes: { su: 200, ip: 400, ic: 400 },
+      auth: false,
     },
+  },
 
-    // List of input field names for introspection
-    inputs: ['email', 'password', 'others'],
+  // List of input field names for introspection
+  inputs: ['email', 'password', 'others'],
 
-    // Main execution logic
-    async run(input, ctx) {
-      const { email, password, others } = input;
-      const orm = await ctx.engine.getOrm();
+  // Main execution logic
+  async run(input, ctx) {
+    const { email, password, others } = input;
+    const orm = await ctx.engine.getOrm();
 
-      // Your business logic here
-      const subject = await orm.create('subjects', {});
+    // Check if user already exists
+    const existing = await orm.findFirst('identities', {
+      where: (b: any) =>
+        b.and(b('provider', '=', 'email'), b('identifier', '=', email)),
+    });
 
-      const token = await ctx.engine.createSessionFor(
-        'subject',
-        subject.id,
-        ctx.config.sessionTtlSeconds,
-      );
-
+    if (existing) {
       return {
-        success: true,
-        message: 'Registration successful',
-        status: 'su',
-        subject: { id: subject.id, email },
-        token,
+        success: false,
+        message: 'User already exists',
+        status: 'ip',
+        others,
       };
-    },
+    }
 
-    // Step-level hooks (optional)
-    hooks: {
-      before: async (input, ctx) => {
-        // Pre-process before validation
-      },
-      after: async (output, ctx) => {
-        // Post-process after execution
-      },
-      onError: async (error, ctx) => {
-        // Handle errors for this step
-      },
+    // Create subject and credentials
+    const subject = await orm.create('subjects', {});
+    await orm.create('credentials', {
+      subject_id: subject.id,
+      password_hash: await hashPassword(password),
+    });
+
+    // Create identity
+    const identity = await orm.create('identities', {
+      subject_id: subject.id,
+      provider: 'email',
+      identifier: email,
+      verified: false,
+    });
+
+    // Create email identity record
+    await orm.create('email_identities', {
+      identity_id: identity.id,
+    });
+
+    // Handle email verification if required
+    if (ctx.config.requireVerification && ctx.config.sendCode) {
+      const code = generateCode();
+      const hashedCode = await hashPassword(String(code));
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+      await orm.upsert('email_identities', {
+        where: (b: any) => b('identity_id', '=', identity.id),
+        create: {
+          identity_id: identity.id,
+          verification_code: hashedCode,
+          verification_code_expires_at: expiresAt,
+        },
+        update: {
+          verification_code: hashedCode,
+          verification_code_expires_at: expiresAt,
+        },
+      });
+
+      await ctx.config.sendCode({ id: subject.id }, code, email, 'verify');
+    }
+
+    // Create session if login on register is enabled
+    const loginOnRegister = ctx.config?.loginOnRegister ?? true;
+    const ttl = ctx.config?.sessionTtlSeconds ?? 3600;
+    const token = loginOnRegister
+      ? await ctx.engine.createSessionFor('subject', subject.id as string, ttl)
+      : undefined;
+
+    const outSubject = {
+      id: subject.id,
+      email,
+      provider: 'email',
+      verified: !ctx.config.requireVerification,
+    };
+
+    const baseResult = {
+      success: true,
+      message: 'Registration successful',
+      status: 'su',
+      subject: outSubject,
+      others,
+    } as const;
+
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
+  },
+
+  // Step-level hooks (optional)
+  hooks: {
+    before: async (input, ctx) => {
+      // Pre-process before validation
+      console.log(`Registering user: ${input.email}`);
     },
-  };
+    after: async (output, ctx) => {
+      // Post-process after execution
+      if (output.success) {
+        console.log(`User registered successfully: ${output.subject?.id}`);
+      }
+    },
+    onError: async (error, ctx) => {
+      // Handle errors for this step
+      console.error('Registration failed:', error);
+    },
+  },
+};
 ```
 
 <Callout title="Type safety" type="success">
@@ -252,12 +390,17 @@ export interface MyPluginConfig {
 
 export const registerStep: AuthStep<MyPluginConfig> = {
   name: 'register',
+  validationSchema: type({
+    email: 'string.email',
+    password: 'string>8',
+  }),
   async run(input, ctx: StepContext<MyPluginConfig>) {
     // Access the ReAuth engine
     const orm = await ctx.engine.getOrm();
 
     // Access plugin configuration
     const ttl = ctx.config.sessionTtlSeconds;
+    const loginOnRegister = ctx.config.loginOnRegister ?? true;
 
     // 1. Check if user exists
     const existing = await orm.findFirst('identities', {
@@ -290,28 +433,44 @@ export const registerStep: AuthStep<MyPluginConfig> = {
       verified: false,
     });
 
-    // 4. Send verification code if configured
+    // 4. Create email identity record
+    await orm.create('email_identities', {
+      identity_id: identity.id,
+    });
+
+    // 5. Send verification code if configured
     if (ctx.config.sendCode) {
       const code = generateCode();
       await ctx.config.sendCode({ id: subject.id }, code, input.email, 'verify');
     }
 
-    // 5. Create session
-    const token = await ctx.engine.createSessionFor(
-      'subject',
-      subject.id,
-      ttl,
-    );
+    // 6. Create session if login on register is enabled
+    const token = loginOnRegister
+      ? await ctx.engine.createSessionFor('subject', subject.id as string, ttl)
+      : undefined;
 
-    return {
+    const outSubject = {
+      id: subject.id,
+      email: input.email,
+      provider: 'email',
+      verified: false,
+    };
+
+    const baseResult = {
       success: true,
       message: 'Registration successful',
       status: 'su',
-      subject: { id: subject.id, email: input.email },
-      token,
-    };
+      subject: outSubject,
+    } as const;
+
+    return attachNewTokenIfDifferent(baseResult, undefined, token);
   }
 ```
+
+**Key Context Properties:**
+
+- `ctx.engine`: The ReAuth engine instance with methods like `getOrm()`, `createSessionFor()`, etc.
+- `ctx.config`: The merged plugin configuration (defaults + user config)
 
 ### Utility Functions
 
@@ -686,16 +845,29 @@ Write tests for your plugin using Vitest:
 
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest';
-import createReAuthEngine from '@re-auth/reauth';
-import { createTestDatabase } from './test-utils';
-import { myAuthPlugin } from './my-plugin';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import { myAuthPlugin, myPluginSchema } from './my-plugin';
 
 describe('MyAuthPlugin', () => {
   let engine: ReturnType<typeof createReAuthEngine>;
   let dbClient: any;
 
   beforeEach(async () => {
-    dbClient = await createTestDatabase();
+    // Setup test database with plugin schema
+    const { schema: v1 } = reauthDb('1.0.1', [myPluginSchema]);
+    const factory = reauthDbVersions([v1]);
+    const client = factory.client(
+      kyselyAdapter({ provider: 'sqlite', db: ':memory:' }),
+    );
+
+    dbClient = {
+      version: async () => await client.version(),
+      orm: (version: any) => client.orm(version),
+    };
 
     engine = createReAuthEngine({
       dbClient,
@@ -703,6 +875,7 @@ describe('MyAuthPlugin', () => {
       getUserData: async () => ({}),
     });
   });
+
   it('should register a new user', async () => {
     const result = await engine.executeStep('my-auth-plugin', 'register', {
       email: 'test@example.com',
@@ -1017,17 +1190,16 @@ const verifyCodeStep: AuthStep<SMSAuthConfig> = {
 
 // ============= Plugin Definition =============
 
-export const smsAuthPlugin = (
-  config: Partial<SMSAuthConfig>,
-): AuthPlugin<SMSAuthConfig> => ({
-  name: 'sms-auth',
+// Base plugin structure
+export const baseSmsAuthPlugin = {
+  name: 'sms-auth' as const,
 
   config: {
     apiKey: '',
     from: '',
     sessionTtlSeconds: 3600,
     codeExpiresIn: 10 * 60 * 1000, // 10 minutes
-    ...config,
+    cleanupIntervalMinutes: 5, // 5 minutes
   },
 
   initialize(engine) {
@@ -1037,7 +1209,9 @@ export const smsAuthPlugin = (
         const subject = await orm.findFirst('subjects', {
           where: (b: any) => b('id', '=', id),
         });
-        return subject;
+        return (subject ?? null) as unknown as
+          | import('@re-auth/reauth').Subject
+          | null;
       },
       sanitize(subject: any) {
         return subject;
@@ -1045,45 +1219,37 @@ export const smsAuthPlugin = (
     });
 
     // Register cleanup task for expired codes
+    const config = this.config || {};
+    const cleanupIntervalMs = (config.cleanupIntervalMinutes || 5) * 60 * 1000;
+
     engine.registerCleanupTask({
       name: 'expired-sms-codes',
       pluginName: 'sms-auth',
-      intervalMs: 5 * 60 * 1000, // 5 minutes
+      intervalMs: cleanupIntervalMs,
       enabled: true,
 
-      async runner(orm) {
-        const deleted = await orm.deleteMany('sms_verification_codes', {
-          where: (b: any) => b('expires_at', '<', new Date()),
-        });
+      async runner(orm, pluginConfig) {
+        try {
+          const deleted = await orm.deleteMany('sms_verification_codes', {
+            where: (b: any) => b('expires_at', '<', new Date()),
+          });
 
-        return {
-          cleaned: deleted.count || 0,
-        };
+          return {
+            cleaned: deleted.count || 0,
+          };
+        } catch (error) {
+          return {
+            cleaned: 0,
+            errors: [
+              `Cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+            ],
+          };
+        }
       },
     });
   },
 
   steps: [sendCodeStep, verifyCodeStep],
-
-  // Root hooks for all steps
-  rootHooks: {
-    before: async (input, ctx, step) => {
-      console.log(`[SMS Auth] Executing step: ${step.name}`);
-      return input;
-    },
-
-    after: async (output, ctx, step) => {
-      // Log successful operations
-      if (output.success) {
-        console.log(`[SMS Auth] ${step.name} successful`);
-      }
-      return output;
-    },
-
-    onError: async (error, input, ctx, step) => {
-      console.error(`[SMS Auth] Error in ${step.name}:`, error);
-    },
-  },
 
   async getProfile(subjectId, ctx) {
     const orm = await ctx.engine.getOrm();
@@ -1102,17 +1268,73 @@ export const smsAuthPlugin = (
   getSensitiveFields() {
     return ['code', 'apiKey'];
   },
-});
+} satisfies AuthPlugin<SMSAuthConfig, 'sms-auth'>;
+
+// Factory function
+export const smsAuthPlugin = (
+  config: Partial<SMSAuthConfig>,
+  options?: {
+    rootHooks?: {
+      before?: (input: any, ctx: any, step: any) => Promise<any> | any;
+      after?: (output: any, ctx: any, step: any) => Promise<any> | any;
+      onError?: (
+        error: unknown,
+        input: any,
+        ctx: any,
+        step: any,
+      ) => Promise<void> | void;
+    };
+  },
+) => {
+  const pl = createAuthPlugin(baseSmsAuthPlugin, {
+    config,
+    validateConfig: (config) => {
+      const errs: string[] = [];
+
+      if (!config.apiKey) {
+        errs.push('apiKey is required for SMS authentication');
+      }
+
+      if (!config.from) {
+        errs.push('from phone number is required for SMS authentication');
+      }
+
+      return errs.length ? errs : null;
+    },
+    rootHooks: options?.rootHooks || {
+      before: async (input, ctx, step) => {
+        console.log(`[SMS Auth] Executing step: ${step.name}`);
+        return input;
+      },
+      after: async (output, ctx, step) => {
+        if (output.success) {
+          console.log(`[SMS Auth] ${step.name} successful`);
+        }
+        return output;
+      },
+      onError: async (error, input, ctx, step) => {
+        console.error(`[SMS Auth] Error in ${step.name}:`, error);
+      },
+    },
+  });
+
+  return pl;
+};
 ```
 
 **Usage:**
 
 ```typescript
-import createReAuthEngine from '@re-auth/reauth';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
 import { kyselyAdapter } from 'fumadb/adapters/kysely';
-import { smsAuthPlugin } from './sms-auth-plugin';
+import { smsAuthPlugin, smsAuthSchema } from './sms-auth-plugin';
 
-// Setup database client
+// Setup database with plugin schema
+const { schema: v1 } = reauthDb('1.0.1', [smsAuthSchema]);
+const factory = reauthDbVersions([v1]);
 const client = factory.client(
   kyselyAdapter({ provider: 'sqlite', db: kysely }),
 );

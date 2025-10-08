@@ -23,35 +23,28 @@ ReAuth plugins are self-contained modules that register authentication flows (ca
 
 <Steps>
   <Step>
-    <h4>1. Registration</h4>
-    <p>
-      The engine calls <code>plugin.initialize(engine, config)</code> during
-      construction, allowing the plugin to register resolvers, cleanup tasks,
-      and configure dependencies.
-    </p>
+    <h4>Registration</h4>
+    The engine calls <code>plugin.initialize(engine, config)</code> during
+    construction, allowing the plugin to register resolvers, cleanup tasks, and
+    configure dependencies.
   </Step>
   <Step>
-    <h4>2. Step Execution</h4>
-    <p>
-      When <code>engine.executeStep(pluginName, stepName, input)</code> runs,
-      the engine validates input, calls plugin-level and step-level hooks, and
-      returns typed output.
-    </p>
+    <h4>Step Execution</h4>
+    When <code>engine.executeStep(pluginName, stepName, input)</code> runs, the
+    engine validates input, calls plugin-level and step-level hooks, and returns
+    typed output.
   </Step>
   <Step>
-    <h4>3. Background Tasks</h4>
-    <p>
-      Registered cleanup tasks run on intervals (e.g., every hour) to prune
-      expired codes, invitations, or sessions without blocking request flows.
-    </p>
+    <h4>Background Tasks</h4>
+    Registered cleanup tasks run on intervals (e.g., every hour) to prune
+    expired codes, invitations, or sessions without blocking request flows.
   </Step>
   <Step>
-    <h4>4. Profile Aggregation</h4>
-    <p>
+    <h4>Profile Aggregation</h4>
       The engine can call <code>plugin.getProfile(subjectId, ctx)</code> to
       gather user-specific data (emails, credentials, memberships) for unified
       responses.
-    </p>
+
   </Step>
 </Steps>
 
@@ -61,24 +54,76 @@ ReAuth ships with production-ready plugins for common authentication patterns:
 
 <Cards>
   <Card
+    href="/docs/engine/plugins/admin"
+    title="Admin Plugin"
+    description="User management, role-based access control, audit logging, and administrative operations."
+    icon="Shield"
+  />
+  <Card
     href="/docs/engine/plugins/email-password"
     title="Email + Password"
     description="Traditional username/email sign-in with verification codes and password resets."
+    icon="Mail"
   />
   <Card
     href="/docs/engine/plugins/passwordless"
     title="Passwordless"
     description="Magic links and WebAuthn (passkeys) for frictionless authentication."
+    icon="Key"
   />
   <Card
     href="/docs/engine/plugins/organization"
     title="Organizations"
     description="Multi-tenant workspaces with role-based access control and invitations."
+    icon="Users"
   />
   <Card
     href="/docs/engine/plugins/oauth"
     title="OAuth Providers"
     description="Drop-in integrations for GitHub, Google, and custom OAuth servers."
+    icon="Globe"
+  />
+  <Card
+    href="/docs/engine/plugins/anonymous"
+    title="Anonymous Plugin"
+    description="Guest sessions with device fingerprinting and seamless conversion to registered users."
+    icon="User"
+  />
+  <Card
+    href="/docs/engine/plugins/api-key"
+    title="API Key Plugin"
+    description="API key authentication for service-to-service communication and developer access."
+    icon="Key"
+  />
+  <Card
+    href="/docs/engine/plugins/session"
+    title="Session Plugin"
+    description="Session management, cleanup, and lifecycle operations."
+    icon="Clock"
+  />
+  <Card
+    href="/docs/engine/plugins/jwt"
+    title="JWT Plugin"
+    description="JSON Web Token management with JWKS support for distributed authentication."
+    icon="FileText"
+  />
+  <Card
+    href="/docs/engine/plugins/phone"
+    title="Phone Plugin"
+    description="Phone number authentication with SMS verification codes."
+    icon="Phone"
+  />
+  <Card
+    href="/docs/engine/plugins/username"
+    title="Username Plugin"
+    description="Username-based authentication without email requirements."
+    icon="User"
+  />
+  <Card
+    href="/docs/engine/plugins/email-or-username"
+    title="Email or Username Plugin"
+    description="Flexible authentication supporting both email and username login methods."
+    icon="AtSign"
   />
 </Cards>
 

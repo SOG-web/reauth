@@ -1,0 +1,790 @@
+---
+title: Admin Plugin
+description: User management, role-based access control, audit logging, and administrative operations.
+---
+
+## Overview
+
+The `admin` plugin provides comprehensive **administrative capabilities** for managing users, roles, permissions, and system operations. It's essential for any production ReAuth deployment that needs user management and audit trails.
+
+Key features:
+
+- **User Management**: Create, update, delete, and list users
+- **Role-Based Access Control (RBAC)**: Assign and manage user roles with permissions
+- **Audit Logging**: Comprehensive logging of all administrative actions
+- **Ban Management**: User suspension and ban enforcement across all plugins
+- **Access Restrictions**: Fine-grained control over which plugins/steps require admin access
+- **First Admin Setup**: Secure bootstrap process for the initial admin user
+- **System Status**: Health checks and system information
+
+<Callout title="Security-first design" type="success">
+  The admin plugin includes universal hooks that enforce bans and access restrictions
+  across ALL plugins automatically. Once configured, these security measures apply
+  to your entire authentication system.
+</Callout>
+
+## Installation & Setup
+
+```npm
+npm i @re-auth/reauth
+```
+
+### Basic Configuration
+
+```ts
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import adminPlugin, { adminSchema } from '@re-auth/reauth/plugins/admin';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database schema and client
+const { schema: v1 } = reauthDb('1.0.1', [
+  emailPasswordSchema,
+  adminSchema,
+]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  plugins: [
+    // Email/password for user authentication
+    emailPasswordPlugin({
+      sessionTtlSeconds: 3600,
+      enableRegistration: true,
+    }),
+
+    // Admin plugin for user management
+    adminPlugin({
+      // Role configuration
+      adminRole: 'admin',
+      availableRoles: ['admin', 'moderator', 'user'],
+
+      // Audit logging
+      enableAuditLogging: true,
+      auditLogRetentionDays: 90,
+
+      // Security settings
+      requireMfaForAdmin: true,
+      maxAdminSessionDuration: 3600, // 1 hour
+
+      // User management permissions
+      allowAdminCreateUser: true,
+      allowAdminDeleteUser: true,
+
+      // Rate limiting
+      rateLimitPerHour: 100,
+
+      // First admin setup
+      allowFirstAdminSetup: true,
+      firstAdminSetupKey: 'your-secret-setup-key', // Optional
+
+      // Access restrictions
+      accessRestrictions: {
+        adminOnlyPlugins: ['admin'],
+        adminOnlySteps: ['email-password.delete-user'],
+        allowedRoles: ['admin', 'moderator'],
+      },
+
+      // Ban configuration
+      banConfig: {
+        allowedReasons: ['warning', 'temporary'],
+        allowedPlugins: ['email-password.login'],
+        allowedSteps: ['email-password.logout'],
+      },
+
+      // Custom permissions per role
+      customPermissions: {
+        admin: ['user.create', 'user.delete', 'user.update', 'role.assign'],
+        moderator: ['user.update', 'user.view'],
+        user: ['profile.update'],
+      },
+    }),
+  ],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
+  },
+});
+```
+
+## Configuration
+
+### AdminConfig
+
+| Option                    | Type       | Default                          | Description                                |
+| ------------------------- | ---------- | -------------------------------- | ------------------------------------------ |
+| `adminRole`               | `string`   | `'admin'`                        | The primary admin role name                |
+| `availableRoles`          | `string[]` | `['admin', 'moderator', 'user']` | List of available roles in the system      |
+| `enableAuditLogging`      | `boolean`  | `true`                           | Enable comprehensive audit logging         |
+| `auditLogRetentionDays`   | `number`   | `90`                             | How long to keep audit logs (days)         |
+| `requireMfaForAdmin`      | `boolean`  | `true`                           | Require MFA for admin operations           |
+| `maxAdminSessionDuration` | `number`   | `3600`                           | Max admin session duration (seconds)       |
+| `allowAdminCreateUser`    | `boolean`  | `true`                           | Allow admins to create users               |
+| `allowAdminDeleteUser`    | `boolean`  | `true`                           | Allow admins to delete users               |
+| `rateLimitPerHour`        | `number`   | `100`                            | Rate limit for admin operations per hour   |
+| `allowFirstAdminSetup`    | `boolean`  | `true`                           | Enable first admin setup                   |
+| `firstAdminSetupKey`      | `string?`  | `undefined`                      | Optional setup key for additional security |
+
+### Access Restrictions
+
+Control which plugins and steps require admin access:
+
+```typescript
+accessRestrictions: {
+  // Plugins that require admin access
+  adminOnlyPlugins: ['admin', 'organization'],
+  
+  // Steps that require admin access (format: "pluginName.stepName")
+  adminOnlySteps: ['email-password.delete-user', 'organization.create-organization'],
+  
+  // Specific roles that can access restricted plugins/steps
+  allowedRoles: ['admin', 'moderator'],
+}
+```
+
+### Ban Configuration
+
+Configure how bans affect user access:
+
+```typescript
+banConfig: {
+  // Ban reasons that still allow limited access
+  allowedReasons: ['warning', 'temporary'],
+  
+  // Plugins that banned users can still access
+  allowedPlugins: ['email-password.login', 'email-password.logout'],
+  
+  // Steps that banned users can still access
+  allowedSteps: ['email-password.change-password'],
+}
+```
+
+## Database Schema
+
+The admin plugin extends the base ReAuth schema with several tables:
+
+### `subject_roles`
+
+Role assignments for users with expiration and revocation support.
+
+```sql
+CREATE TABLE subject_roles (
+  id UUID PRIMARY KEY,
+  subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  role VARCHAR(50) NOT NULL,
+  permissions TEXT[], -- Array of permission strings
+  assigned_by UUID REFERENCES subjects(id),
+  assigned_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP NULL, -- Optional role expiration
+  revoked_at TIMESTAMP NULL, -- Soft deletion
+  metadata JSONB
+);
+```
+
+### `user_bans`
+
+User ban records with expiration and lift tracking.
+
+```sql
+CREATE TABLE user_bans (
+  id UUID PRIMARY KEY,
+  subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  reason VARCHAR(100) NOT NULL,
+  description TEXT,
+  banned_by UUID REFERENCES subjects(id),
+  banned_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP NULL, -- NULL = permanent ban
+  lifted_at TIMESTAMP NULL,
+  lifted_by UUID REFERENCES subjects(id),
+  metadata JSONB
+);
+```
+
+### `audit_logs`
+
+Comprehensive audit trail for all administrative actions.
+
+```sql
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY,
+  actor_id UUID NOT NULL REFERENCES subjects(id),
+  action VARCHAR(100) NOT NULL,
+  target_type VARCHAR(50), -- 'subject', 'organization', etc.
+  target_id UUID,
+  details JSONB,
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Extended `subjects` Table
+
+The plugin extends the subjects table with admin-specific fields:
+
+```sql
+-- Additional fields added by admin plugin
+ALTER TABLE subjects ADD COLUMN last_login TIMESTAMP;
+ALTER TABLE subjects ADD COLUMN login_count INTEGER DEFAULT 0;
+ALTER TABLE subjects ADD COLUMN is_active BOOLEAN DEFAULT true;
+```
+
+## Authentication Steps
+
+### 1. Setup First Admin
+
+**Step name:** `setup-first-admin`  
+**HTTP:** `POST /auth/setup-first-admin`
+
+Create the initial admin user when no admins exist.
+
+**Input:**
+
+```ts
+{
+  email?: string; // Email for the admin
+  username?: string; // Username for the admin
+  password: string; // Admin password
+  setupKey?: string; // Optional setup key
+  adminRole?: string; // Role to assign (default: 'admin')
+  metadata?: Record<string, any>; // Additional admin metadata
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'alr' | 'aut';
+  message: string;
+  adminCreated?: boolean;
+  adminId?: string;
+  token?: Token; // Admin session token
+  error?: string | object;
+}
+```
+
+**Behavior:**
+
+- Only works when no admin users exist
+- Optionally validates setup key
+- Creates user via email-password or username-password plugin
+- Assigns admin role automatically
+- Creates admin session
+- Logs the setup action
+
+**Example:**
+
+```ts
+// Setup first admin with email/password
+const result = await engine.executeStep('admin', 'setup-first-admin', {
+  email: 'admin@company.com',
+  password: 'SecureAdminPassword123!',
+  setupKey: 'your-secret-setup-key',
+  metadata: {
+    department: 'IT',
+    fullName: 'System Administrator',
+  },
+});
+
+if (result.success) {
+  console.log('First admin created:', result.adminId);
+  // Store admin token
+  localStorage.setItem('adminToken', result.token.accessToken);
+}
+```
+
+### 2. Create User
+
+**Step name:** `create-user`  
+**HTTP:** `POST /auth/create-user`  
+**Auth:** Required (Admin)
+
+Create a new user account.
+
+**Input:**
+
+```ts
+{
+  email?: string;
+  username?: string;
+  password: string;
+  roles?: string[]; // Initial roles to assign
+  metadata?: Record<string, any>;
+  sendWelcomeEmail?: boolean;
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'du' | 'aut';
+  message: string;
+  user?: {
+    id: string;
+    email?: string;
+    username?: string;
+    roles: string[];
+    createdAt: string;
+  };
+  error?: string | object;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('admin', 'create-user', {
+  email: 'newuser@company.com',
+  password: 'TempPassword123!',
+  roles: ['user'],
+  metadata: {
+    department: 'Sales',
+    manager: 'admin-123',
+  },
+  sendWelcomeEmail: true,
+});
+```
+
+### 3. List Users
+
+**Step name:** `list-users`  
+**HTTP:** `GET /auth/list-users`  
+**Auth:** Required (Admin)
+
+Retrieve a paginated list of users with filtering options.
+
+**Input:**
+
+```ts
+{
+  page?: number; // Default: 1
+  limit?: number; // Default: 50
+  role?: string; // Filter by role
+  isActive?: boolean; // Filter by active status
+  search?: string; // Search by email/username
+  sortBy?: 'created_at' | 'last_login' | 'email';
+  sortOrder?: 'asc' | 'desc';
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'aut';
+  users: Array<{
+    id: string;
+    email?: string;
+    username?: string;
+    roles: string[];
+    isActive: boolean;
+    createdAt: string;
+    lastLogin?: string;
+    metadata?: Record<string, any>;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+```
+
+### 4. Update User
+
+**Step name:** `update-user`  
+**HTTP:** `PUT /auth/update-user`  
+**Auth:** Required (Admin)
+
+Update user information and metadata.
+
+**Input:**
+
+```ts
+{
+  userId: string;
+  email?: string;
+  username?: string;
+  isActive?: boolean;
+  metadata?: Record<string, any>;
+}
+```
+
+### 5. Delete User
+
+**Step name:** `delete-user`  
+**HTTP:** `DELETE /auth/delete-user`  
+**Auth:** Required (Admin)
+
+Delete a user account and all associated data.
+
+**Input:**
+
+```ts
+{
+  userId: string;
+  deleteReason?: string; // Reason for deletion
+  transferDataTo?: string; // Transfer data to another user
+}
+```
+
+### 6. Assign Role
+
+**Step name:** `assign-role`  
+**HTTP:** `POST /auth/assign-role`  
+**Auth:** Required (Admin)
+
+Assign a role to a user with optional expiration.
+
+**Input:**
+
+```ts
+{
+  userId: string;
+  role: string;
+  expiresAt?: string; // ISO date string
+  reason?: string; // Reason for assignment
+  metadata?: Record<string, any>;
+}
+```
+
+### 7. Revoke Role
+
+**Step name:** `revoke-role`  
+**HTTP:** `DELETE /auth/revoke-role`  
+**Auth:** Required (Admin)
+
+Revoke a role from a user.
+
+**Input:**
+
+```ts
+{
+  userId: string;
+  role: string;
+  reason?: string; // Reason for revocation
+}
+```
+
+### 8. Ban User
+
+**Step name:** `ban-user`  
+**HTTP:** `POST /auth/ban-user`  
+**Auth:** Required (Admin)
+
+Ban or suspend a user account.
+
+**Input:**
+
+```ts
+{
+  userId: string;
+  reason: string; // 'spam', 'abuse', 'violation', etc.
+  description?: string;
+  expiresAt?: string; // ISO date string (null = permanent)
+  metadata?: Record<string, any>;
+}
+```
+
+### 9. Unban User
+
+**Step name:** `unban-user`  
+**HTTP:** `POST /auth/unban-user`  
+**Auth:** Required (Admin)
+
+Lift a user ban.
+
+**Input:**
+
+```ts
+{
+  userId: string;
+  reason?: string; // Reason for lifting ban
+}
+```
+
+### 10. View Audit Logs
+
+**Step name:** `view-audit-logs`  
+**HTTP:** `GET /auth/view-audit-logs`  
+**Auth:** Required (Admin)
+
+Retrieve audit log entries with filtering.
+
+**Input:**
+
+```ts
+{
+  page?: number;
+  limit?: number;
+  actorId?: string; // Filter by actor
+  action?: string; // Filter by action type
+  targetType?: string; // Filter by target type
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+}
+```
+
+### 11. System Status
+
+**Step name:** `system-status`  
+**HTTP:** `GET /auth/system-status`  
+**Auth:** Required (Admin)
+
+Get system health and statistics.
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'aut';
+  system: {
+    uptime: number; // Seconds
+    version: string;
+    database: {
+      connected: boolean;
+      version: string;
+    };
+    plugins: Array<{
+      name: string;
+      enabled: boolean;
+      steps: number;
+    }>;
+    statistics: {
+      totalUsers: number;
+      activeUsers: number;
+      bannedUsers: number;
+      totalSessions: number;
+      auditLogs: number;
+    };
+  };
+}
+```
+
+## Universal Security Hooks
+
+The admin plugin automatically registers universal hooks that apply to ALL plugins:
+
+### 1. Ban Enforcement Hook
+
+**Configuration:**
+
+```typescript
+banConfig: {
+  allowedReasons: ['warning', 'temporary'],
+  allowedPlugins: ['email-password.login'],
+  allowedSteps: ['email-password.logout'],
+}
+```
+
+**Behavior:**
+
+- Checks if user has an active ban
+- Compares ban reason against `allowedReasons`
+- Checks if current plugin/step is in `allowedPlugins`/`allowedSteps`
+- Blocks access if none of the above conditions are met
+- Throws `BANNED` error with ban details
+
+### 2. Access Restriction Hook
+
+**Configuration:**
+
+```typescript
+accessRestrictions: {
+  adminOnlyPlugins: ['admin', 'organization'],
+  adminOnlySteps: ['email-password.delete-user'],
+  allowedRoles: ['admin', 'moderator'],
+}
+```
+
+**Behavior:**
+
+- Checks if current plugin/step is restricted
+- Validates user has one of the allowed roles
+- Blocks access if user lacks required permissions
+- Throws `ACCESS_DENIED` error with required roles
+
+## Profile API
+
+The plugin exposes user profile information:
+
+```ts
+const profile = await engine.getUnifiedProfile('user-123');
+
+// profile.plugins['admin']
+{
+  roles: ['admin', 'user'],
+  permissions: ['user.create', 'user.delete', 'role.assign'],
+  isAdmin: true,
+  lastLogin: '2025-01-15T10:30:00Z',
+  loginCount: 42,
+  isActive: true,
+  metadata: {
+    department: 'IT',
+    fullName: 'System Administrator'
+  }
+}
+```
+
+## Background Cleanup
+
+The plugin registers cleanup tasks for:
+
+### `cleanupExpiredAuditLogs(orm, config)`
+
+Removes audit logs older than the retention period.
+
+### `getAdminPermissions(orm, subjectId, config)`
+
+Retrieves admin permissions for a user.
+
+### `logAdminAction(orm, action, config)`
+
+Logs an administrative action to the audit trail.
+
+## Error Handling
+
+The plugin uses standardized error codes:
+
+| Code  | Description                             |
+| ----- | --------------------------------------- |
+| `unf` | Unauthenticated (no valid session)      |
+| `aut` | Unauthorized (insufficient permissions) |
+| `ic`  | Invalid input (validation errors)       |
+| `nf`  | Not found (user/resource doesn't exist) |
+| `du`  | Duplicate (user already exists)         |
+| `su`  | Success                                 |
+
+## Security Considerations
+
+### 1. First Admin Protection
+
+- Only works when no admin users exist
+- Optional setup key for additional security
+- Self-assigned admin role to prevent privilege escalation
+
+### 2. Role Expiration
+
+- Roles can have expiration dates
+- Automatic cleanup of expired roles
+- Audit trail for role changes
+
+### 3. Ban Enforcement
+
+- Universal ban checking across all plugins
+- Configurable ban exceptions
+- Automatic session invalidation for banned users
+
+### 4. Audit Logging
+
+- All admin actions are logged
+- Configurable retention period
+- Automatic cleanup of old logs
+
+### 5. Access Restrictions
+
+- Fine-grained control over plugin/step access
+- Role-based restrictions
+- Universal enforcement across all plugins
+
+## Complete Example: Admin Dashboard
+
+```ts
+// 1. Setup first admin
+const setupResult = await engine.executeStep('admin', 'setup-first-admin', {
+  email: 'admin@company.com',
+  password: 'SecureAdminPassword123!',
+  setupKey: 'company-setup-key-2025',
+});
+
+// 2. Create users
+const userResult = await engine.executeStep('admin', 'create-user', {
+  email: 'employee@company.com',
+  password: 'TempPassword123!',
+  roles: ['user'],
+  metadata: { department: 'Engineering' },
+});
+
+// 3. Assign moderator role
+const roleResult = await engine.executeStep('admin', 'assign-role', {
+  userId: userResult.user.id,
+  role: 'moderator',
+  reason: 'Promoted to team lead',
+});
+
+// 4. List all users
+const usersResult = await engine.executeStep('admin', 'list-users', {
+  page: 1,
+  limit: 50,
+  sortBy: 'created_at',
+  sortOrder: 'desc',
+});
+
+// 5. Check system status
+const statusResult = await engine.executeStep('admin', 'system-status');
+
+// 6. View audit logs
+const logsResult = await engine.executeStep('admin', 'view-audit-logs', {
+  page: 1,
+  limit: 20,
+  action: 'assign-role',
+});
+```
+
+## HTTP Adapter Integration
+
+When using HTTP adapters, admin steps are automatically exposed:
+
+```ts
+POST /auth/setup-first-admin     → admin:setup-first-admin
+POST /auth/create-user           → admin:create-user (auth)
+GET  /auth/list-users            → admin:list-users (auth)
+PUT  /auth/update-user           → admin:update-user (auth)
+DELETE /auth/delete-user         → admin:delete-user (auth)
+POST /auth/assign-role           → admin:assign-role (auth)
+DELETE /auth/revoke-role         → admin:revoke-role (auth)
+POST /auth/ban-user              → admin:ban-user (auth)
+POST /auth/unban-user            → admin:unban-user (auth)
+GET  /auth/view-audit-logs       → admin:view-audit-logs (auth)
+GET  /auth/system-status         → admin:system-status (auth)
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    href="/docs/engine/plugins/email-password"
+    title="Email + Password Plugin"
+    description="Configure user authentication flows."
+  />
+  <Card
+    href="/docs/engine/plugins/organization"
+    title="Organization Plugin"
+    description="Add multi-tenancy with the admin plugin."
+  />
+  <Card
+    href="/docs/engine/configuration"
+    title="Engine Configuration"
+    description="Configure cleanup intervals and session TTLs."
+  />
+</Cards>

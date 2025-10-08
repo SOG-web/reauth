@@ -8,3 +8,4 @@ export { revokeRoleStep } from './revoke-role.step';
 export { listUsersStep } from './list-users.step';
 export { viewAuditLogsStep } from './view-audit-logs.step';
 export { systemStatusStep } from './system-status.step';
+export { setupFirstAdminStep } from './setup-first-admin.step';

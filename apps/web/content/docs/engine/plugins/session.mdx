@@ -1,33 +1,25 @@
 ---
 title: Session Plugin
-description: Enhanced session management with device tracking, concurrent session limits, and security features.
+description: Basic session management with lifecycle operations and cleanup.
 ---
 
 ## Overview
 
-The `session` plugin provides **advanced session management** capabilities beyond basic token issuance. It enables comprehensive session lifecycle management, device tracking, and security controls:
-
-- **Multi-session management** - List and manage all active sessions
-- **Device tracking** - Track and identify user devices
-- **Concurrent session limits** - Restrict number of active sessions
-- **Selective logout** - End specific sessions or all sessions
-- **Session metadata** - Store custom data per session
-- **Geographic tracking** (optional) - Log IP addresses and locations
-- **Trusted devices** - Remember trusted devices
+The `session` plugin provides **basic session management** capabilities for ReAuth applications. It offers essential features for managing user sessions, including listing active sessions, logging out, and basic cleanup operations.
 
 Key features:
 
-- **Session listing** - View all active sessions across devices
-- **Individual logout** - End a specific session
-- **Global logout** - End all sessions at once
-- **Device fingerprinting** - Identify returning devices
-- **Session introspection** - Detailed session information
-- **Background cleanup** - Automatic expired session removal
+- **Session Information**: Get details about the current session
+- **Session Listing**: List all active sessions for a user
+- **Session Logout**: Logout from current session
+- **Logout All Sessions**: Terminate all sessions for a user
+- **Basic Cleanup**: Clean up expired sessions (placeholder implementation)
+- **Profile Integration**: Session information in user profiles
 
-<Callout title="Infrastructure Plugin" type="info">
-  This plugin enhances the core session service with advanced management
-  features. It works alongside authentication plugins to provide richer session
-  control.
+<Callout title="Basic Session Management" type="info">
+  The session plugin provides fundamental session management features. For
+  advanced features like device tracking, geolocation, or session rotation,
+  you'll need to implement custom logic or use additional plugins.
 </Callout>
 
 ## Installation & Setup
@@ -45,9 +37,12 @@ import createReAuthEngine, {
 } from '@re-auth/reauth';
 import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import sessionPlugin, { sessionSchema } from '@re-auth/reauth/plugins/session';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
 
 // Setup database schema and client
-const { schema: v1 } = reauthDb('1.0.1', [sessionSchema]);
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema, sessionSchema]);
 const factory = reauthDbVersions([v1]);
 const client = factory.client(
   kyselyAdapter({ provider: 'sqlite', db: kysely }),
@@ -59,21 +54,16 @@ const engine = createReAuthEngine({
     orm: (version: any) => client.orm(version),
   },
   plugins: [
+    // Email/password for user authentication
+    emailPasswordPlugin({
+      sessionTtlSeconds: 3600,
+      enableRegistration: true,
+    }),
+
+    // Basic session management
     sessionPlugin({
-      // Session limits
-      maxConcurrentSessions: 5, // Max 5 active sessions per user
-
-      // Device tracking
-      deviceTrackingEnabled: true,
-      trustDeviceByDefault: false,
-      deviceRetentionDays: 90,
-
-      // Security
-      requireDeviceFingerprint: false,
-      enableGeoLocation: false, // Privacy-conscious
-
-      // Cleanup
-      cleanupIntervalMinutes: 30,
+      // Cleanup configuration
+      cleanupIntervalMinutes: 30, // Cleanup every 30 minutes
     }),
   ],
   getUserData: async (subjectId, orm) => {
@@ -85,26 +75,12 @@ const engine = createReAuthEngine({
 });
 ```
 
-### Production Configuration
+### With Custom Cleanup
 
 ```ts
 sessionPlugin({
-  // Strict session limits
-  maxConcurrentSessions: 3, // Max 3 devices
-  maxSessionsPerDevice: 2, // Max 2 sessions per device
-
-  // Enhanced device tracking
-  deviceTrackingEnabled: true,
-  trustDeviceByDefault: false,
-  requireDeviceFingerprint: true, // Require device info
-  deviceRetentionDays: 30, // Keep device data for 30 days
-
-  // Security features
-  enableGeoLocation: true, // Track IP/location for audit
-  sessionRotationInterval: 24 * 60 * 60 * 1000, // Rotate every 24h
-
-  // Aggressive cleanup
-  cleanupIntervalMinutes: 15, // Every 15 minutes
+  // More frequent cleanup for high-traffic applications
+  cleanupIntervalMinutes: 15, // Cleanup every 15 minutes
 });
 ```
 
@@ -112,24 +88,88 @@ sessionPlugin({
 
 ### SessionConfig
 
-| Option                     | Type      | Default | Description                                                         |
-| -------------------------- | --------- | ------- | ------------------------------------------------------------------- |
-| `maxConcurrentSessions`    | `number`  | `0`     | Maximum concurrent sessions per user. 0 = unlimited.                |
-| `sessionRotationInterval`  | `number`  | `0`     | Auto-rotate sessions after this many milliseconds. 0 = disabled.    |
-| `deviceTrackingEnabled`    | `boolean` | `true`  | Enable device tracking and fingerprinting.                          |
-| `trustDeviceByDefault`     | `boolean` | `false` | Mark new devices as trusted automatically.                          |
-| `deviceRetentionDays`      | `number`  | `90`    | Days to keep device information (default: 90).                      |
-| `requireDeviceFingerprint` | `boolean` | `false` | Require device fingerprint for all session operations.              |
-| `enableGeoLocation`        | `boolean` | `false` | Track IP addresses and geographic location (privacy consideration). |
-| `maxSessionsPerDevice`     | `number`  | `0`     | Maximum sessions per device. 0 = unlimited.                         |
-| `cleanupIntervalMinutes`   | `number`  | `30`    | Cleanup interval in minutes. Must be 1-1440 (1-24 hours).           |
+| Option                   | Type     | Default | Description                  |
+| ------------------------ | -------- | ------- | ---------------------------- |
+| `cleanupIntervalMinutes` | `number` | `30`    | Cleanup frequency in minutes |
 
-## Session Management Steps
+**Note:** Most configuration options in the SessionConfig interface are currently not implemented. Only `cleanupIntervalMinutes` is actively used. The other options are placeholders for future development.
 
-### 1. List Sessions
+## Database Schema
+
+The session plugin uses the standard ReAuth session tables. No additional database schema is required beyond the base ReAuth setup.
+
+## Authentication Steps
+
+### 1. Get Session
+
+**Step name:** `get-session`  
+**HTTP:** `GET /auth/get-session`  
+**Auth:** Required
+
+Retrieve detailed information about the current session.
+
+**Input:**
+
+```ts
+{
+  token: Token; // Current session token
+}
+```
+
+**Output:**
+
+```ts
+{
+  success: boolean;
+  status: 'su' | 'ic' | 'nf' | 'aut';
+  message: string;
+  session?: {
+    id: string;
+    subject_id: string;
+    device_id?: string;
+    created_at: string;
+    expires_at: string;
+    last_used_at: string;
+    rotation_count: number;
+    is_active: boolean;
+    metadata?: Record<string, any>;
+    device?: {
+      id: string;
+      device_name?: string;
+      device_type?: string;
+      os_name?: string;
+      browser_name?: string;
+      is_trusted: boolean;
+    };
+    location?: {
+      country?: string;
+      city?: string;
+      region?: string;
+    };
+  };
+  error?: string | object;
+}
+```
+
+**Example:**
+
+```ts
+const result = await engine.executeStep('session', 'get-session', {
+  token: userToken,
+});
+
+if (result.success) {
+  console.log('Session ID:', result.session.id);
+  console.log('Device:', result.session.device?.device_name);
+  console.log('Location:', result.session.location?.city);
+  console.log('Expires:', result.session.expires_at);
+}
+```
+
+### 2. List Sessions
 
 **Step name:** `list-sessions`  
-**HTTP:** `GET /auth/session/list-sessions`  
+**HTTP:** `GET /auth/list-sessions`  
 **Auth:** Required
 
 List all active sessions for the authenticated user.
@@ -138,8 +178,9 @@ List all active sessions for the authenticated user.
 
 ```ts
 {
-  token: Token;
-  others?: Record<string, any>;
+  token: Token; // Current session token
+  includeInactive?: boolean; // Include expired sessions
+  limit?: number; // Max sessions to return
 }
 ```
 
@@ -148,161 +189,63 @@ List all active sessions for the authenticated user.
 ```ts
 {
   success: boolean;
-  status: 'su' | 'unf' | 'ic'; // success | unauthorized | error
-  message: string;
-  token?: Token;
-  sessions?: Array<{
-    sessionId: string;
-    token: string; // Truncated for security
-    createdAt: string;
-    expiresAt?: string;
-    isCurrent: boolean;
-    deviceInfo?: {
-      fingerprint?: string;
-      userAgent?: string;
-      ipAddress?: string;
-      deviceName?: string;
-      isTrusted: boolean;
+  status: 'su' | 'aut';
+  sessions: Array<{
+    id: string;
+    device_id?: string;
+    created_at: string;
+    expires_at: string;
+    last_used_at: string;
+    is_active: boolean;
+    is_current: boolean; // Is this the current session?
+    device?: {
+      device_name?: string;
+      device_type?: string;
+      os_name?: string;
+      browser_name?: string;
+      is_trusted: boolean;
     };
-    metadata?: Record<string, any>;
+    location?: {
+      country?: string;
+      city?: string;
+    };
   }>;
-  totalSessions?: number;
-  others?: Record<string, any>;
-}
-```
-
-**Behavior:**
-
-- Returns all active sessions for the current user
-- Marks the current session with `isCurrent: true`
-- Truncates tokens for security (shows first 8 chars + "...")
-- Includes device information if tracking enabled
-
-**Example:**
-
-```tsx
-function SessionsManager() {
-  const [sessions, setSessions] = useState([]);
-
-  useEffect(() => {
-    async function fetchSessions() {
-      const result = await engine.executeStep('session', 'list-sessions', {
-        token: userToken,
-      });
-
-      if (result.success) {
-        setSessions(result.sessions);
-      }
-    }
-    fetchSessions();
-  }, []);
-
-  return (
-    <div>
-      <h2>Active Sessions ({sessions.length})</h2>
-      {sessions.map((session) => (
-        <div key={session.sessionId}>
-          <strong>
-            {session.isCurrent ? '🟢 Current Session' : '⚪ Other Session'}
-          </strong>
-          <p>Device: {session.deviceInfo?.deviceName || 'Unknown'}</p>
-          <p>Location: {session.deviceInfo?.ipAddress || 'Unknown'}</p>
-          <p>Created: {new Date(session.createdAt).toLocaleString()}</p>
-          {!session.isCurrent && (
-            <button onClick={() => endSession(session.sessionId)}>
-              End Session
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-```
-
-### 2. Get Session
-
-**Step name:** `get-session`  
-**HTTP:** `GET /auth/session/get-session`  
-**Auth:** Required
-
-Get detailed information about the current session.
-
-**Input:**
-
-```ts
-{
-  token: Token;
-  deviceInfo?: {
-    fingerprint?: string;
-    userAgent?: string;
-    ipAddress?: string;
-    deviceName?: string;
-  };
-  others?: Record<string, any>;
-}
-```
-
-**Output:**
-
-```ts
-{
-  success: boolean;
-  status: 'su' | 'unf' | 'ic'; // success | unauthorized | error
-  message: string;
-  session?: {
-    sessionId: string;
-    token: string; // Masked for security
-    subject: Subject;
-    createdAt: string;
-    expiresAt?: string;
-    deviceInfo?: {
-      fingerprint?: string;
-      userAgent?: string;
-      ipAddress?: string;
-      isTrusted: boolean;
-      deviceName?: string;
-    };
-    metadata?: Record<string, any>;
-  };
-  others?: Record<string, any>;
+  total: number;
 }
 ```
 
 **Example:**
 
 ```ts
-const result = await engine.executeStep('session', 'get-session', {
+const result = await engine.executeStep('session', 'list-sessions', {
   token: userToken,
-  deviceInfo: {
-    fingerprint: deviceFingerprint,
-    userAgent: navigator.userAgent,
-    deviceName: 'My Laptop',
-  },
+  limit: 10,
 });
 
 if (result.success) {
-  console.log('Session ID:', result.session.sessionId);
-  console.log('Created:', result.session.createdAt);
-  console.log('Expires:', result.session.expiresAt);
-  console.log('Device:', result.session.deviceInfo);
+  result.sessions.forEach((session) => {
+    console.log(`${session.is_current ? 'Current' : 'Other'} session:`);
+    console.log(`  Device: ${session.device?.device_name || 'Unknown'}`);
+    console.log(`  Location: ${session.location?.city || 'Unknown'}`);
+    console.log(`  Last used: ${session.last_used_at}`);
+    console.log(`  Expires: ${session.expires_at}`);
+  });
 }
 ```
 
 ### 3. Logout
 
 **Step name:** `logout`  
-**HTTP:** `POST /auth/session/logout`  
+**HTTP:** `POST /auth/logout`  
 **Auth:** Required
 
-End the current session (logout from this device).
+Logout from the current session.
 
 **Input:**
 
 ```ts
 {
-  token: Token;
-  others?: Record<string, any>;
+  token: Token; // Current session token
 }
 ```
 
@@ -311,46 +254,39 @@ End the current session (logout from this device).
 ```ts
 {
   success: boolean;
-  status: 'su' | 'unf' | 'ic'; // success | unauthorized | error
+  status: 'su' | 'ic' | 'nf' | 'aut';
   message: string;
-  sessionDestroyed?: boolean;
-  others?: Record<string, any>;
+  error?: string | object;
 }
 ```
 
 **Example:**
 
-```tsx
-function LogoutButton() {
-  const handleLogout = async () => {
-    const result = await engine.executeStep('session', 'logout', {
-      token: userToken,
-    });
+```ts
+const result = await engine.executeStep('session', 'logout', {
+  token: userToken,
+});
 
-    if (result.success) {
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
-    }
-  };
-
-  return <button onClick={handleLogout}>Logout</button>;
+if (result.success) {
+  console.log('Logged out successfully');
+  // Remove token from client storage
+  localStorage.removeItem('authToken');
 }
 ```
 
-### 4. Logout All
+### 4. Logout All Sessions
 
 **Step name:** `logout-all`  
-**HTTP:** `POST /auth/session/logout-all`  
+**HTTP:** `POST /auth/logout-all`  
 **Auth:** Required
 
-End all sessions for the user (logout from all devices).
+Logout from all sessions for the authenticated user.
 
 **Input:**
 
 ```ts
 {
-  token: Token;
-  others?: Record<string, any>;
+  token: Token; // Current session token
 }
 ```
 
@@ -359,48 +295,53 @@ End all sessions for the user (logout from all devices).
 ```ts
 {
   success: boolean;
-  status: 'su' | 'unf' | 'ic'; // success | unauthorized | error
+  status: 'su' | 'aut';
   message: string;
-  sessionsDestroyed?: number;
-  others?: Record<string, any>;
+  sessionsLoggedOut: number;
+  error?: string | object;
 }
 ```
 
-**Behavior:**
-
-- Destroys ALL sessions for the authenticated user
-- Useful for security incidents or password changes
-- Returns count of sessions destroyed
-
 **Example:**
 
-```tsx
-function LogoutAllButton() {
-  const handleLogoutAll = async () => {
-    if (!confirm('This will log you out from all devices. Continue?')) {
-      return;
-    }
+```ts
+const result = await engine.executeStep('session', 'logout-all', {
+  token: userToken,
+});
 
-    const result = await engine.executeStep('session', 'logout-all', {
-      token: userToken,
-    });
-
-    if (result.success) {
-      console.log(`Logged out from ${result.sessionsDestroyed} devices`);
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
-    }
-  };
-
-  return (
-    <button onClick={handleLogoutAll} className="danger">
-      Logout from All Devices
-    </button>
-  );
+if (result.success) {
+  console.log(`Logged out from ${result.sessionsLoggedOut} sessions`);
+  // Remove token from client storage
+  localStorage.removeItem('authToken');
 }
+```
+
+## Background Cleanup
+
+The plugin registers a basic cleanup task:
+
+```ts
+engine.registerCleanupTask({
+  name: 'enhanced-sessions-cleanup',
+  pluginName: 'session',
+  intervalMs: 30 * 60 * 1000, // Every 30 minutes
+  enabled: true,
+  runner: async (orm, config) => {
+    // Note: Currently returns placeholder data
+    // TODO: Implement actual cleanup logic
+    return {
+      cleaned: 0,
+      sessionsDeleted: 0,
+      devicesDeleted: 0,
+      metadataDeleted: 0,
+    };
+  },
+});
 ```
 
 ## Profile API
+
+The plugin exposes basic session information in user profiles:
 
 ```ts
 const profile = await engine.getUnifiedProfile('user-123');
@@ -409,458 +350,114 @@ const profile = await engine.getUnifiedProfile('user-123');
 {
   sessions: [
     {
-      sessionId: 'session-abc123',
-      token: 'Bearer abc...',
-      createdAt: '2025-10-03T10:00:00Z',
-      expiresAt: '2025-10-04T10:00:00Z',
-      deviceInfo: {
-        fingerprint: 'device-hash-xyz',
-        userAgent: 'Mozilla/5.0...',
-        ipAddress: '192.168.1.1',
-        isTrusted: true,
-        deviceName: 'MacBook Pro'
-      },
-      metadata: { loginMethod: 'email-password' }
-    }
+      sessionId: 'session-1',
+      token: 'abc12345...', // Truncated for security
+      createdAt: '2025-01-15T10:30:00Z',
+      expiresAt: '2025-01-15T11:30:00Z',
+      deviceInfo: undefined, // Not implemented
+      metadata: undefined, // Not implemented
+    },
+    // ... other sessions
   ],
-  totalSessions: 1
+  totalSessions: 3
 }
 ```
 
 ## HTTP Adapter Integration
 
-```ts
-GET  /auth/session/list-sessions  → session:list-sessions (auth)
-GET  /auth/session/get-session    → session:get-session (auth)
-POST /auth/session/logout          → session:logout (auth)
-POST /auth/session/logout-all      → session:logout-all (auth)
-```
-
-## Device Tracking
-
-### Device Fingerprinting
+When using HTTP adapters, session steps are automatically exposed:
 
 ```ts
-// Generate device fingerprint (client-side)
-import { sha256 } from 'crypto-hash';
-
-async function getDeviceFingerprint() {
-  const components = [
-    navigator.userAgent,
-    navigator.language,
-    screen.width,
-    screen.height,
-    new Date().getTimezoneOffset(),
-    !!window.sessionStorage,
-    !!window.localStorage,
-  ];
-
-  const fingerprint = await sha256(components.join('|'));
-  return fingerprint;
-}
-
-// Use with session operations
-const result = await engine.executeStep('session', 'get-session', {
-  token: userToken,
-  deviceInfo: {
-    fingerprint: await getDeviceFingerprint(),
-    userAgent: navigator.userAgent,
-    deviceName: 'My Laptop',
-  },
-});
-```
-
-### Trusted Devices
-
-```ts
-sessionPlugin({
-  trustDeviceByDefault: false, // Require explicit trust
-  deviceRetentionDays: 90, // Remember trusted devices for 90 days
-});
-
-// Mark device as trusted after successful login
-// This reduces security prompts on trusted devices
+GET  /auth/get-session        → session:get-session (auth)
+GET  /auth/list-sessions      → session:list-sessions (auth)
+POST /auth/logout             → session:logout (auth)
+POST /auth/logout-all         → session:logout-all (auth)
 ```
 
 ## Security Features
 
-<Steps>
-  <Step>
-    ### 1. Concurrent Session Limits
+**Note:** Advanced security features like concurrent session limits, device tracking, and geolocation monitoring are not currently implemented in the session plugin. These features are placeholders for future development.
 
-    Restrict the number of active sessions to prevent account sharing or unauthorized access.
+## Complete Example: Basic Session Management
 
-    ```ts
-    sessionPlugin({
-      maxConcurrentSessions: 3, // Max 3 devices
-      maxSessionsPerDevice: 2, // Max 2 sessions per device
-    });
+```ts
+// 1. User logs in and gets session
+const loginResult = await engine.executeStep('email-password', 'login', {
+  email: 'user@example.com',
+  password: 'password123',
+});
 
-    // When limit reached, oldest session is automatically revoked
-    ```
+const sessionToken = loginResult.token;
 
-  </Step>
+// 2. User views their active sessions
+const sessionsResult = await engine.executeStep('session', 'list-sessions', {
+  token: sessionToken,
+});
 
-  <Step>
-    ### 2. Session Rotation
+console.log(`Active sessions: ${sessionsResult.totalSessions}`);
+sessionsResult.sessions.forEach((session) => {
+  console.log(
+    `Session ${session.sessionId}: ${session.isCurrent ? 'Current' : 'Other'}`,
+  );
+  console.log(`Created: ${session.createdAt}`);
+});
 
-    Automatically rotate session tokens after a specified interval to limit exposure.
+// 3. User logs out from current session
+const logoutResult = await engine.executeStep('session', 'logout', {
+  token: sessionToken,
+});
 
-    ```ts
-    sessionPlugin({
-      sessionRotationInterval: 24 * 60 * 60 * 1000, // 24 hours
-    });
+if (logoutResult.success) {
+  console.log('Logged out successfully');
+  localStorage.removeItem('authToken');
+}
 
-    // Sessions automatically get new tokens after 24 hours
-    // Old tokens are invalidated
-    ```
+// 4. User logs out from all sessions (security measure)
+const logoutAllResult = await engine.executeStep('session', 'logout-all', {
+  token: sessionToken,
+});
 
-  </Step>
-
-  <Step>
-    ### 3. Device Fingerprinting
-
-    Require device fingerprints to detect suspicious activity or device changes.
-
-    ```ts
-    sessionPlugin({
-      requireDeviceFingerprint: true,
-      deviceTrackingEnabled: true,
-    });
-
-    // Alerts when same account accessed from new device
-    ```
-
-  </Step>
-
-  <Step>
-    ### 4. Geographic Tracking
-
-    Log IP addresses and locations for security auditing (privacy consideration).
-
-    ```ts
-    sessionPlugin({
-      enableGeoLocation: true,
-    });
-
-    // Audit logs show: "Login from 192.168.1.1 (San Francisco, CA)"
-    ```
-
-  </Step>
-</Steps>
+if (logoutAllResult.success) {
+  console.log(`Logged out from ${logoutAllResult.sessionsDestroyed} sessions`);
+}
+```
 
 ## Use Cases
 
-### 1. Session Manager Dashboard
-
-```tsx
-function SessionManagerPage() {
-  const [sessions, setSessions] = useState([]);
-
-  useEffect(() => {
-    loadSessions();
-  }, []);
-
-  async function loadSessions() {
-    const result = await engine.executeStep('session', 'list-sessions', {
-      token: userToken,
-    });
-    if (result.success) {
-      setSessions(result.sessions);
-    }
-  }
-
-  async function revokeSession(sessionId: string) {
-    // Note: Individual session revocation requires custom implementation
-    // For now, use logout-all and re-login
-    await engine.executeStep('session', 'logout-all', { token: userToken });
-    // User needs to re-login
-  }
-
-  return (
-    <div className="session-manager">
-      <h2>Active Sessions</h2>
-      <p>You are logged in on {sessions.length} device(s)</p>
-
-      {sessions.map((session) => (
-        <div key={session.sessionId} className="session-card">
-          <div className="session-header">
-            {session.isCurrent && <span className="badge">Current</span>}
-            <h3>{session.deviceInfo?.deviceName || 'Unknown Device'}</h3>
-          </div>
-
-          <div className="session-details">
-            <p>
-              <strong>Browser:</strong>{' '}
-              {session.deviceInfo?.userAgent || 'Unknown'}
-            </p>
-            <p>
-              <strong>Location:</strong>{' '}
-              {session.deviceInfo?.ipAddress || 'Unknown'}
-            </p>
-            <p>
-              <strong>Last active:</strong>{' '}
-              {new Date(session.createdAt).toLocaleString()}
-            </p>
-            {session.expiresAt && (
-              <p>
-                <strong>Expires:</strong>{' '}
-                {new Date(session.expiresAt).toLocaleString()}
-              </p>
-            )}
-          </div>
-
-          {!session.isCurrent && (
-            <button onClick={() => revokeSession(session.sessionId)}>
-              End Session
-            </button>
-          )}
-        </div>
-      ))}
-
-      <button
-        className="logout-all"
-        onClick={async () => {
-          await engine.executeStep('session', 'logout-all', {
-            token: userToken,
-          });
-          window.location.href = '/login';
-        }}
-      >
-        Logout from All Devices
-      </button>
-    </div>
-  );
-}
-```
-
-### 2. Security Incident Response
+### Basic Session Management
 
 ```ts
-// User reports suspicious activity
-async function handleSecurityIncident(userId: string) {
-  // Get admin token
-  const adminToken = await getAdminToken();
-
-  // Get user's profile to find sessions
-  const profile = await engine.getUnifiedProfile(userId);
-  const sessionCount = profile.plugins.session.totalSessions;
-
-  console.log(`User has ${sessionCount} active sessions`);
-
-  // Force logout from all devices
-  // Note: Admin would need user's token or direct DB access
-  await sessionService.destroyAllSessions('subject', userId);
-
-  // Notify user
-  await sendEmail(
-    user.email,
-    'Security Alert',
-    'We logged you out from all devices due to suspicious activity.',
-  );
-}
-```
-
-### 3. Device Trust Verification
-
-```ts
-async function checkDeviceTrust(token: Token, deviceFingerprint: string) {
-  const result = await engine.executeStep('session', 'get-session', {
-    token,
-    deviceInfo: { fingerprint: deviceFingerprint },
-  });
-
-  if (result.success) {
-    const isTrusted = result.session.deviceInfo?.isTrusted;
-
-    if (!isTrusted) {
-      // Prompt for additional verification
-      return {
-        requiresVerification: true,
-        message: 'This device is not recognized. Please verify your identity.',
-      };
-    }
-  }
-
-  return { requiresVerification: false };
-}
-```
-
-### 4. Session Limits Enforcement
-
-```ts
+// Simple session management for most applications
 sessionPlugin({
-  maxConcurrentSessions: 2, // Only 2 devices allowed
+  cleanupIntervalMinutes: 30, // Clean up every 30 minutes
 });
-
-// When third device tries to login:
-// 1. Login succeeds
-// 2. Oldest session is automatically revoked
-// 3. User on oldest device gets "Session expired" error
-// 4. User must re-login on that device
-
-// Use case: Family account sharing prevention
-// Use case: Free tier with device limits
-// Use case: Enterprise seat management
 ```
 
-## Complete Example: Multi-Device Auth
+### High-Traffic Application
 
-```tsx
-import { createReAuthEngine } from '@re-auth/reauth';
-import sessionPlugin from '@re-auth/reauth/plugins/session';
-import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
-import { useState, useEffect } from 'react';
-
-const engine = createReAuthEngine({
-  dbClient: createKyselyAdapter({ client: db }),
-  plugins: [
-    emailPasswordPlugin({ verifyEmail: false }),
-    sessionPlugin({
-      maxConcurrentSessions: 5,
-      deviceTrackingEnabled: true,
-      cleanupIntervalMinutes: 30,
-    }),
-  ],
-  getUserData: async (subjectId, orm) => {
-    const user = await orm.findFirst('subjects', {
-      where: (b) => b('id', '=', subjectId),
-    });
-    return user ?? {};
-  },
+```ts
+// More frequent cleanup for high-traffic applications
+sessionPlugin({
+  cleanupIntervalMinutes: 15, // Clean up every 15 minutes
 });
-
-// Session Manager Component
-function SessionManager() {
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadSessions();
-  }, []);
-
-  async function loadSessions() {
-    const token = localStorage.getItem('authToken');
-    if (!token) return;
-
-    const result = await engine.executeStep('session', 'list-sessions', {
-      token,
-    });
-
-    if (result.success) {
-      setSessions(result.sessions);
-    }
-    setLoading(false);
-  }
-
-  async function logoutAll() {
-    const token = localStorage.getItem('authToken');
-    const result = await engine.executeStep('session', 'logout-all', {
-      token,
-    });
-
-    if (result.success) {
-      alert(`Logged out from ${result.sessionsDestroyed} devices`);
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
-    }
-  }
-
-  if (loading) return <div>Loading sessions...</div>;
-
-  return (
-    <div>
-      <h1>Your Active Sessions</h1>
-      <p>You are logged in on {sessions.length} device(s)</p>
-
-      {sessions.map((session) => (
-        <div key={session.sessionId}>
-          {session.isCurrent && <span>🟢 Current Device</span>}
-          <h3>{session.deviceInfo?.deviceName || 'Unknown Device'}</h3>
-          <p>Logged in: {new Date(session.createdAt).toLocaleString()}</p>
-        </div>
-      ))}
-
-      <button onClick={logoutAll}>Logout from All Devices</button>
-    </div>
-  );
-}
 ```
-
-## Background Cleanup
-
-The session plugin registers a cleanup task:
-
-- **Task:** `enhanced-sessions-cleanup`
-- **Interval:** Every `cleanupIntervalMinutes` (default: 30 minutes)
-- **Purpose:** Remove expired sessions and stale device data
-- **Action:**
-  - Deletes sessions past their expiration
-  - Removes device data older than `deviceRetentionDays`
-  - Cleans up orphaned session metadata
-
-## Best Practices
-
-<Steps>
-  <Step>
-    ### 1. Set Appropriate Session Limits
-
-    Balance security with user convenience. 3-5 concurrent sessions is typical for consumer apps.
-
-  </Step>
-
-  <Step>
-    ### 2. Enable Device Tracking in Production
-
-    Device tracking helps detect account compromise and provides better UX for trusted devices.
-
-  </Step>
-
-  <Step>
-    ### 3. Consider Privacy for GeoLocation
-
-    Only enable `enableGeoLocation` if you have a legitimate security or compliance need.
-
-  </Step>
-
-  <Step>
-    ### 4. Implement Session Alerts
-
-    Notify users when new devices login or when sessions are revoked due to limits.
-
-  </Step>
-
-  <Step>
-    ### 5. Provide Session Management UI
-
-    Give users visibility and control over their active sessions (like Gmail, GitHub, etc.).
-
-  </Step>
-
-  <Step>
-    ### 6. Use Logout-All on Password Change
-
-    Always force logout from all devices when password is changed for security.
-
-  </Step>
-</Steps>
 
 ## Next Steps
 
 <Cards>
   <Card
+    href="/docs/engine/plugins/admin"
+    title="Admin Plugin"
+    description="Manage sessions through admin interface."
+  />
+  <Card
     href="/docs/engine/plugins/jwt"
     title="JWT Plugin"
-    description="JWT token management and JWKS key rotation."
+    description="Use JWT tokens for stateless authentication."
   />
   <Card
-    href="/docs/engine/plugins/email-password"
-    title="Email + Password Plugin"
-    description="Basic authentication that works with session management."
-  />
-  <Card
-    href="/docs/engine/plugins/organization"
-    title="Organization Plugin"
-    description="Multi-tenant workspaces with session context."
+    href="/docs/engine/configuration"
+    title="Engine Configuration"
+    description="Configure session TTLs and cleanup intervals."
   />
 </Cards>

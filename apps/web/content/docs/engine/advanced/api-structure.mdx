@@ -44,13 +44,13 @@ ReAuth does **not** expose a flow router. Everything runs through plugins, steps
 `ReAuthConfig` is the only required input to construct an engine:
 
 ```ts
-export type ReAuthConfig = {
+export type ReAuthConfig<P extends AuthPlugin[] = AuthPlugin[]> = {
   dbClient: FumaClient;
-  plugins?: AuthPlugin[];
+  plugins?: P;
   tokenFactory?: () => string;
-  authHooks?: AuthHook[];
-  sessionHooks?: AuthHook[];
-  enableCleanupScheduler?: boolean;
+  authHooks: Array<AuthHook<P>>;
+  sessionHooks: Array<AuthHook<P>>;
+  enableCleanupScheduler?: boolean; // Default true
   getUserData: (
     subjectId: string,
     orm: OrmLike,
@@ -62,28 +62,53 @@ export type ReAuthConfig = {
 };
 ```
 
-- `dbClient` must implement the Fuma client interface (see `packages/reauth/src/types.ts`).
-- `plugins` is an ordered list; dependencies are managed by the author, not the engine.
-- `authHooks` are engine-level hooks for step execution, while `sessionHooks` wrap session operations.
-- `getUserData` hydrates JWKS payloads when distributed JWT verification is enabled.
-- `enableCleanupScheduler` defaults to `true`; the scheduler runs plugin tasks in the background.
+**Key Configuration Options:**
+
+- `dbClient`: Must implement the FumaDB client interface (see `packages/reauth/src/types.ts`)
+- `plugins`: Ordered list of authentication plugins; dependencies managed by plugin authors
+- `authHooks`: Engine-level hooks for step execution (before/after/onError)
+- `sessionHooks`: Session-level hooks for session lifecycle events
+- `getUserData`: Function to fetch user data for JWT payloads and session hydration
+- `enableCleanupScheduler`: Defaults to `true`; runs plugin cleanup tasks in background
+- `tokenFactory`: Optional custom token generation function
+- `deviceValidator`: Optional device validation for enhanced session security
 
 ### Engine Entry Points
 
 `ReAuthEngine` exposes these key methods:
 
-- `executeStep(pluginName, stepName, input)` – core step executor with validation and hook orchestration.
-- `runStep(...)` – alias that returns `AuthOutput` for backward compatibility.
-- `createSessionFor(subjectType, subjectId, ttl?, deviceInfo?)` – issue sessions without touching the service directly.
-- `checkSession(token, deviceInfo?)` – verify access tokens and hydrate subjects.
-- `registerAuthHook(hook)` / `registerHook(hook)` – add engine-level hooks at runtime.
-- `registerSessionHook(hook)` – extend session lifecycle behaviour.
-- `registerSessionResolver(subjectType, resolver)` – teach the session service how to hydrate custom subjects.
-- `registerCleanupTask(task)` – plug plugin maintenance jobs into the scheduler.
-- `getService<T>('name')` and `getContainer()` – access Awilix registrations.
-- `getOrm()` – resolve a Fuma ORM instance with the current database version.
-- `getAllPlugins()`, `getPlugin(name)` – inspect registered plugins.
-- `getUnifiedProfile(subjectId)` and `getIntrospectionData()` – expose aggregated runtime metadata for tooling and dashboards.
+**Core Execution:**
+
+- `executeStep(pluginName, stepName, input)` – Main step executor with validation and hook orchestration
+- `runStep(...)` – Alias that returns `AuthOutput` for backward compatibility
+
+**Session Management:**
+
+- `createSessionFor(subjectType, subjectId, ttl?, deviceInfo?)` – Create sessions without touching the service directly
+- `checkSession(token, deviceInfo?)` – Verify access tokens and hydrate subjects
+
+**Runtime Registration:**
+
+- `registerAuthHook(hook)` – Add engine-level hooks at runtime
+- `registerSessionHook(hook)` – Extend session lifecycle behavior
+- `registerSessionResolver(subjectType, resolver)` – Teach session service how to hydrate custom subjects
+- `registerCleanupTask(task)` – Register plugin maintenance jobs with the scheduler
+
+**Service Access:**
+
+- `getService<T>('name')` – Access Awilix-registered services
+- `getContainer()` – Access the Awilix dependency injection container
+- `getOrm()` – Resolve a FumaDB ORM instance with the current database version
+
+**Plugin Inspection:**
+
+- `getAllPlugins()` – Get all registered plugins
+- `getPlugin(name)` – Get a specific plugin by name
+
+**Introspection & Metadata:**
+
+- `getUnifiedProfile(subjectId)` – Get aggregated profile data from all plugins
+- `getIntrospectionData()` – Expose runtime metadata for tooling and dashboards
 
 ## Plugin API
 
@@ -104,17 +129,27 @@ export interface AuthPlugin<Cfg = any> {
 }
 ```
 
+**Plugin Interface Breakdown:**
+
+- `name`: Unique identifier for the plugin
+- `config`: Plugin-specific configuration object
+- `initialize`: Optional setup function called when plugin is registered
+- `steps`: Array of authentication steps provided by the plugin
+- `rootHooks`: Plugin-level hooks that apply to all steps
+- `getSensitiveFields`: Optional function to identify sensitive fields for introspection filtering
+- `getProfile`: Optional function to provide profile data for user profiles
+
 ### Step Definition
 
 ```ts
 export interface AuthStep<Cfg, I = AuthInput, O = AuthOutput> {
   name: string;
   description?: string;
-  validationSchema?: Type<any>; // ArkType schema for input
-  outputs?: Type<any>; // Optional ArkType schema for output
+  validationSchema?: Type<any>; // ArkType schema for input validation
+  outputs?: Type<any>; // Optional ArkType schema for output validation
   run: (input: I, ctx: StepContext<Cfg>) => Promise<O> | O;
   hooks?: StepHooks<Cfg, I, O>;
-  inputs?: string[]; // Named inputs for documentation
+  inputs?: string[]; // Named inputs for documentation and introspection
   protocol?: StepProtocolMeta; // HTTP metadata used by adapters
 }
 
@@ -124,7 +159,25 @@ export interface StepContext<Cfg> {
 }
 ```
 
-Steps are transport-agnostic. HTTP adapters map routes to `plugin.step` pairs and use the ArkType schemas to coerce payloads.
+**Step Interface Breakdown:**
+
+- `name`: Unique identifier for the step within the plugin
+- `description`: Optional human-readable description
+- `validationSchema`: ArkType schema for runtime input validation and TypeScript type inference
+- `outputs`: Optional ArkType schema for output validation
+- `run`: Main execution function that implements the step logic
+- `hooks`: Step-specific hooks (before/after/onError)
+- `inputs`: Array of input field names for documentation and introspection
+- `protocol`: HTTP metadata (method, status codes, auth requirements) used by adapters
+
+**Step Context:**
+
+The `StepContext` provides access to:
+
+- `engine`: The ReAuth engine instance for calling other steps or services
+- `config`: The plugin's configuration object
+
+Steps are **transport-agnostic**. HTTP adapters map routes to `plugin.step` pairs and use the ArkType schemas to coerce and validate payloads.
 
 ### Hook Interfaces
 

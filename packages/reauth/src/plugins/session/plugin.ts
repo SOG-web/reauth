@@ -24,13 +24,6 @@ function validateSessionConfig(config: Partial<SessionConfig>): string[] {
   const errors: string[] = [];
 
   if (
-    config.maxConcurrentSessions !== undefined &&
-    config.maxConcurrentSessions < 0
-  ) {
-    errors.push('maxConcurrentSessions cannot be negative');
-  }
-
-  if (
     config.cleanupIntervalMinutes !== undefined &&
     config.cleanupIntervalMinutes < 1
   ) {
@@ -103,21 +96,21 @@ export const baseSessionPlugin = {
     });
   },
   config: {
-    // Session management defaults
-    maxConcurrentSessions: 0, // Unlimited
-    sessionRotationInterval: 0, // Disabled by default
+    // // Session management defaults
+    // maxConcurrentSessions: 0, // Unlimited
+    // sessionRotationInterval: 0, // Disabled by default
 
-    // Device tracking defaults
-    deviceTrackingEnabled: true,
-    trustDeviceByDefault: false,
-    deviceRetentionDays: 90,
+    // // Device tracking defaults
+    // deviceTrackingEnabled: true,
+    // trustDeviceByDefault: false,
+    // deviceRetentionDays: 90,
 
     cleanupIntervalMinutes: 30, // Every 30 minutes
 
-    // Security features
-    requireDeviceFingerprint: false,
-    enableGeoLocation: false, // Privacy-conscious default
-    maxSessionsPerDevice: 0, // Unlimited
+    // // Security features
+    // requireDeviceFingerprint: false,
+    // enableGeoLocation: false, // Privacy-conscious default
+    // maxSessionsPerDevice: 0, // Unlimited
   },
   steps: [
     listSessionsStep,

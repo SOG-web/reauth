@@ -32,6 +32,20 @@ export interface AdminConfig {
   // Additional permissions
   customPermissions?: Record<string, string[]>;
 
+  // Access restrictions - controls which plugins/steps require admin access
+  accessRestrictions?: {
+    // Plugins that require admin access
+    adminOnlyPlugins?: string[];
+    // Steps that require admin access (format: "pluginName.stepName")
+    adminOnlySteps?: string[];
+    // Specific roles that can access restricted plugins/steps
+    allowedRoles?: string[];
+  };
+
+  // First admin setup
+  allowFirstAdminSetup?: boolean;
+  firstAdminSetupKey?: string; // Optional setup key for additional security
+
   /**
    * Root hooks
    * @example

@@ -56,15 +56,29 @@ Use ReAuth **only** for OAuth social login while keeping your existing email/pas
 ### Setup
 
 ```ts
-import createReAuthEngine from '@re-auth/reauth';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import { oauthPlugin } from '@re-auth/reauth/plugins/oauth';
 import {
   googleProvider,
   githubProvider,
 } from '@re-auth/reauth/plugins/oauth/providers';
 
+// Setup database with OAuth plugin schema
+const { schema: v1 } = reauthDb('1.0.1', [oauthSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
 const reauth = createReAuthEngine({
-  dbClient: db, // Your FumaDB client
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
   plugins: [
     oauthPlugin({
       providers: [
@@ -214,11 +228,25 @@ Use ReAuth's organization plugin to add multi-tenancy to your existing auth syst
 ### Setup
 
 ```ts
-import createReAuthEngine from '@re-auth/reauth';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import { organizationPlugin } from '@re-auth/reauth/plugins/organization';
 
+// Setup database with organization plugin schema
+const { schema: v1 } = reauthDb('1.0.1', [organizationSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
 const reauth = createReAuthEngine({
-  dbClient: db,
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
   plugins: [
     organizationPlugin({
       maxOrganizationsPerUser: 10,
@@ -393,11 +421,25 @@ Use ReAuth's JWT plugin to issue tokens that **other services** can verify witho
 ### Setup
 
 ```ts
-import createReAuthEngine from '@re-auth/reauth';
-import { apiKeyPlugin } from '@re-auth/reauth/plugins/api-key';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import { jwtPlugin } from '@re-auth/reauth/plugins/jwt';
+
+// Setup database with JWT plugin schema
+const { schema: v1 } = reauthDb('1.0.1', [jwtSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
 
 const reauth = createReAuthEngine({
-  dbClient: db,
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
   plugins: [
     jwtPlugin({
       issuer: 'https://auth.yourapp.com',

@@ -5,13 +5,13 @@ description: Understand how the ReAuth engine models flows, hooks, and persisten
 
 ## Architecture
 
-The engine separates authentication concerns into three layers:
+The ReAuth engine separates authentication concerns into three core layers:
 
-1. **State**: deterministic persistence via pluggable database adapters using FumaDB.
-2. **Flows**: reusable authentication flows composed from plugins (email/password, OAuth, JWT, organizations).
-3. **Hooks**: middleware-style interceptors that gate and extend flows at multiple levels (engine, plugin, step).
+1. **Database Layer**: FumaDB-based persistence with versioned schemas and plugin-specific tables
+2. **Plugin Layer**: Composable authentication flows (email/password, OAuth, JWT, admin, session, etc.)
+3. **Hook System**: Multi-level middleware (engine, plugin, step) for extending and intercepting flows
 
-Because the engine is transport agnostic, the same configuration runs in Node, Deno, Bun, or edge environments.
+The engine is **transport-agnostic** - the same configuration runs in Node.js, Deno, Bun, or edge environments without modification.
 
 ```mermaid
 flowchart LR
@@ -243,23 +243,43 @@ The ReAuth pattern establishes a **universal authentication standard** by:
   function can authenticate users from the same user pool.
 </Callout>
 
-## Core concepts
+## Core Concepts
 
-### Engine configuration
+### Engine Configuration
 
-The engine accepts a configuration object that nails down persistence, plugins, and security settings:
+The engine accepts a configuration object that defines persistence, plugins, and security settings:
 
 ```ts
-import createReAuthEngine from '@re-auth/reauth';
-import { emailPasswordPlugin } from '@re-auth/reauth/plugins/email-password';
-import { db } from './database'; // FumaDB client
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+import sessionPlugin, { sessionSchema } from '@re-auth/reauth/plugins/session';
 
-export const auth = createReAuthEngine({
-  dbClient: db, // FumaDB client instance
+// Setup database with versioned schemas
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema, sessionSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+export const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
   plugins: [
     emailPasswordPlugin({
-      requireEmailVerification: true,
-      sessionTtlSeconds: 3600, // 1 hour
+      sessionTtlSeconds: 3600, // 1 hour sessions
+      enableRegistration: true,
+      verifyEmail: true,
+    }),
+    sessionPlugin({
+      cleanupIntervalMinutes: 30,
     }),
   ],
   authHooks: [
@@ -267,9 +287,9 @@ export const auth = createReAuthEngine({
     {
       type: 'before',
       universal: true,
-      fn: async (data) => {
+      fn: async (input, container) => {
         console.log('Before any auth flow');
-        return data;
+        return input;
       },
     },
   ],
@@ -277,14 +297,14 @@ export const auth = createReAuthEngine({
     // Session-level hooks
     {
       type: 'after',
-      fn: async (data) => {
+      fn: async (data, container) => {
         console.log('After session created');
         return data;
       },
     },
   ],
   getUserData: async (subjectId, orm) => {
-    // Fetch additional user data for sessions
+    // Fetch additional user data for JWT payloads
     const user = await orm.findFirst('subjects', {
       where: (b) => b('id', '=', subjectId),
     });
@@ -294,13 +314,14 @@ export const auth = createReAuthEngine({
 });
 ```
 
-Key sections:
+**Key Configuration Options:**
 
-- `dbClient`: FumaDB client for persistence.
-- `plugins`: authentication flows that extend the engine.
-- `authHooks`: engine-level hooks that run for all authentication flows.
-- `sessionHooks`: hooks that run during session creation/verification.
-- `getUserData`: function to fetch additional user data for JWT payloads.
+- `dbClient`: FumaDB client for database operations
+- `plugins`: Authentication flows that extend the engine
+- `authHooks`: Engine-level hooks that run for all authentication flows
+- `sessionHooks`: Hooks that run during session creation/verification
+- `getUserData`: Function to fetch user data for JWT payloads and sessions
+- `enableCleanupScheduler`: Background cleanup for expired tokens and sessions
 
 ### Plugins
 
@@ -312,24 +333,37 @@ Plugins encapsulate authentication flows as **steps**. Each plugin can define:
 - **Hooks**: Step-level (`before`, `after`, `onError`) and plugin-level root hooks.
 - **Database Tables**: Custom tables and relations via FumaDB schema plugins.
 
-Plugins are composable and can depend on each other. ReAuth core ships with:
+Plugins are composable and can depend on each other. ReAuth ships with:
 
 <Cards>
   <Card
     title="Email + Password"
-    description="Form-based sign-in with verification rules"
+    description="Traditional email/password authentication with verification"
   />
   <Card
-    title="Passwordless"
-    description="Magic links and passcodes without password storage"
+    title="Username"
+    description="Username-based authentication without email requirements"
   />
   <Card
-    title="Organizations"
-    description="Experimental team & workspace support"
+    title="Email or Username"
+    description="Flexible authentication supporting both methods"
   />
   <Card
-    title="OAuth Providers"
-    description="Drop-in integrations for popular identity providers"
+    title="Phone"
+    description="SMS-based authentication with verification codes"
+  />
+  <Card
+    title="Session"
+    description="Session management and lifecycle operations"
+  />
+  <Card title="JWT" description="JSON Web Token management with JWKS support" />
+  <Card
+    title="Admin"
+    description="User management, roles, and administrative operations"
+  />
+  <Card
+    title="API Key"
+    description="API key authentication for service-to-service communication"
   />
 </Cards>
 
@@ -346,13 +380,20 @@ ReAuth provides a flexible hooks system at three levels:
     Global hooks that run for all authentication flows:
     
     ```ts
-    auth.registerAuthHook({
-      type: 'before',
-      universal: true,
-      fn: async (data) => {
-        // Rate limiting, logging, etc.
-        return data;
-      }
+    const engine = createReAuthEngine({
+      dbClient,
+      authHooks: [
+        {
+          type: 'before',
+          universal: true,
+          fn: async (input, container) => {
+            // Rate limiting, logging, etc.
+            console.log('Before any auth step');
+            return input;
+          },
+        },
+      ],
+      getUserData: async (subjectId, orm) => ({}),
     });
     ```
   </Step>
@@ -363,21 +404,26 @@ ReAuth provides a flexible hooks system at three levels:
     Hooks that run for all steps within a plugin:
     
     ```ts
-    {
+    const myPlugin = {
+      name: 'my-plugin',
       rootHooks: {
         before: async (input, ctx, step) => {
           // Pre-process input for all plugin steps
+          console.log(`Executing step: ${step.name}`);
           return input;
         },
         after: async (output, ctx, step) => {
           // Post-process output
+          console.log(`Completed step: ${step.name}`);
           return output;
         },
         onError: async (error, input, ctx, step) => {
           // Handle errors
-        }
-      }
-    }
+          console.error(`Error in ${step.name}:`, error);
+        },
+      },
+      steps: [/* ... */],
+    };
     ```
   </Step>
   
@@ -387,19 +433,26 @@ ReAuth provides a flexible hooks system at three levels:
     Hooks specific to individual steps:
     
     ```ts
-    {
+    const registerStep = {
+      name: 'register',
       hooks: {
         before: async (input, ctx) => {
           // Step-specific pre-processing
+          console.log('Before registration');
         },
         after: async (output, ctx) => {
           // Step-specific post-processing  
+          console.log('After registration');
         },
         onError: async (error, ctx) => {
           // Step-specific error handling
-        }
-      }
-    }
+          console.error('Registration failed:', error);
+        },
+      },
+      async run(input, ctx) {
+        // Step implementation
+      },
+    };
     ```
   </Step>
   
@@ -409,18 +462,32 @@ ReAuth provides a flexible hooks system at three levels:
     Special hooks for session lifecycle:
     
     ```ts
-    auth.registerSessionHook({
-      type: 'after',
-      fn: async (data) => {
-        // Track session creation
-        return data;
-      }
+    const engine = createReAuthEngine({
+      dbClient,
+      sessionHooks: [
+        {
+          type: 'after',
+          fn: async (data, container) => {
+            // Track session creation
+            analytics.track('session_created', { userId: data.subject?.id });
+            return data;
+          },
+        },
+      ],
+      getUserData: async (subjectId, orm) => ({}),
     });
     ```
   </Step>
 </Steps>
 
-Hooks run in order: **Engine → Plugin Root → Step**, allowing fine-grained control without coupling to transport.
+**Hook Execution Order:**
+
+1. **Before hooks**: Engine → Plugin Root → Step
+2. **Validation**: Input validation with ArkType schemas
+3. **Execution**: Step implementation
+4. **Output validation**: Output validation (if defined)
+5. **After hooks**: Step → Plugin Root → Engine (reversed)
+6. **On error**: Step → Plugin Root → Engine (reversed)
 
 ### Input & Output Validation
 
@@ -460,28 +527,124 @@ const step = {
 - ✅ Automatic validation errors
 - ✅ JSON Schema generation for introspection
 
-## Data expectations
+## Data Persistence
 
-The engine persists:
+The engine persists data through FumaDB with versioned schemas:
 
-- Users with metadata and verification state
-- Sessions plus refresh/access token relationships
-- Linked identities (OAuth providers, passkeys)
-- Plugin-specific tables (e.g., organization membership)
+- **Core Tables**: `subjects`, `identities`, `credentials`, `sessions`
+- **Plugin Tables**: Each plugin defines its own tables (e.g., `password_reset_codes`, `api_keys`, `audit_logs`)
+- **Session Management**: Enhanced sessions with device tracking and metadata
+- **JWT Support**: JWKS keys for distributed token verification
 
-The built-in Kysely adapter ships migrations that capture these tables. Bring your own adapter when you need custom storage—implement the datastore interface and register it in the engine configuration.
+### Schema Versioning
 
-## Observability
-
-Use the built-in event bus to log or trace flows:
+ReAuth uses FumaDB's versioned schema system for safe database migrations:
 
 ```ts
-auth.events.on('session.created', (payload) => {
-  telemetry.capture('reauth.session.created', payload);
+// Version 1.0.1 - Initial schema
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+
+// Version 1.0.2 - Add new plugin
+const { schema: v2 } = extendSchemaVersion(v1Plugins, '1.0.2', [
+  sessionSchema,
+  adminSchema,
+]);
+
+// Register all versions
+const factory = reauthDbVersions([v1, v2]);
+```
+
+This allows:
+
+- Zero-downtime deployments
+- Safe plugin additions
+- Rollback capabilities
+- Multiple client version support
+
+## Observability & Monitoring
+
+ReAuth provides multiple ways to monitor and observe authentication flows:
+
+### Engine Hooks for Logging
+
+```ts
+const engine = createReAuthEngine({
+  dbClient,
+  authHooks: [
+    {
+      type: 'before',
+      universal: true,
+      fn: async (input, container) => {
+        // Log all authentication attempts
+        telemetry.track('auth.attempt', {
+          plugin: input.pluginName,
+          step: input.stepName,
+          timestamp: new Date().toISOString(),
+        });
+        return input;
+      },
+    },
+  ],
+  sessionHooks: [
+    {
+      type: 'after',
+      fn: async (data, container) => {
+        // Track session creation
+        telemetry.track('session.created', {
+          userId: data.subject?.id,
+          timestamp: new Date().toISOString(),
+        });
+        return data;
+      },
+    },
+  ],
+  getUserData: async (subjectId, orm) => ({}),
 });
 ```
 
-Events fire for lifecycle edges (session created, token revoked, user invitation sent) to keep external systems in sync.
+### Plugin-Level Monitoring
+
+```ts
+const myPlugin = {
+  name: 'my-plugin',
+  rootHooks: {
+    onError: async (error, input, ctx, step) => {
+      // Log plugin-specific errors
+      monitoring.captureError(error, {
+        plugin: 'my-plugin',
+        step: step.name,
+        userId: input.subject?.id,
+      });
+    },
+  },
+  steps: [
+    /* ... */
+  ],
+};
+```
+
+### Cleanup Task Monitoring
+
+```ts
+engine.registerCleanupTask({
+  name: 'expired-tokens',
+  pluginName: 'my-plugin',
+  intervalMs: 60000,
+  enabled: true,
+  async runner(orm, config) {
+    const result = await cleanupExpiredTokens(orm);
+
+    // Log cleanup results
+    telemetry.track('cleanup.completed', {
+      task: 'expired-tokens',
+      cleaned: result.cleaned,
+      errors: result.errors?.length || 0,
+    });
+
+    return result;
+  },
+});
+```
 
 ## Next steps
 

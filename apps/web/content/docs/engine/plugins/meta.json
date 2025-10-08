@@ -2,6 +2,7 @@
   "title": "Plugins",
   "description": "Built-in and custom authentication plugins for ReAuth.",
   "pages": [
+    "admin",
     "email-password",
     "passwordless",
     "username",

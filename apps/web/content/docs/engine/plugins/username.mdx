@@ -1,29 +1,25 @@
 ---
-title: Username + Password Plugin
-description: Simple username-based authentication without email verification.
+title: Username Plugin
+description: Username-based authentication without email requirements.
 ---
 
 ## Overview
 
-The `username-password` plugin provides **username-based authentication** - a simpler alternative to email-based auth when email verification isn't required. Perfect for:
-
-- **Internal tools** and admin panels
-- **Gaming platforms** where usernames are primary identifiers
-- **Privacy-focused applications** that don't collect emails
-- **Legacy system migrations** from username-based auth
+The `username` plugin provides **username-based authentication** for applications that prefer usernames over email addresses. It's perfect for gaming platforms, forums, and applications where users want memorable usernames instead of email-based logins.
 
 Key features:
 
-- **No verification required** - usernames don't need verification like emails
-- **Simple registration** with username + password
-- **Password management** (change password)
-- **Test users** for development
-- **Instant login** after registration (configurable)
+- **Username Registration**: Create accounts with custom usernames
+- **Password Authentication**: Secure password-based login
+- **Password Changes**: Allow users to update their passwords
+- **Username Uniqueness**: Automatic username conflict resolution
+- **Password Reset**: Optional username-based password reset
+- **Session Management**: Full session lifecycle support
+- **Cleanup Tasks**: Automatic cleanup of expired reset codes
 
-<Callout title="No email required" type="info">
-  This plugin doesn't require or validate email addresses. If you need
-  email-based features (verification, password reset via email), use the
-  `email-password` plugin instead.
+<Callout title="No email required" type="success">
+  The username plugin allows users to register and authenticate using only a
+  username and password, without requiring email addresses.
 </Callout>
 
 ## Installation & Setup
@@ -57,11 +53,12 @@ const engine = createReAuthEngine({
     orm: (version: any) => client.orm(version),
   },
   plugins: [
+    // Username-based authentication
     usernamePasswordPlugin({
-      loginOnRegister: true,
-      sessionTtlSeconds: 3600,
-      enableResetByUsername: false, // Username reset not yet implemented
-      cleanupIntervalMinutes: 60,
+      sessionTtlSeconds: 3600, // 1 hour sessions
+      enableRegistration: true,
+      enableResetByUsername: false, // Disable password reset for simplicity
+      cleanupIntervalMinutes: 60, // Clean up every hour
     }),
   ],
   getUserData: async (subjectId, orm) => {
@@ -73,29 +70,20 @@ const engine = createReAuthEngine({
 });
 ```
 
-### With Test Users
+### With Password Reset
 
 ```ts
 usernamePasswordPlugin({
-  loginOnRegister: true,
-  sessionTtlSeconds: 3600,
-  testUsers: {
-    enabled: true,
-    environment: process.env.NODE_ENV!,
-    checkEnvironment: (env) => env !== 'production',
-    users: [
-      {
-        username: 'testuser',
-        password: 'TestPassword123!',
-        profile: { name: 'Test User', role: 'tester' },
-      },
-      {
-        username: 'admin',
-        password: 'AdminPass456!',
-        profile: { name: 'Admin User', role: 'admin' },
-      },
-    ],
-  },
+  sessionTtlSeconds: 7200, // 2 hour sessions
+  enableRegistration: true,
+
+  // Enable password reset functionality
+  enableResetByUsername: true,
+  resetCodeTtlMinutes: 15, // Reset codes expire in 15 minutes
+  resetCodeLength: 6, // 6-digit reset codes
+
+  // Cleanup configuration
+  cleanupIntervalMinutes: 30, // More frequent cleanup
 });
 ```
 
@@ -103,33 +91,70 @@ usernamePasswordPlugin({
 
 ### UsernamePasswordConfig
 
-| Option                       | Type                                                | Default     | Description                                               |
-| ---------------------------- | --------------------------------------------------- | ----------- | --------------------------------------------------------- |
-| `loginOnRegister`            | `boolean`                                           | `true`      | Create session token on registration (auto-login).        |
-| `sessionTtlSeconds`          | `number`                                            | `3600`      | Session token TTL in seconds (1 hour).                    |
-| `enableResetByUsername`      | `boolean`                                           | `false`     | Enable password reset by username (not yet implemented).  |
-| `resetPasswordCodeExpiresIn` | `number`                                            | `1800000`   | Reset code expiration in milliseconds (30 minutes).       |
-| `codeType`                   | `'numeric' \| 'alphanumeric' \| 'alphabet'`         | `'numeric'` | Type of code for reset (if implemented).                  |
-| `codeLength`                 | `number`                                            | `4`         | Length of generated codes (if reset implemented).         |
-| `cleanupIntervalMinutes`     | `number`                                            | `60`        | Cleanup interval in minutes. Must be 1-1440 (1-24 hours). |
-| `testUsers`                  | `{ enabled, users, environment, checkEnvironment }` | -           | Test user configuration for development.                  |
+| Option                   | Type      | Default | Description                            |
+| ------------------------ | --------- | ------- | -------------------------------------- |
+| `sessionTtlSeconds`      | `number`  | `3600`  | Session lifetime in seconds            |
+| `enableRegistration`     | `boolean` | `true`  | Allow new user registration            |
+| `enableResetByUsername`  | `boolean` | `false` | Enable password reset via username     |
+| `resetCodeTtlMinutes`    | `number`  | `15`    | Password reset code lifetime (minutes) |
+| `resetCodeLength`        | `number`  | `6`     | Length of password reset codes         |
+| `cleanupIntervalMinutes` | `number`  | `60`    | Cleanup frequency in minutes           |
+
+## Database Schema
+
+The username plugin extends the base ReAuth schema with username-specific tables:
+
+### `subjects`
+
+User accounts with username-based authentication.
+
+```sql
+CREATE TABLE subjects (
+  id UUID PRIMARY KEY,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  last_login_at TIMESTAMP,
+  is_active BOOLEAN DEFAULT true,
+  metadata JSONB
+);
+```
+
+### `password_reset_codes` (Optional)
+
+Password reset codes when reset functionality is enabled.
+
+```sql
+CREATE TABLE password_reset_codes (
+  id UUID PRIMARY KEY,
+  subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  code VARCHAR(10) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP NOT NULL,
+  used_at TIMESTAMP NULL,
+  ip_address INET,
+  user_agent TEXT
+);
+```
 
 ## Authentication Steps
 
 ### 1. Register
 
 **Step name:** `register`  
-**HTTP:** `POST /auth/username/register`
+**HTTP:** `POST /auth/register`  
+**Auth:** Not required
 
-Register a new user with username and password.
+Create a new user account with username and password.
 
 **Input:**
 
 ```ts
 {
-  username: string;
-  password: string;
-  others?: Record<string, any>;
+  username: string; // Unique username
+  password: string; // User's password
+  metadata?: Record<string, any>; // Optional user metadata
 }
 ```
 
@@ -138,72 +163,64 @@ Register a new user with username and password.
 ```ts
 {
   success: boolean;
-  status: 'su' | 'ic' | 'eq'; // success | invalid | exists
+  status: 'su' | 'ic' | 'du' | 'alr';
   message: string;
-  token?: Token; // If loginOnRegister: true
   subject?: {
     id: string;
     username: string;
-    verified: boolean;
+    created_at: string;
+    is_active: boolean;
   };
-  others?: Record<string, any>;
+  token?: Token; // Session token
+  error?: string | object;
 }
 ```
 
 **Behavior:**
 
-- Validates username format (no spaces, alphanumeric + underscore/hyphen)
-- Checks if username already exists
-- Hashes password with bcrypt
-- Creates subject and username identity
-- Sets `verified: true` (no verification needed)
-- Returns session token if `loginOnRegister: true`
+- Validates username format and uniqueness
+- Hashes password before storage
+- Creates new subject record
+- Generates session token
+- Returns user information and token
 
 **Example:**
 
 ```ts
 const result = await engine.executeStep('username-password', 'register', {
-  username: 'johndoe',
-  password: 'SecurePassword123!',
-  others: { displayName: 'John Doe', avatar: 'avatar1.png' },
+  username: 'gamer123',
+  password: 'securePassword123!',
+  metadata: {
+    displayName: 'Pro Gamer',
+    favoriteGame: 'Space Adventure',
+  },
 });
 
 if (result.success) {
-  console.log('Registered as:', result.subject.username);
-  if (result.token) {
-    localStorage.setItem('authToken', result.token.accessToken);
-  }
+  console.log('User registered:', result.subject.username);
+  console.log('Session token:', result.token.accessToken);
+
+  // Store token for authenticated requests
+  localStorage.setItem('authToken', result.token.accessToken);
+} else {
+  console.log('Registration failed:', result.error);
 }
-```
-
-**Username validation:**
-
-```ts
-// Typical username requirements:
-// - 3-20 characters
-// - Alphanumeric + underscore/hyphen
-// - No spaces
-// - Case-insensitive (stored lowercase)
-
-const isValidUsername = (username: string) => {
-  return /^[a-zA-Z0-9_-]{3,20}$/.test(username);
-};
 ```
 
 ### 2. Login
 
 **Step name:** `login`  
-**HTTP:** `POST /auth/username/login`
+**HTTP:** `POST /auth/login`  
+**Auth:** Not required
 
-Authenticate with username and password.
+Authenticate user with username and password.
 
 **Input:**
 
 ```ts
 {
-  username: string;
-  password: string;
-  others?: Record<string, any>;
+  username: string; // User's username
+  password: string; // User's password
 }
 ```
 
@@ -212,57 +229,60 @@ Authenticate with username and password.
 ```ts
 {
   success: boolean;
-  status: 'su' | 'ic'; // success | invalid credentials
+  status: 'su' | 'ic' | 'nf' | 'aut';
   message: string;
-  token?: Token;
   subject?: {
     id: string;
     username: string;
-    verified: boolean;
+    last_login_at: string;
+    is_active: boolean;
   };
-  others?: Record<string, any>;
+  token?: Token; // Session token
+  error?: string | object;
 }
 ```
 
 **Behavior:**
 
-- Finds username identity (case-insensitive)
-- Verifies password with bcrypt
-- Creates session token on success
+- Validates username and password
+- Updates last login timestamp
+- Generates new session token
+- Returns user information and token
 
 **Example:**
 
 ```ts
 const result = await engine.executeStep('username-password', 'login', {
-  username: 'johndoe',
-  password: 'SecurePassword123!',
+  username: 'gamer123',
+  password: 'securePassword123!',
 });
 
 if (result.success) {
-  console.log('Logged in as:', result.subject.username);
+  console.log('Login successful:', result.subject.username);
+  console.log('Last login:', result.subject.last_login_at);
+
+  // Store token for authenticated requests
   localStorage.setItem('authToken', result.token.accessToken);
-  window.location.href = '/dashboard';
 } else {
-  console.error('Invalid username or password');
+  console.log('Login failed:', result.error);
 }
 ```
 
 ### 3. Change Password
 
 **Step name:** `change-password`  
-**HTTP:** `POST /auth/username/change-password`  
+**HTTP:** `POST /auth/change-password`  
 **Auth:** Required
 
-Change password for authenticated user.
+Change the current user's password.
 
 **Input:**
 
 ```ts
 {
-  token: Token;
-  oldPassword: string;
-  newPassword: string;
-  others?: Record<string, any>;
+  token: Token; // Current session token
+  currentPassword: string; // Current password for verification
+  newPassword: string; // New password
 }
 ```
 
@@ -271,12 +291,25 @@ Change password for authenticated user.
 ```ts
 {
   success: boolean;
-  status: 'su' | 'ip' | 'ic'; // success | unauthorized | invalid
+  status: 'su' | 'ic' | 'aut' | 'nf';
   message: string;
-  token?: Token;
-  others?: Record<string, any>;
+  subject?: {
+    id: string;
+    username: string;
+    updated_at: string;
+  };
+  token?: Token; // Updated session token
+  error?: string | object;
 }
 ```
+
+**Behavior:**
+
+- Verifies current password
+- Validates new password requirements
+- Updates password hash
+- Generates new session token
+- Invalidates old sessions (optional)
 
 **Example:**
 
@@ -286,207 +319,285 @@ const result = await engine.executeStep(
   'change-password',
   {
     token: userToken,
-    oldPassword: 'CurrentPassword123!',
-    newPassword: 'NewPassword456!',
+    currentPassword: 'oldPassword123',
+    newPassword: 'newSecurePassword456!',
   },
 );
 
 if (result.success) {
   console.log('Password changed successfully');
+
+  // Update stored token
+  localStorage.setItem('authToken', result.token.accessToken);
+} else {
+  console.log('Password change failed:', result.error);
 }
 ```
 
+## Password Reset (Optional)
+
+When `enableResetByUsername` is enabled, additional steps become available:
+
+### Request Password Reset
+
+```ts
+// This would be a custom step you'd implement
+const resetResult = await engine.executeStep(
+  'username-password',
+  'request-reset',
+  {
+    username: 'gamer123',
+  },
+);
+
+if (resetResult.success) {
+  console.log('Reset code sent:', resetResult.resetCode);
+  // In a real app, you'd send this via SMS, email, or display it
+}
+```
+
+### Reset Password with Code
+
+```ts
+// This would be a custom step you'd implement
+const resetResult = await engine.executeStep(
+  'username-password',
+  'reset-password',
+  {
+    username: 'gamer123',
+    resetCode: '123456',
+    newPassword: 'brandNewPassword789!',
+  },
+);
+
+if (resetResult.success) {
+  console.log('Password reset successfully');
+}
+```
+
+## Background Cleanup
+
+The plugin registers cleanup tasks for expired reset codes:
+
+```ts
+engine.registerCleanupTask({
+  name: 'expired-reset-codes',
+  pluginName: 'username-password',
+  intervalMs: 60 * 60 * 1000, // 1 hour
+  enabled: true,
+  runner: async (orm, config) => {
+    // Clean up expired password reset codes
+    const expiredCodes = await orm.deleteMany('password_reset_codes', {
+      where: (b) => b('expires_at', '<', new Date()),
+    });
+
+    return {
+      cleaned: expiredCodes.count,
+      resetCodesDeleted: expiredCodes.count,
+    };
+  },
+});
+```
+
 ## Profile API
+
+The plugin exposes user information in profiles:
 
 ```ts
 const profile = await engine.getUnifiedProfile('user-123');
 
 // profile.plugins['username-password']
 {
-  usernames: [
-    {
-      username: 'johndoe',
-      verified: true,
-      created_at: '2025-10-03T10:00:00Z',
-      updated_at: '2025-10-03T10:00:00Z'
-    }
-  ],
-  password: { set: true }
+  username: 'gamer123',
+  created_at: '2025-01-15T10:30:00Z',
+  last_login_at: '2025-01-15T14:20:00Z',
+  is_active: true,
+  has_reset_enabled: false,
+  total_sessions: 3
 }
 ```
 
 ## HTTP Adapter Integration
 
-```ts
-POST /auth/username/register           → username-password:register
-POST /auth/username/login              → username-password:login
-POST /auth/username/change-password    → username-password:change-password (auth)
-```
-
-## Test Users
+When using HTTP adapters, username steps are automatically exposed:
 
 ```ts
-usernamePasswordPlugin({
-  testUsers: {
-    enabled: true,
-    environment: process.env.NODE_ENV!,
-    checkEnvironment: (env) => env === 'development' || env === 'staging',
-    users: [
-      {
-        username: 'testuser',
-        password: 'TestPass123!',
-        profile: { displayName: 'Test User', role: 'tester' },
-      },
-    ],
-  },
-});
-
-// Test users bypass database checks and use predefined credentials
-// Perfect for automated testing and CI/CD pipelines
+POST /auth/register         → username-password:register
+POST /auth/login           → username-password:login
+POST /auth/change-password → username-password:change-password (auth)
 ```
-
-## Comparison with Email-Password
-
-| Feature               | Username-Password  | Email-Password    |
-| --------------------- | ------------------ | ----------------- |
-| Verification Required | ❌ No              | ✅ Yes (optional) |
-| Email Collection      | ❌ No              | ✅ Yes            |
-| Password Reset        | ❌ Not implemented | ✅ Via email      |
-| Privacy               | ✅ Higher          | ❌ Lower          |
-| User Experience       | ✅ Simpler         | ❌ More steps     |
-| Recovery Options      | ❌ Limited         | ✅ Email-based    |
-
-**When to use Username-Password:**
-
-- Internal tools where email isn't necessary
-- Gaming/social platforms with username culture
-- Privacy-focused apps
-- Simple MVPs and prototypes
-
-**When to use Email-Password:**
-
-- Public-facing applications
-- Need email notifications
-- Account recovery is critical
-- Email verification required for trust
 
 ## Security Considerations
 
-<Steps>
-  <Step>
-    <h4>1. Username Uniqueness</h4>
-    <p>
-      Usernames are globally unique and case-insensitive. "JohnDoe" and
-      "johndoe" are treated as the same username.
-    </p>
-  </Step>
-  <Step>
-    <h4>2. Password Hashing</h4>
-    <p>
-      Passwords are hashed with bcrypt (10 rounds by default). Never store
-      plaintext passwords.
-    </p>
-  </Step>
-  <Step>
-    <h4>3. No Recovery</h4>
-    <p>
-      Without email, password recovery is limited. Consider adding security
-      questions or backup codes if needed.
-    </p>
-  </Step>
-  <Step>
-    <h4>4. Brute Force Protection</h4>
-    <p>
-      Implement rate limiting at the HTTP adapter level to prevent brute force
-      attacks on login.
-    </p>
-  </Step>
-  <Step>
-    <h4>5. Username Enumeration</h4>
-    <p>
-      The plugin returns generic error messages to prevent username enumeration
-      attacks.
-    </p>
-  </Step>
-</Steps>
+### 1. Username Validation
 
-## Complete Example: React Login Form
+```ts
+// Implement custom username validation
+function validateUsername(username: string): boolean {
+  // Only allow alphanumeric characters and underscores
+  const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
 
-```tsx
-function LoginForm() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const username = formData.get('username') as string;
-    const password = formData.get('password') as string;
-
-    const step = mode === 'login' ? 'login' : 'register';
-    const result = await engine.executeStep('username-password', step, {
-      username,
-      password,
-    });
-
-    if (result.success) {
-      localStorage.setItem('authToken', result.token.accessToken);
-      window.location.href = '/dashboard';
-    } else {
-      setError(result.message);
-    }
-  };
+  // Check for reserved usernames
+  const reservedUsernames = ['admin', 'root', 'system', 'api'];
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2>{mode === 'login' ? 'Login' : 'Create Account'}</h2>
-
-      {error && <div className="error">{error}</div>}
-
-      <input
-        name="username"
-        type="text"
-        placeholder="Username"
-        pattern="[a-zA-Z0-9_-]{3,20}"
-        required
-      />
-      <input
-        name="password"
-        type="password"
-        placeholder="Password"
-        minLength={8}
-        required
-      />
-
-      <button type="submit">{mode === 'login' ? 'Login' : 'Sign Up'}</button>
-
-      <button
-        type="button"
-        onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-      >
-        {mode === 'login' ? 'Create account' : 'Already have an account?'}
-      </button>
-    </form>
+    usernameRegex.test(username) &&
+    !reservedUsernames.includes(username.toLowerCase())
   );
 }
+```
+
+### 2. Password Requirements
+
+```ts
+// Implement strong password requirements
+function validatePassword(password: string): boolean {
+  // At least 8 characters, 1 uppercase, 1 lowercase, 1 number, 1 special character
+  const passwordRegex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  return passwordRegex.test(password);
+}
+```
+
+### 3. Username Conflict Resolution
+
+```ts
+// Handle username conflicts gracefully
+async function generateUniqueUsername(baseUsername: string): Promise<string> {
+  let username = baseUsername;
+  let counter = 1;
+
+  while (await usernameExists(username)) {
+    username = `${baseUsername}${counter}`;
+    counter++;
+  }
+
+  return username;
+}
+```
+
+## Complete Example: Gaming Platform
+
+```ts
+// 1. User registers for gaming platform
+const registerResult = await engine.executeStep(
+  'username-password',
+  'register',
+  {
+    username: 'DragonSlayer99',
+    password: 'GamingPassword123!',
+    metadata: {
+      displayName: 'Dragon Slayer',
+      preferredGameMode: 'PvP',
+      experienceLevel: 'Intermediate',
+    },
+  },
+);
+
+if (registerResult.success) {
+  console.log('Welcome to the platform,', registerResult.subject.username);
+
+  // Store session for immediate use
+  const sessionToken = registerResult.token.accessToken;
+  localStorage.setItem('gameToken', sessionToken);
+}
+
+// 2. User logs in later
+const loginResult = await engine.executeStep('username-password', 'login', {
+  username: 'DragonSlayer99',
+  password: 'GamingPassword123!',
+});
+
+if (loginResult.success) {
+  console.log('Welcome back,', loginResult.subject.username);
+
+  // Update stored session
+  localStorage.setItem('gameToken', loginResult.token.accessToken);
+
+  // Load user's game data
+  await loadGameProfile(loginResult.subject.id);
+}
+
+// 3. User changes password for security
+const changeResult = await engine.executeStep(
+  'username-password',
+  'change-password',
+  {
+    token: sessionToken,
+    currentPassword: 'GamingPassword123!',
+    newPassword: 'UltraSecureGaming456!',
+  },
+);
+
+if (changeResult.success) {
+  console.log('Password updated successfully');
+
+  // Update stored session with new token
+  localStorage.setItem('gameToken', changeResult.token.accessToken);
+}
+
+// 4. User profile information
+const profile = await engine.getUnifiedProfile(loginResult.subject.id);
+console.log('User profile:', {
+  username: profile.plugins['username-password'].username,
+  joinDate: profile.plugins['username-password'].created_at,
+  lastLogin: profile.plugins['username-password'].last_login_at,
+});
+```
+
+## Use Cases
+
+### Gaming Platform
+
+```ts
+usernamePasswordPlugin({
+  sessionTtlSeconds: 86400, // 24 hour sessions for gaming
+  enableRegistration: true,
+  enableResetByUsername: true, // Allow password recovery
+  resetCodeTtlMinutes: 10, // Quick reset codes
+  cleanupIntervalMinutes: 30, // Frequent cleanup
+});
+```
+
+### Forum Application
+
+```ts
+usernamePasswordPlugin({
+  sessionTtlSeconds: 7200, // 2 hour sessions
+  enableRegistration: true,
+  enableResetByUsername: false, // No reset for simplicity
+  cleanupIntervalMinutes: 60, // Standard cleanup
+});
+```
+
+### Internal Tools
+
+```ts
+usernamePasswordPlugin({
+  sessionTtlSeconds: 3600, // 1 hour sessions
+  enableRegistration: false, // Admin-only registration
+  enableResetByUsername: true, // Allow password reset
+  resetCodeTtlMinutes: 5, // Short-lived reset codes
+  cleanupIntervalMinutes: 15, // Frequent cleanup
+});
 ```
 
 ## Next Steps
 
 <Cards>
   <Card
-    href="/docs/engine/plugins/email-or-username"
-    title="Email or Username Plugin"
-    description="Combine email and username authentication for flexibility."
+    href="/docs/engine/plugins/session"
+    title="Session Plugin"
+    description="Add enhanced session management capabilities."
   />
   <Card
-    href="/docs/engine/plugins/email-password"
-    title="Email + Password Plugin"
-    description="Alternative with email verification and recovery options."
+    href="/docs/engine/plugins/admin"
+    title="Admin Plugin"
+    description="Manage users through admin interface."
   />
   <Card
-    href="/docs/engine/plugins/organization"
-    title="Organization Plugin"
-    description="Add username users to organizations."
+    href="/docs/engine/plugins/jwt"
+    title="JWT Plugin"
+    description="Use JWT tokens for stateless authentication."
   />
 </Cards>

@@ -31,7 +31,7 @@ flowchart TB
 
 <Steps>
   <Step>
-    ### Construct the container
+    ### Construct the Awilix container
 
     ```ts
     this.container = createContainer({
@@ -40,16 +40,17 @@ flowchart TB
     });
     ```
 
-    The container exposes `dbClient`, `sessionService`, `sessionResolvers`, and the engine instance itself for plugins to consume through Awilix.
+    The container exposes `dbClient`, `sessionService`, `sessionResolvers`, and the engine instance itself for plugins to consume through dependency injection.
 
   </Step>
 
   <Step>
     ### Create session infrastructure
 
-    - `InMemorySessionResolvers` keeps subject resolvers.
-    - `FumaSessionService` owns session CRUD, JWKS, and refresh logic.
-    - Optional `deviceValidator` hooks allow custom device checks.
+    - `InMemorySessionResolvers` manages subject resolvers for different subject types
+    - `FumaSessionService` handles session CRUD, JWKS, and refresh token logic
+    - Optional `deviceValidator` function allows custom device validation
+    - Session service is configured with `getUserData` function for JWT payloads
 
   </Step>
 
@@ -62,21 +63,21 @@ flowchart TB
     }
     ```
 
-    `registerPlugin` stores the plugin, exposes its config to the cleanup scheduler, and calls `plugin.initialize?.(engine, config)`.
+    `registerPlugin` stores the plugin in the plugin map, exposes its config to the cleanup scheduler, and calls `plugin.initialize?.(engine, config)` if defined.
 
   </Step>
 
   <Step>
     ### Attach engine and session hooks
 
-    Global hooks from `config.authHooks` and `config.sessionHooks` are appended so they run for every step or session lifecycle event.
+    Global hooks from `config.authHooks` and `config.sessionHooks` are registered so they run for every step or session lifecycle event.
 
   </Step>
 
   <Step>
-    ### Start background cleanup (optional)
+    ### Start background cleanup scheduler
 
-    By default `SimpleCleanupScheduler` runs; set `enableCleanupScheduler: false` to opt out.
+    By default `SimpleCleanupScheduler` runs; set `enableCleanupScheduler: false` to disable background cleanup tasks.
 
   </Step>
 </Steps>
@@ -154,16 +155,21 @@ On error the engine unwinds in reverse order: step → root → engine. Session 
 ReAuth exposes high-level helpers so plugins or adapters can issue and verify sessions without touching the session service directly.
 
 ```ts
-const token = await engine.createSessionFor('user', subjectId, ttl, deviceInfo);
+const token = await engine.createSessionFor(
+  'subject',
+  subjectId,
+  ttl,
+  deviceInfo,
+);
 const result = await engine.checkSession(token.accessToken);
 ```
 
 ### What `createSessionFor` Does
 
-1. Runs **session hooks** with type `'before'`.
-2. Calls `FumaSessionService.createSession` or `createSessionWithMetadata`.
-3. Invokes `'after'` hooks with the new token pair.
-4. On error, runs `'onError'` hooks then rethrows.
+1. Runs **session hooks** with type `'before'`
+2. Calls `FumaSessionService.createSession` or `createSessionWithMetadata`
+3. Invokes `'after'` hooks with the new token pair
+4. On error, runs `'onError'` hooks then rethrows
 
 ### `checkSession`
 
@@ -182,7 +188,12 @@ engine.getSessionService().enableJWKS({
 });
 ```
 
-The session service automatically rotates signing keys, blacklists old refresh tokens, and exposes a JWKS endpoint through the HTTP adapters.
+The session service automatically:
+
+- Rotates signing keys at specified intervals
+- Blacklists old refresh tokens when rotation is enabled
+- Exposes a JWKS endpoint through HTTP adapters
+- Manages key grace periods for smooth transitions
 
 ## Session Resolvers
 
@@ -195,18 +206,28 @@ engine.registerSessionResolver('subject', {
       where: (b) => b('id', '=', id),
     });
     if (!subject) return null;
+
+    // Optionally load related data
+    const identity = await orm.findFirst('identities', {
+      where: (b) => b('subject_id', '=', id),
+    });
+
     return {
       id: subject.id,
-      email: subject.email,
+      email: identity?.identifier,
+      provider: identity?.provider,
+      verified: identity?.verified,
     };
   },
   sanitize(subject) {
-    return { id: subject.id, email: subject.email };
+    // Remove sensitive fields before returning to client
+    const { passwordHash, ...safe } = subject;
+    return safe;
   },
 });
 ```
 
-Resolvers plug into `FumaSessionService.verifySession`, giving you full control over how subjects are loaded and sanitized before returning to callers.
+Resolvers plug into `FumaSessionService.verifySession`, giving you full control over how subjects are loaded and sanitized before returning to callers. The `sanitize` function ensures sensitive data is never exposed to the client.
 
 ## Cleanup Scheduler
 
@@ -225,7 +246,31 @@ engine.registerCleanupTask({
 });
 ```
 
-The scheduler stores plugin configs so tasks can honour user-defined options. Enable or disable the scheduler with `enableCleanupScheduler` in `ReAuthConfig`.
+**Cleanup Task Features:**
+
+- Tasks run at specified intervals using `setInterval`
+- Plugin configs are stored so tasks can honor user-defined options
+- Tasks return structured results with cleanup counts and error information
+- Failed tasks are logged but don't stop the scheduler
+- Enable or disable the scheduler with `enableCleanupScheduler` in `ReAuthConfig`
+
+**Task Runner Interface:**
+
+```ts
+interface CleanupTask {
+  name: string;
+  pluginName: string;
+  intervalMs: number;
+  enabled: boolean;
+  runner: (
+    orm: OrmLike,
+    config?: any,
+  ) => Promise<{
+    cleaned: number;
+    errors?: string[];
+  }>;
+}
+```
 
 ## Dependency Injection
 
@@ -235,16 +280,59 @@ Although plugins primarily use the `engine` instance, the Awilix container is ac
 const cradle = engine.getContainer().cradle;
 const sessionService = cradle.sessionService; // FumaSessionService
 const dbClient = cradle.dbClient; // FumaDB client
+const sessionResolvers = cradle.sessionResolvers; // InMemorySessionResolvers
 ```
 
-You can also resolve additional services with `engine.getService<T>('name')` if custom registrations are added.
+**Available Services:**
+
+- `dbClient`: FumaDB client instance
+- `sessionService`: FumaSessionService for session management
+- `sessionResolvers`: InMemorySessionResolvers for subject hydration
+- `engine`: The ReAuth engine instance itself
+
+You can also resolve additional services with `engine.getService<T>('name')` if custom registrations are added during engine initialization.
 
 ## Introspection & Profiles
 
 Two helper APIs expose runtime state:
 
-- `engine.getUnifiedProfile(subjectId)` gathers profile data from every plugin implementing `getProfile`.
-- `engine.getIntrospectionData()` lists plugins and their steps with JSON Schema generated from ArkType.
+### Unified Profile
+
+`engine.getUnifiedProfile(subjectId)` gathers profile data from every plugin implementing `getProfile`:
+
+```ts
+const profile = await engine.getUnifiedProfile('user-123');
+// Returns: {
+//   'email-password': { emails: [...], password: { set: true } },
+//   'session': { sessions: [...], totalSessions: 3 },
+//   'admin': { roles: ['admin'], permissions: [...] }
+// }
+```
+
+### Introspection Data
+
+`engine.getIntrospectionData()` lists plugins and their steps with JSON Schema generated from ArkType:
+
+```ts
+const introspection = await engine.getIntrospectionData();
+// Returns: {
+//   plugins: [
+//     {
+//       name: 'email-password',
+//       steps: [
+//         {
+//           name: 'register',
+//           inputs: ['email', 'password'],
+//           validationSchema: { /* JSON Schema */ },
+//           protocol: { http: { method: 'POST', codes: {...} } }
+//         }
+//       ]
+//     }
+//   ],
+//   generatedAt: '2024-01-15T10:30:00Z',
+//   version: '1.0.0'
+// }
+```
 
 These methods power documentation, SDK generation, and admin dashboards without invoking steps manually.
 

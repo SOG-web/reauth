@@ -8,6 +8,7 @@ import { assignRoleStep } from './steps/assign-role.step';
 import { revokeRoleStep } from './steps/revoke-role.step';
 import { viewAuditLogsStep } from './steps/view-audit-logs.step';
 import { systemStatusStep } from './steps/system-status.step';
+import { setupFirstAdminStep } from './steps/setup-first-admin.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredAuditLogs } from './utils';
 
@@ -126,6 +127,102 @@ export const baseAdminPlugin = {
       },
     });
 
+    // Register access restriction hook - controls which plugins/steps require admin access
+    engine.registerAuthHook({
+      type: 'before',
+      universal: true, // Applies to all plugins and steps
+      async fn(input, container, error, pluginName, stepName) {
+        // Skip if no input or no token
+        if (
+          !input ||
+          typeof input !== 'object' ||
+          !('token' in input) ||
+          !input.token
+        ) {
+          return input;
+        }
+
+        try {
+          const engine = container.cradle.engine;
+          const session = await engine.checkSession(input.token);
+
+          if (!session.subject) {
+            return input; // Let other auth hooks handle unauthenticated users
+          }
+
+          // Get admin plugin config
+          const adminPlugin = engine.getPlugin('admin') as any;
+          const accessRestrictions = adminPlugin?.config?.accessRestrictions;
+
+          if (!accessRestrictions) {
+            return input; // No restrictions configured
+          }
+
+          const {
+            adminOnlyPlugins = [],
+            adminOnlySteps = [],
+            allowedRoles = [],
+          } = accessRestrictions;
+          const currentPlugin = pluginName;
+          const currentStep = stepName;
+          const stepKey = `${currentPlugin}.${currentStep}`;
+
+          // Check if this plugin or step requires admin access
+          const isPluginRestricted = adminOnlyPlugins.includes(currentPlugin);
+          const isStepRestricted = adminOnlySteps.includes(stepKey);
+
+          if (!isPluginRestricted && !isStepRestricted) {
+            return input; // No restrictions apply to this plugin/step
+          }
+
+          // User needs admin access - check their roles
+          const orm = await engine.getOrm();
+          const userRoles = await orm.findMany('subject_roles', {
+            where: (b) =>
+              b.and(
+                b('subject_id', '=', session.subject!.id),
+                b('revoked_at', '=', null), // Only active roles
+                b.or(
+                  b('expires_at', '=', null),
+                  b('expires_at', '>', new Date()),
+                ),
+              ),
+          });
+
+          const userRoleNames = userRoles?.map((r) => r.role as string) || [];
+
+          // Check if user has any of the allowed roles
+          const hasAllowedRole =
+            allowedRoles.length === 0 ||
+            userRoleNames.some((role) => allowedRoles.includes(role));
+
+          if (!hasAllowedRole) {
+            // User doesn't have required permissions
+            const error = new Error(
+              `Access denied: This action requires admin privileges`,
+            );
+            (error as any).status = 'aut';
+            (error as any).code = 'ACCESS_DENIED';
+            (error as any).requiredRoles =
+              allowedRoles.length > 0 ? allowedRoles : ['admin'];
+            (error as any).userRoles = userRoleNames;
+            (error as any).pluginName = currentPlugin;
+            (error as any).stepName = currentStep;
+            throw error;
+          }
+        } catch (error) {
+          // Re-throw access denied errors
+          if ((error as any).code === 'ACCESS_DENIED') {
+            throw error;
+          }
+          // If access check fails for other reasons, log but don't block (fail open)
+          console.warn('Failed to check user access permissions:', error);
+        }
+
+        return input;
+      },
+    });
+
     // Register cleanup task for audit logs
     const cleanupIntervalMs =
       (this.config?.auditLogRetentionDays || 90) * 24 * 60 * 60 * 1000;
@@ -166,6 +263,15 @@ export const baseAdminPlugin = {
       allowedPlugins: [],
       allowedSteps: [],
     },
+    // Access restrictions - by default, no restrictions
+    accessRestrictions: {
+      adminOnlyPlugins: [],
+      adminOnlySteps: [],
+      allowedRoles: [], // Empty means only admin role is allowed
+    },
+    // First admin setup
+    allowFirstAdminSetup: true,
+    firstAdminSetupKey: undefined, // No setup key required by default
   },
   steps: [
     createUserStep,
@@ -176,6 +282,7 @@ export const baseAdminPlugin = {
     revokeRoleStep,
     viewAuditLogsStep,
     systemStatusStep,
+    setupFirstAdminStep,
   ],
   getSensitiveFields() {
     return ['audit_logs', 'admin_actions'];

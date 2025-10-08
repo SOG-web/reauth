@@ -5,82 +5,184 @@ description: Detailed reference for configuring the ReAuth engine.
 
 ## createReAuthEngine options
 
-| Option     | Type              | Description                                                                        |
-| ---------- | ----------------- | ---------------------------------------------------------------------------------- |
-| `database` | `DatabaseAdapter` | Required persistence adapter that implements CRUD for users, sessions, and tokens. |
-| `plugins`  | `AuthPlugin[]`    | List of plugins that register flows (email/password, OTP, OAuth, etc.).            |
-| `session`  | `SessionConfig`   | TTLs, concurrency limits, rotation strategies.                                     |
-| `cookies`  | `CookieConfig`    | Defaults for cookie-based flows when using HTTP adapters.                          |
-| `secrets`  | `SecretConfig`    | Keys for signing tokens and encrypting device secrets.                             |
-| `events`   | `EventConfig`     | Optional event handlers or bus integration.                                        |
+| Option                   | Type           | Required | Description                                             |
+| ------------------------ | -------------- | -------- | ------------------------------------------------------- |
+| `dbClient`               | `FumaClient`   | Yes      | FumaDB client for database operations                   |
+| `plugins`                | `AuthPlugin[]` | No       | List of plugins that register authentication flows      |
+| `authHooks`              | `AuthHook[]`   | No       | Engine-level hooks that run before/after all steps      |
+| `sessionHooks`           | `AuthHook[]`   | No       | Session-level hooks for session lifecycle events        |
+| `getUserData`            | `Function`     | Yes      | Function to fetch user data for JWT payloads            |
+| `tokenFactory`           | `Function`     | No       | Custom token generation function                        |
+| `deviceValidator`        | `Function`     | No       | Custom device validation function                       |
+| `enableCleanupScheduler` | `boolean`      | No       | Enable/disable background cleanup tasks (default: true) |
 
-### Database adapter
+### Database Client
 
-A database adapter must implement `AuthDatastore`:
+ReAuth uses FumaDB for database operations. You need to provide a `FumaClient` instance:
 
 ```ts
-export interface AuthDatastore {
-  createUser(input: CreateUserInput): Promise<UserRecord>;
-  findUserById(userId: string): Promise<UserRecord | null>;
-  saveSession(session: SessionRecord): Promise<void>;
-  revokeSession(sessionId: string): Promise<void>;
-  listSessions(userId: string): Promise<SessionRecord[]>;
-  // ...and other methods for plugin extensions
+export interface FumaClient {
+  version(): Promise<any>;
+  orm(version: any): OrmLike;
 }
 ```
 
-ReAuth ships batteries-included adapters for Kysely and Prisma. To bring your own store, implement this interface and pass it to the engine.
-
-### Session configuration
+ReAuth ships with FumaDB adapters for popular databases. Here's how to set it up:
 
 ```ts
-import createReAuthEngine from '@re-auth/reauth';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
 
-const auth = createReAuthEngine({
-  dbClient,
-  session: {
-    accessTokenTtl: '15m',
-    refreshTokenTtl: '30d',
-    maxConcurrentSessions: 10,
-    rotateRefreshToken: 'rotate-and-invalidate-previous',
+// Setup database schema and client
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'sqlite', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  plugins: [emailPasswordPlugin({})],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
   },
 });
 ```
 
-- `accessTokenTtl`: Access token lifetime (string, milliseconds, or number of seconds).
-- `refreshTokenTtl`: Refresh token lifetime.
-- `maxConcurrentSessions`: Drop oldest sessions once the limit is exceeded.
-- `rotateRefreshToken`: Strategy to rotate refresh tokens on reissue.
+### Engine Hooks
 
-### Cookie configuration
+ReAuth supports hooks at multiple levels for extending functionality:
 
-Adapters that respond with cookies respect these defaults:
+#### Auth Hooks (Engine-level)
 
 ```ts
-cookies: {
-  domain: '.example.com',
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
-  path: '/',
-  httpOnly: true,
-}
+const engine = createReAuthEngine({
+  dbClient,
+  authHooks: [
+    {
+      type: 'before',
+      universal: true, // Runs for all plugins and steps
+      fn: async (input, container) => {
+        console.log('Before any authentication step');
+        return input;
+      },
+    },
+    {
+      type: 'after',
+      universal: true,
+      fn: async (output, container) => {
+        console.log('After any authentication step');
+        return output;
+      },
+    },
+  ],
+  getUserData: async (subjectId, orm) => ({}),
+});
 ```
 
-You can override cookie behavior per adapter (for example, to distinguish between web UI and device flows).
-
-### Secret configuration
-
-Provide symmetric keys or key references for token signing:
+#### Session Hooks
 
 ```ts
-secrets: {
-  accessToken: process.env.ACCESS_TOKEN_SECRET!,
-  refreshToken: process.env.REFRESH_TOKEN_SECRET!,
-  cookie: process.env.COOKIE_SECRET!,
-}
+const engine = createReAuthEngine({
+  dbClient,
+  sessionHooks: [
+    {
+      type: 'before',
+      fn: async (data, container) => {
+        console.log('Before session creation/verification');
+        return data;
+      },
+    },
+    {
+      type: 'after',
+      fn: async (data, container) => {
+        console.log('After session creation/verification');
+        return data;
+      },
+    },
+  ],
+  getUserData: async (subjectId, orm) => ({}),
+});
 ```
 
-Rotate secrets carefully—ReAuth keeps a rotation window so old tokens remain valid until expiration.
+### getUserData Function
+
+The `getUserData` function is required and is used to fetch user data for JWT payloads and session hydration:
+
+```ts
+const engine = createReAuthEngine({
+  dbClient,
+  getUserData: async (subjectId, orm) => {
+    // Fetch user data from your database
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+
+    // Return user data that will be included in JWT tokens
+    return {
+      id: user?.id,
+      email: user?.email,
+      role: user?.role,
+      // ... other user properties
+    };
+  },
+});
+```
+
+### Device Validation
+
+Optional device validation for enhanced session security:
+
+```ts
+const engine = createReAuthEngine({
+  dbClient,
+  deviceValidator: async (storedDeviceInfo, currentDeviceInfo) => {
+    // Compare device fingerprints, IP addresses, etc.
+    const isSameDevice =
+      storedDeviceInfo.userAgent === currentDeviceInfo.userAgent &&
+      storedDeviceInfo.ipAddress === currentDeviceInfo.ipAddress;
+
+    return isSameDevice;
+  },
+  getUserData: async (subjectId, orm) => ({}),
+});
+```
+
+### Cleanup Scheduler
+
+ReAuth includes a background cleanup scheduler that runs plugin cleanup tasks:
+
+```ts
+const engine = createReAuthEngine({
+  dbClient,
+  enableCleanupScheduler: true, // Default: true
+  plugins: [
+    emailPasswordPlugin({
+      cleanupIntervalMinutes: 60, // Plugin-specific cleanup interval
+    }),
+  ],
+  getUserData: async (subjectId, orm) => ({}),
+});
+```
+
+The cleanup scheduler automatically:
+
+- Runs plugin cleanup tasks at specified intervals
+- Cleans up expired tokens, codes, and sessions
+- Logs cleanup results for monitoring
+- Can be disabled by setting `enableCleanupScheduler: false`
 
 ## Schema Versioning
 
@@ -237,31 +339,66 @@ const engine = createReAuthEngine({
 });
 ```
 
-## Plugin-specific configuration
+## Plugin Configuration
 
-Each plugin documents its own options. Example: email/password plugin
+Each plugin has its own configuration options. Here are examples for common plugins:
+
+### Email Password Plugin
 
 ```ts
 emailPasswordPlugin({
-  sendCode(subject, code, email, type) {
+  sessionTtlSeconds: 3600, // 1 hour sessions
+  enableRegistration: true,
+  verifyEmail: true,
+  verificationCodeTtlMinutes: 15,
+  resetCodeTtlMinutes: 10,
+  cleanupIntervalMinutes: 60,
+  sendCode: async (subject, code, email, type) => {
     // Send verification/reset codes via your email provider
-    return emailService.send({
+    await emailService.send({
       to: email,
       subject: type === 'verify' ? 'Verify your email' : 'Reset your password',
       template: type === 'verify' ? 'email-verification' : 'password-reset',
       data: { code },
     });
   },
-  verifyEmail: true,
-  codeType: 'numeric',
-  codeLength: 6,
-  verificationCodeExpiresIn: 1800000, // 30 minutes
-  resetPasswordCodeExpiresIn: 900000, // 15 minutes
-  cleanupIntervalMinutes: 60,
 });
 ```
 
-Plugins can expose custom configuration options specific to their authentication method.
+### Session Plugin
+
+```ts
+sessionPlugin({
+  cleanupIntervalMinutes: 30, // Clean up every 30 minutes
+});
+```
+
+### Admin Plugin
+
+```ts
+adminPlugin({
+  enableAuditLogging: true,
+  allowFirstAdminSetup: true,
+  firstAdminSetupKey: process.env.ADMIN_SETUP_KEY,
+  accessRestrictions: {
+    adminOnlyPlugins: ['admin'],
+    adminOnlySteps: ['admin.create-user', 'admin.delete-user'],
+    allowedRoles: ['admin', 'super-admin'],
+  },
+});
+```
+
+### JWT Plugin
+
+```ts
+jwtPlugin({
+  issuer: 'https://yourapp.com',
+  defaultAccessTokenTtlSeconds: 900, // 15 minutes
+  defaultRefreshTokenTtlSeconds: 2592000, // 30 days
+  keyRotationIntervalDays: 30,
+  enableBlacklist: true,
+});
+```
 
 ## Environmental separation
 
@@ -278,13 +415,125 @@ export const auth = createReAuthEngine({
 
 Inject environment-aware dependencies (email providers, caches, analytics) when instantiating plugins.
 
-## Validation checklist
+## Validation Checklist
 
-- [ ] Database adapter passes the ReAuth datastore test suite.
-- [ ] Secrets loaded from environment or secret manager.
-- [ ] Session limits defined for your threat model.
-- [ ] All mandatory plugins registered.
-- [ ] Events wired to your observability stack.
-- [ ] `pnpm --filter "@re-auth/*" build` succeeds.
+Before deploying to production, ensure:
+
+- [ ] Database client properly configured with FumaDB
+- [ ] All required plugins registered and configured
+- [ ] `getUserData` function properly implemented
+- [ ] Environment variables for external services (email, SMS, OAuth) configured
+- [ ] Cleanup scheduler enabled for production
+- [ ] Device validation configured if needed
+- [ ] Engine hooks properly implemented for logging/monitoring
+- [ ] Schema versioning properly set up for database migrations
+- [ ] All plugins tested in development environment
+
+## Complete Example
+
+Here's a complete production-ready configuration:
+
+```ts
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+import sessionPlugin, { sessionSchema } from '@re-auth/reauth/plugins/session';
+import adminPlugin, { adminSchema } from '@re-auth/reauth/plugins/admin';
+
+// Setup database with versioning
+const { schema: v1 } = reauthDb('1.0.1', [
+  emailPasswordSchema,
+  sessionSchema,
+  adminSchema,
+]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({ provider: 'postgresql', db: kysely }),
+);
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+
+  plugins: [
+    emailPasswordPlugin({
+      sessionTtlSeconds: 3600,
+      enableRegistration: true,
+      verifyEmail: true,
+      sendCode: async (subject, code, email, type) => {
+        await emailService.send({
+          to: email,
+          subject:
+            type === 'verify' ? 'Verify your email' : 'Reset your password',
+          template: type === 'verify' ? 'email-verification' : 'password-reset',
+          data: { code },
+        });
+      },
+    }),
+
+    sessionPlugin({
+      cleanupIntervalMinutes: 30,
+    }),
+
+    adminPlugin({
+      enableAuditLogging: true,
+      allowFirstAdminSetup: true,
+      accessRestrictions: {
+        adminOnlyPlugins: ['admin'],
+        allowedRoles: ['admin'],
+      },
+    }),
+  ],
+
+  authHooks: [
+    {
+      type: 'before',
+      universal: true,
+      fn: async (input, container) => {
+        // Log all authentication attempts
+        console.log('Auth attempt:', input);
+        return input;
+      },
+    },
+  ],
+
+  sessionHooks: [
+    {
+      type: 'after',
+      fn: async (data, container) => {
+        // Track session creation
+        analytics.track('session_created', { userId: data.subject?.id });
+        return data;
+      },
+    },
+  ],
+
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return {
+      id: user?.id,
+      email: user?.email,
+      role: user?.role,
+    };
+  },
+
+  deviceValidator: async (stored, current) => {
+    return stored.userAgent === current.userAgent;
+  },
+
+  enableCleanupScheduler: true,
+});
+
+export { engine };
+```
 
 Move on to [HTTP adapters](../http-adapters/overview) to expose these flows.
