@@ -68,7 +68,7 @@ export const registerClientStep: AuthStep<
       is_active: 'boolean?',
     }),
     'others?': 'object | undefined',
-    token: tokenType,
+    'token?': tokenType,
   }),
   run: async (input, ctx) => {
     const others = input.others || {};
