@@ -1,5 +1,13 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.14
+
+### Minor Changes
+
+- [`ed0fbea`](https://github.com/SOG-web/reauth/commit/ed0fbea478316a12388d242ebc877005c6db907a) Thanks [@SOG-web](https://github.com/SOG-web)! - fix: enhance token handling in SDK generator to support both object and string formats for rawToken
+
+- [`156e5e2`](https://github.com/SOG-web/reauth/commit/156e5e2074f65aed0bc37652180fe77afe095ec1) Thanks [@SOG-web](https://github.com/SOG-web)! - fix: enhance token handling in SDK generator to support both object and string formats for rawToken
+
 ## 0.1.0-alpha.13
 
 ### Minor Changes
