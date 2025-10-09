@@ -11,14 +11,14 @@ description: Install ReAuth, configure the engine, and run your first build.
 
 ## Install the packages
 
-```npm
-npm i @re-auth/reauth @re-auth/http-adapters
+```bash
+npm install @re-auth/reauth @re-auth/http-adapters fumadb kysely
 ```
 
 Add development tooling if you plan to emit SDKs:
 
-```npm
-npm i -D @re-auth/sdk-generator
+```bash
+npm install -D @re-auth/sdk-generator
 ```
 
 ## Configure the engine
@@ -26,21 +26,44 @@ npm i -D @re-auth/sdk-generator
 Create `auth/engine.ts` in your application and wire the core engine together:
 
 ```ts
-import createReAuthEngine from '@re-auth/reauth';
-import { emailPasswordPlugin } from '@re-auth/reauth/plugins/email-password';
-import { createKyselyAdapter } from '@re-auth/reauth/lib/adapters/kysely';
+import createReAuthEngine, {
+  reauthDb,
+  reauthDbVersions,
+} from '@re-auth/reauth';
+import { kyselyAdapter } from 'fumadb/adapters/kysely';
+import emailPasswordPlugin, {
+  emailPasswordSchema,
+} from '@re-auth/reauth/plugins/email-password';
+
+// Setup database with FumaDB
+const { schema: v1 } = reauthDb('1.0.1', [emailPasswordSchema]);
+const factory = reauthDbVersions([v1]);
+const client = factory.client(
+  kyselyAdapter({
+    provider: 'postgresql', // or 'sqlite', 'mysql'
+    db: kysely,
+  }),
+);
 
 export const auth = createReAuthEngine({
-  database: createKyselyAdapter({ client: db }),
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version) => client.orm(version),
+  },
   plugins: [
     emailPasswordPlugin({
-      requireEmailVerification: true,
+      verifyEmail: true,
+      sendCode: async (subject, code, email, type) => {
+        // Send email via your provider (Resend, SendGrid, etc.)
+        console.log(`Email to ${email}: ${code}`);
+      },
     }),
   ],
+  getUserData: async (subjectId, orm) => ({ id: subjectId }),
 });
 ```
 
-The engine is runtime agnostic: you bring your database adapter, cache implementation, and plugins that model your policy.
+The engine is runtime agnostic: you bring your database adapter, plugins, and user data resolver to model your authentication policy.
 
 ## Expose the API
 
@@ -52,9 +75,22 @@ import { createExpressAdapter } from '@re-auth/http-adapters';
 import { auth } from './auth/engine';
 
 const app = express();
-const adapter = createExpressAdapter({ engine: auth });
 
-app.use('/auth', adapter.createRouter());
+const adapter = createExpressAdapter({
+  auth,
+  extractDeviceInfo: (req) => ({
+    ip: req.ip,
+    userAgent: req.get('user-agent') || '',
+  }),
+  sessionCookie: {
+    name: 'reauth_session',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  },
+});
+
+app.use('/auth', adapter.router);
 app.listen(3000);
 ```
 
@@ -65,10 +101,10 @@ The adapter maps HTTP verbs to the deterministic flows you configured on the eng
 After wiring the engine, make sure the packages compile cleanly:
 
 ```bash
-pnpm --filter "@re-auth/*" build
+pnpm build
 ```
 
-This command compiles:
+This command compiles all packages in the monorepo including:
 
 - `@re-auth/reauth` – the engine
 - `@re-auth/http-adapters` – transport integrations

@@ -10,8 +10,10 @@
     "partial-integration",
     "---Plugins---",
     "plugins",
+    "---Services---",
+    "services",
     "---Advanced---",
     "advanced"
   ],
-  "folders": ["plugins", "advanced"]
+  "folders": ["plugins", "services", "advanced"]
 }

@@ -1,0 +1,493 @@
+---
+title: Engine Services
+description: Core services and utilities provided by the ReAuth engine for session management, JWT handling, and more.
+---
+
+ReAuth provides a comprehensive set of services and utilities that power the authentication engine. These services handle session management, JWT operations, token validation, and other core functionality.
+
+## Overview
+
+The ReAuth engine exposes several key services:
+
+- **SessionService**: Core session management with JWT support
+- **JWKSService**: JSON Web Key Set management with automatic rotation
+- **SessionResolvers**: Subject data resolution and hydration
+- **Utilities**: Password hashing, token generation, and validation helpers
+
+<Callout title="Service Architecture" type="info">
+  Services are designed to be composable and extensible. They integrate
+  seamlessly with plugins and can be customized through configuration and hooks.
+</Callout>
+
+## SessionService
+
+The `SessionService` is the core service responsible for managing user sessions, tokens, and authentication state.
+
+### Features
+
+- **Hybrid Token Support**: Both JWT and legacy token formats
+- **Automatic Token Rotation**: Refresh token rotation for enhanced security
+- **Device Validation**: Device fingerprinting and validation
+- **Session Metadata**: Rich session data with device info and custom metadata
+- **JWKS Integration**: Optional JWT signing with automatic key rotation
+
+### Basic Usage
+
+```ts
+import { FumaSessionService } from '@re-auth/reauth';
+
+// Create session service
+const sessionService = new FumaSessionService(
+  dbClient,
+  sessionResolvers,
+  tokenFactory,
+  getUserData,
+  options,
+);
+
+// Create a session
+const token = await sessionService.createSession(
+  'subject',
+  'user-123',
+  3600, // 1 hour TTL
+);
+
+// Verify a session
+const result = await sessionService.verifySession(token);
+if (result.subject) {
+  console.log('User authenticated:', result.subject);
+}
+```
+
+### Enhanced Session Features
+
+Enable enhanced features for rich session management:
+
+```ts
+// Enable enhanced session features
+sessionService.enableEnhancedFeatures();
+
+// Create session with metadata
+const token = await sessionService.createSessionWithMetadata(
+  'subject',
+  'user-123',
+  {
+    ttlSeconds: 3600,
+    deviceInfo: {
+      ip: '192.168.1.1',
+      userAgent: 'Mozilla/5.0...',
+      fingerprint: 'abc123',
+    },
+    metadata: {
+      loginMethod: 'email-password',
+      source: 'web-app',
+    },
+  },
+);
+
+// List all sessions for a user
+const sessions = await sessionService.listSessionsForSubject(
+  'subject',
+  'user-123',
+);
+```
+
+### JWT Integration
+
+Enable JWT support with automatic key management:
+
+```ts
+// Enable JWKS functionality
+sessionService.enableJWKS({
+  issuer: 'https://auth.example.com',
+  keyRotationIntervalDays: 10,
+  keyGracePeriodDays: 2,
+  defaultAccessTokenTtlSeconds: 15 * 60, // 15 minutes
+  defaultRefreshTokenTtlSeconds: 30 * 24 * 60 * 60, // 30 days
+  enableRefreshTokenRotation: true,
+});
+
+// Create JWT session
+const tokenPair = await sessionService.createJWTSession('subject', 'user-123', {
+  accessTokenTtlSeconds: 15 * 60,
+  refreshTokenTtlSeconds: 30 * 24 * 60 * 60,
+  deviceInfo: { ip: '192.168.1.1' },
+  metadata: { source: 'mobile-app' },
+});
+
+// Verify JWT token
+const result = await sessionService.verifyToken(tokenPair.accessToken);
+console.log('JWT payload:', result.payload);
+```
+
+## JWKSService
+
+The `EnhancedJWKSService` provides comprehensive JWT key management with automatic rotation and blacklisting.
+
+### Features
+
+- **Automatic Key Rotation**: Scheduled key rotation with grace periods
+- **Key Blacklisting**: Secure key revocation and blacklisting
+- **JWKS Endpoint**: Standard JWKS endpoint for token verification
+- **Client Management**: JWT client registration and validation
+- **Refresh Token Management**: Secure refresh token handling with rotation
+
+### Basic Usage
+
+```ts
+import { EnhancedJWKSService } from '@re-auth/reauth';
+
+// Create JWKS service
+const jwksService = new EnhancedJWKSService(
+  dbClient,
+  'https://auth.example.com', // issuer
+  10, // key rotation interval (days)
+  2, // key grace period (days)
+  15 * 60, // default access token TTL
+  30 * 24 * 60 * 60, // default refresh token TTL
+  true, // enable refresh token rotation
+);
+
+// Generate initial key pair
+await jwksService.generateKeyPair();
+
+// Get public JWKS
+const jwks = await jwksService.getPublicJWKS();
+console.log('JWKS endpoint:', jwks);
+```
+
+### Key Management
+
+```ts
+// Get active signing key
+const activeKey = await jwksService.getActiveKey();
+console.log('Active key ID:', activeKey.keyId);
+
+// Generate new key pair
+const newKey = await jwksService.generateKeyPair('RS256');
+
+// Rotate keys (manual rotation)
+await jwksService.rotateKeys('manual');
+
+// Blacklist a key
+await jwksService.blacklistKey('key-id-123', 'security_breach');
+
+// Get blacklisted keys
+const blacklistedKeys = await jwksService.getBlacklistedKeys();
+```
+
+### Client Management
+
+```ts
+// Register a JWT client
+const client = await jwksService.registerClient({
+  clientId: 'web-app',
+  name: 'Web Application',
+  type: 'public',
+  redirectUris: ['https://app.example.com/callback'],
+  scopes: ['read', 'write'],
+});
+
+// Validate client
+const isValid = await jwksService.validateClient('web-app', 'public');
+
+// List all clients
+const clients = await jwksService.listClients();
+```
+
+### Token Operations
+
+```ts
+// Sign a JWT token
+const token = await jwksService.signToken({
+  payload: {
+    sub: 'user-123',
+    aud: 'web-app',
+    iss: 'https://auth.example.com',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  },
+  accessTokenTtlSeconds: 3600,
+  refreshTokenTtlSeconds: 86400,
+  deviceInfo: { ip: '192.168.1.1' },
+});
+
+// Verify a JWT token
+const result = await jwksService.verifyToken(token.accessToken);
+console.log('Token payload:', result.payload);
+
+// Refresh a token
+const newTokenPair = await jwksService.refreshToken(token.refreshToken, {
+  ip: '192.168.1.1',
+});
+```
+
+## SessionResolvers
+
+The `SessionResolvers` service manages subject data resolution and hydration for session management.
+
+### Basic Usage
+
+```ts
+import { InMemorySessionResolvers } from '@re-auth/reauth';
+
+// Create session resolvers
+const sessionResolvers = new InMemorySessionResolvers();
+
+// Register a subject resolver
+sessionResolvers.register('subject', {
+  async getById(id: string, orm) {
+    const subject = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', id),
+    });
+    return subject;
+  },
+  sanitize(subject) {
+    // Remove sensitive fields
+    const { password_hash, ...sanitized } = subject;
+    return sanitized;
+  },
+});
+
+// Get a resolver
+const resolver = sessionResolvers.get('subject');
+if (resolver) {
+  const subject = await resolver.getById('user-123', orm);
+  const sanitized = resolver.sanitize(subject);
+}
+```
+
+### Custom Resolvers
+
+```ts
+// Register a custom subject type
+sessionResolvers.register('organization', {
+  async getById(id: string, orm) {
+    const org = await orm.findFirst('organizations', {
+      where: (b) => b('id', '=', id),
+      include: ['members', 'settings'],
+    });
+    return org;
+  },
+  sanitize(org) {
+    // Remove sensitive organization data
+    const { api_keys, internal_notes, ...sanitized } = org;
+    return sanitized;
+  },
+});
+
+// Register a user resolver with related data
+sessionResolvers.register('user', {
+  async getById(id: string, orm) {
+    const user = await orm.findFirst('users', {
+      where: (b) => b('id', '=', id),
+    });
+
+    if (user) {
+      // Load related data
+      const profile = await orm.findFirst('profiles', {
+        where: (b) => b('user_id', '=', id),
+      });
+
+      const roles = await orm.findMany('user_roles', {
+        where: (b) => b('user_id', '=', id),
+      });
+
+      return {
+        ...user,
+        profile,
+        roles: roles.map((r) => r.role),
+      };
+    }
+
+    return null;
+  },
+  sanitize(user) {
+    // Remove sensitive fields
+    const { password_hash, email_verification_token, ...sanitized } = user;
+    return sanitized;
+  },
+});
+```
+
+## Utilities
+
+ReAuth provides several utility functions for common authentication tasks.
+
+### Password Utilities
+
+```ts
+import { hashPassword, verifyPassword, haveIbeenPawned } from '@re-auth/reauth';
+
+// Hash a password
+const hashedPassword = await hashPassword('userpassword123');
+
+// Verify a password
+const isValid = await verifyPassword('userpassword123', hashedPassword);
+
+// Check if password has been breached
+const isBreached = await haveIbeenPawned('commonpassword');
+if (isBreached) {
+  throw new Error('Password has been found in data breaches');
+}
+```
+
+### Token Utilities
+
+```ts
+import {
+  generateSessionToken,
+  attachNewTokenIfDifferent,
+} from '@re-auth/reauth';
+
+// Generate a secure session token
+const token = generateSessionToken();
+
+// Attach token to response if different
+const response = {
+  success: true,
+  message: 'Login successful',
+  subject: { id: 'user-123', email: 'user@example.com' },
+};
+
+const responseWithToken = attachNewTokenIfDifferent(
+  response,
+  undefined, // old token
+  token, // new token
+);
+```
+
+### Plugin Utilities
+
+```ts
+import { createAuthPlugin } from '@re-auth/reauth';
+
+// Create a plugin with factory pattern
+const myPlugin = createAuthPlugin(basePlugin, {
+  config: {
+    customOption: 'value',
+  },
+  stepOverrides: [
+    {
+      name: 'login',
+      override: {
+        hooks: {
+          before: async (input, ctx) => {
+            console.log('Custom login hook');
+          },
+        },
+      },
+    },
+  ],
+  validateConfig: (config) => {
+    const errors = [];
+    if (!config.customOption) {
+      errors.push('customOption is required');
+    }
+    return errors.length ? errors : null;
+  },
+});
+```
+
+## Service Integration
+
+### Engine Integration
+
+Services are automatically integrated into the ReAuth engine:
+
+```ts
+import createReAuthEngine from '@re-auth/reauth';
+
+const engine = createReAuthEngine({
+  dbClient,
+  plugins: [emailPasswordPlugin, sessionPlugin, jwtPlugin],
+  getUserData: async (subjectId, orm) => {
+    // Custom user data resolution
+    const user = await orm.findFirst('users', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user;
+  },
+});
+
+// Access services through the engine
+const sessionService = engine.getSessionService();
+const jwksService = sessionService.getJwkService();
+```
+
+### Plugin Integration
+
+Plugins can access and extend services:
+
+```ts
+export const myPlugin = {
+  name: 'my-plugin',
+  initialize(engine) {
+    // Access session service
+    const sessionService = engine.getSessionService();
+
+    // Enable enhanced features
+    sessionService.enableEnhancedFeatures();
+
+    // Register custom session resolver
+    engine.registerSessionResolver('custom-subject', {
+      async getById(id, orm) {
+        // Custom subject resolution
+        return await orm.findFirst('custom_subjects', {
+          where: (b) => b('id', '=', id),
+        });
+      },
+    });
+  },
+  // ... rest of plugin
+};
+```
+
+## Configuration
+
+### Session Service Options
+
+```ts
+const sessionService = new FumaSessionService(
+  dbClient,
+  sessionResolvers,
+  tokenFactory,
+  getUserData,
+  {
+    // Device validation function
+    deviceValidator: (storedDeviceInfo, currentDeviceInfo) => {
+      // Custom device validation logic
+      return storedDeviceInfo.ip === currentDeviceInfo.ip;
+    },
+  },
+);
+```
+
+### JWKS Service Options
+
+```ts
+const jwksService = new EnhancedJWKSService(
+  dbClient,
+  'https://auth.example.com', // issuer
+  10, // key rotation interval (days)
+  2, // key grace period (days)
+  15 * 60, // default access token TTL
+  30 * 24 * 60 * 60, // default refresh token TTL
+  true, // enable refresh token rotation
+);
+```
+
+## Best Practices
+
+1. **Service Lifecycle**: Initialize services once and reuse instances
+2. **Error Handling**: Always handle service errors gracefully
+3. **Security**: Use appropriate TTL values for tokens and keys
+4. **Monitoring**: Monitor key rotation and token usage
+5. **Customization**: Extend services through plugins and hooks
+6. **Testing**: Mock services in tests for reliable unit testing
+
+## Next Steps
+
+- **Advanced Configuration**: Explore advanced service configuration options
+- **Custom Services**: Learn how to create custom services and utilities
+- **Monitoring**: Set up monitoring and alerting for service health
+- **Security**: Implement additional security measures and validations

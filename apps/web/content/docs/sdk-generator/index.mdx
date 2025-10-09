@@ -5,76 +5,632 @@ description: Generate type-safe clients that mirror your ReAuth configuration.
 
 The `@re-auth/sdk-generator` package introspects a running ReAuth instance and emits fully typed TypeScript clients. Ship consistent clients without reimplementing request logic.
 
+## Overview
+
+The SDK Generator is a CLI tool that:
+
+- **Introspects** your running ReAuth HTTP adapter
+- **Generates** fully typed TypeScript client libraries
+- **Supports** multiple HTTP clients (Axios, Fetch)
+- **Validates** inputs/outputs with Zod schemas
+- **Handles** authentication tokens automatically
+
+<Callout title="Type Safety" type="info">
+  Generated clients provide end-to-end type safety from your ReAuth
+  configuration to your frontend code. Input validation, output parsing, and API
+  changes are caught at compile time.
+</Callout>
+
 ## When to use the generator
 
-- You expose ReAuth over HTTP and want frontends to call it via a strongly typed API.
-- You support multiple frontends (web, mobile, CLI) that should share the same auth client.
-- You rotate flows or plugins frequently and do not want to keep manual client code in sync.
+- **Multiple frontends**: You support web, mobile, and CLI apps that need consistent auth clients
+- **Frequent changes**: You rotate plugins or flows often and want to avoid manual client updates
+- **Type safety**: You want compile-time validation of API contracts
+- **Team collaboration**: Multiple developers need consistent auth client interfaces
 
-## Generate a client
+## Installation
 
-Run the generator after starting your HTTP adapter:
+```bash
+# Install globally
+npm install -g @re-auth/sdk-generator
 
-```npm
-pnpm --filter @re-auth/sdk-generator build
-node packages/sdk-generator/dist/index.js \
-  --url http://localhost:3001/test-introspection \
-  --output apps/web/lib/reauth-client \
-  --client axios \
-  --key key
+# Or use via npx
+npx @re-auth/sdk-generator --help
+
+# Or install locally in your project
+npm install @re-auth/sdk-generator --save-dev
 ```
 
-Parameters:
+## Quick Start
 
-- `--url`: Introspection endpoint exposed by the HTTP adapter.
-- `--output`: Directory to write the generated client.
-- `--client`: HTTP client to target (`axios`, `fetch`, `node-fetch`).
-- `--key`: Optional API key if your introspection route is protected.
+### 1. Start your ReAuth HTTP adapter
 
-## Generated output
-
-The generator creates:
-
-- `index.ts` exposing `createClient` factory functions.
-- Namespaced method groups (e.g., `emailPassword.register`, `sessions.list`).
-- Type definitions for request/response payloads, derived from your engine configuration.
-- Runtime helpers for attaching authorization headers.
-
-Example usage:
+Ensure your HTTP adapter is running and exposes the introspection endpoint:
 
 ```ts
-import { createClient } from './reauth-client';
+// Your ReAuth server
+import { honoReAuth } from '@re-auth/http-adapters';
 
-const authClient = createClient({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  tokenStore: {
-    get: () => localStorage.getItem('reauth_token'),
-    set: (token) => localStorage.setItem('reauth_token', token),
+const app = new Hono();
+const adapter = honoReAuth({ engine }, deviceInfoExtractor);
+
+// Enable introspection (required for SDK generation)
+adapter.registerRoutes(app, '/auth', true); // true = expose introspection
+
+app.listen({ port: 3001 });
+```
+
+### 2. Generate the SDK
+
+```bash
+reauth-sdk-generator \
+  --url http://localhost:3001/auth/introspection \
+  --output ./src/auth-client \
+  --client fetch \
+  --key your-api-key
+```
+
+### 3. Use the generated client
+
+```ts
+import { createReAuthClient } from './auth-client';
+
+const authClient = createReAuthClient({
+  baseURL: 'http://localhost:3001',
+  auth: {
+    type: 'localstorage',
+    key: 'reauth-token',
   },
 });
 
-await authClient.emailPassword.login({
+// Fully typed API calls
+const result = await authClient.email_password.login({
   email: 'user@example.com',
-  password: 'pa$$w0rd',
+  password: 'securepassword123',
+});
+
+if (result.error) {
+  console.error('Login failed:', result.error);
+} else {
+  console.log('User logged in:', result.data.subject);
+}
+```
+
+## CLI Options
+
+| Option     | Short | Required | Description                                   |
+| ---------- | ----- | -------- | --------------------------------------------- |
+| `--url`    | `-u`  | ✅       | URL of the ReAuth introspection endpoint      |
+| `--output` | `-o`  | ✅       | Directory to write the generated SDK          |
+| `--client` | `-c`  | ❌       | HTTP client to use (`axios` or `fetch`)       |
+| `--key`    | `-k`  | ❌       | API key for protected introspection endpoints |
+
+### Examples
+
+```bash
+# Generate with Axios client
+reauth-sdk-generator \
+  --url http://localhost:3001/auth/introspection \
+  --output ./clients/web \
+  --client axios
+
+# Generate with custom API key
+reauth-sdk-generator \
+  --url https://auth.example.com/introspection \
+  --output ./clients/mobile \
+  --client fetch \
+  --key "your-secret-key"
+
+# Generate for production
+reauth-sdk-generator \
+  --url https://api.production.com/auth/introspection \
+  --output ./dist/auth-client \
+  --client fetch \
+  --key $PRODUCTION_API_KEY
+```
+
+## Generated Output
+
+The generator creates a complete TypeScript client with:
+
+### File Structure
+
+```
+src/auth-client/
+├── index.ts                 # Main client factory
+├── plugins/
+│   ├── email_password.ts    # Email password plugin methods
+│   ├── sessions.ts          # Session management methods
+│   ├── admin.ts             # Admin plugin methods
+│   └── ...                  # Other plugins
+└── types/                   # Generated TypeScript types
+```
+
+### Client Features
+
+- **Plugin namespacing**: Methods grouped by plugin (e.g., `emailPassword.register`)
+- **Input validation**: Zod schemas validate all inputs at runtime
+- **Output parsing**: Response data is parsed and validated
+- **Authentication**: Automatic token handling (Bearer, cookies, custom)
+- **Error handling**: Structured error responses with type safety
+- **Interceptors**: Request/response middleware support
+
+## HTTP Client Options
+
+### Fetch Client (Default)
+
+```ts
+import { createReAuthClient } from './auth-client';
+
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  headers: {
+    'User-Agent': 'MyApp/1.0',
+  },
+  auth: {
+    type: 'localstorage',
+    key: 'auth-token',
+  },
+  responseInterceptor: async (response) => {
+    // Custom response handling
+    return response;
+  },
+});
+
+// Usage
+const result = await client.email_password.login({
+  email: 'user@example.com',
+  password: 'password123',
 });
 ```
 
-## Version control & CI
+### Axios Client
 
-- Commit generated clients if you want deterministic builds for consumers.
-- Regenerate clients in CI/CD after `pnpm --filter "@re-auth/*" build`.
-- Use the generator in watch mode for local development (coming soon).
+```ts
+import { createReAuthClient } from './auth-client';
+
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  axiosInstance: axios.create({
+    timeout: 5000,
+  }),
+  auth: {
+    type: 'custom',
+    getToken: async () => {
+      // Custom token retrieval
+      return await getTokenFromSecureStore();
+    },
+  },
+});
+
+// Usage with callbacks
+const result = await client.email_password.register(
+  {
+    email: 'new@example.com',
+    password: 'securepassword',
+  },
+  {
+    onRequest: () => console.log('Sending registration request...'),
+    onSuccess: (data) => console.log('Registration successful:', data),
+    onError: (error) => console.error('Registration failed:', error),
+  },
+);
+```
+
+## Authentication Types
+
+### LocalStorage
+
+```ts
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  auth: {
+    type: 'localstorage',
+    key: 'reauth-token', // Optional, defaults to 'reauth-token'
+  },
+});
+```
+
+### SessionStorage
+
+```ts
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  auth: {
+    type: 'sessionstorage',
+    key: 'auth-session',
+  },
+});
+```
+
+### Cookies
+
+```ts
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  auth: {
+    type: 'cookie',
+  },
+});
+```
+
+### Custom Token Provider
+
+```ts
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  auth: {
+    type: 'custom',
+    getToken: async () => {
+      // Your custom token logic
+      const token = await secureStore.getItem('access_token');
+      return token;
+    },
+  },
+});
+```
+
+## Error Handling
+
+Generated clients provide structured error handling:
+
+```ts
+const result = await client.email_password.login({
+  email: 'user@example.com',
+  password: 'wrongpassword',
+});
+
+if (result.error) {
+  // Error structure matches your ReAuth error format
+  console.error('Login failed:', {
+    code: result.error.code, // e.g., 'INVALID_CREDENTIALS'
+    message: result.error.message, // e.g., 'Invalid email or password'
+    details: result.error.details, // Additional error context
+  });
+} else {
+  // Success case with typed data
+  console.log('Login successful:', {
+    subject: result.data.subject, // Typed user data
+    token: result.data.token, // Session token
+  });
+}
+```
+
+## Interceptors and Middleware
+
+### Request Interceptors
+
+```ts
+const result = await client.email_password.login(
+  { email: 'user@example.com', password: 'password' },
+  {
+    interceptors: {
+      request: async (payload, request) => {
+        // Modify request before sending
+        request.headers = {
+          ...request.headers,
+          'X-Client-Version': '1.0.0',
+        };
+        return request;
+      },
+    },
+  },
+);
+```
+
+### Response Interceptors
+
+```ts
+const result = await client.sessions.list(
+  {},
+  {
+    interceptors: {
+      response: async (response) => {
+        // Modify response before parsing
+        if (response.headers.get('X-Rate-Limit-Remaining') === '0') {
+          console.warn('Rate limit reached');
+        }
+        return response;
+      },
+    },
+  },
+);
+```
+
+## Integration Examples
+
+### React Hook
+
+```ts
+// hooks/useAuth.ts
+import { createReAuthClient } from '../auth-client';
+import { useState, useEffect } from 'react';
+
+const authClient = createReAuthClient({
+  baseURL: process.env.REACT_APP_API_URL,
+  auth: { type: 'localstorage' },
+});
+
+export function useAuth() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  const checkSession = async () => {
+    try {
+      const result = await authClient.sessions.check({});
+      if (result.data) {
+        setUser(result.data.subject);
+      }
+    } catch (error) {
+      console.error('Session check failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    const result = await authClient.email_password.login({ email, password });
+    if (result.data) {
+      setUser(result.data.subject);
+      return { success: true };
+    } else {
+      return { success: false, error: result.error };
+    }
+  };
+
+  const logout = async () => {
+    await authClient.email_password.logout({});
+    setUser(null);
+  };
+
+  return { user, loading, login, logout };
+}
+```
+
+### Vue Composable
+
+```ts
+// composables/useAuth.ts
+import { createReAuthClient } from '../auth-client';
+import { ref, computed } from 'vue';
+
+const authClient = createReAuthClient({
+  baseURL: import.meta.env.VITE_API_URL,
+  auth: { type: 'localstorage' },
+});
+
+export function useAuth() {
+  const user = ref(null);
+  const loading = ref(true);
+
+  const isAuthenticated = computed(() => !!user.value);
+
+  const login = async (email: string, password: string) => {
+    const result = await authClient.email_password.login({ email, password });
+    if (result.data) {
+      user.value = result.data.subject;
+      return { success: true };
+    } else {
+      return { success: false, error: result.error };
+    }
+  };
+
+  const logout = async () => {
+    await authClient.email_password.logout({});
+    user.value = null;
+  };
+
+  return {
+    user: readonly(user),
+    loading: readonly(loading),
+    isAuthenticated,
+    login,
+    logout,
+  };
+}
+```
+
+### Node.js CLI
+
+```ts
+// cli/auth.ts
+import { createReAuthClient } from '../auth-client';
+import readline from 'readline';
+
+const authClient = createReAuthClient({
+  baseURL: process.env.API_URL,
+  auth: {
+    type: 'custom',
+    getToken: () => {
+      // Read token from file or environment
+      return process.env.AUTH_TOKEN || null;
+    },
+  },
+});
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+async function login() {
+  const email = await question('Email: ');
+  const password = await question('Password: ');
+
+  const result = await authClient.email_password.login({ email, password });
+  if (result.data) {
+    console.log('Login successful!');
+    console.log('User:', result.data.subject);
+  } else {
+    console.error('Login failed:', result.error);
+  }
+}
+
+function question(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+}
+
+login().finally(() => rl.close());
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+# .github/workflows/generate-sdk.yml
+name: Generate SDK
+
+on:
+  push:
+    branches: [main]
+    paths: ['packages/reauth/**']
+
+jobs:
+  generate-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build ReAuth
+        run: npm run build
+
+      - name: Start ReAuth server
+        run: |
+          npm start &
+          sleep 10
+
+      - name: Generate SDK
+        run: |
+          npx @re-auth/sdk-generator \
+            --url http://localhost:3001/auth/introspection \
+            --output ./clients/generated \
+            --client fetch
+
+      - name: Commit generated SDK
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add ./clients/generated
+          git commit -m "Update generated SDK" || exit 0
+          git push
+```
+
+### Package Scripts
+
+```json
+{
+  "scripts": {
+    "generate-sdk": "reauth-sdk-generator --url http://localhost:3001/auth/introspection --output ./src/auth-client --client fetch",
+    "generate-sdk:watch": "nodemon --watch packages/reauth --exec npm run generate-sdk",
+    "prebuild": "npm run generate-sdk",
+    "postinstall": "npm run generate-sdk"
+  }
+}
+```
+
+## Advanced Configuration
+
+### Custom Base URL
+
+```ts
+const client = createReAuthClient({
+  baseURL:
+    process.env.NODE_ENV === 'production'
+      ? 'https://auth.production.com'
+      : 'http://localhost:3001',
+  auth: { type: 'localstorage' },
+});
+```
+
+### Custom Headers
+
+```ts
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  headers: {
+    'X-API-Version': 'v1',
+    'X-Client-Platform': 'web',
+  },
+  auth: { type: 'localstorage' },
+});
+```
+
+### Timeout Configuration
+
+```ts
+const client = createReAuthClient({
+  baseURL: 'https://api.example.com',
+  axiosInstance: axios.create({
+    timeout: 10000, // 10 seconds
+  }),
+  auth: { type: 'localstorage' },
+});
+```
 
 ## Troubleshooting
 
-| Issue               | Resolution                                                                             |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| `404 introspection` | Ensure the adapter exposes the introspection route (`/test-introspection` by default). |
-| Type mismatches     | Re-run the generator after updating plugins or schemas.                                |
-| Unauthorized        | Pass `--key` or configure the introspection route to allow internal networks.          |
+### Common Issues
 
-## Next steps
+| Issue               | Cause                              | Solution                                                   |
+| ------------------- | ---------------------------------- | ---------------------------------------------------------- |
+| `404 introspection` | Introspection endpoint not exposed | Ensure `adapter.registerRoutes(app, '/auth', true)`        |
+| `Unauthorized`      | Missing API key                    | Pass `--key` parameter or configure introspection security |
+| Type mismatches     | Plugin changes                     | Regenerate SDK after updating plugins                      |
+| Import errors       | Missing dependencies               | Install required peer dependencies (`zod`, `axios`)        |
 
-- Add auth clients to your web or native apps.
-- Leverage the generated types for end-to-end testing.
-- Pair the generator with CI to detect breaking API changes automatically.
+### Debug Mode
+
+```bash
+# Enable verbose logging
+DEBUG=reauth-sdk-generator reauth-sdk-generator --url ... --output ...
+```
+
+### Validation Issues
+
+```ts
+// Check generated schemas
+import { email_password_login_inputSchema } from './auth-client/plugins/email_password';
+
+// Validate manually
+const result = email_password_login_inputSchema.safeParse({
+  email: 'invalid-email',
+  password: 'short',
+});
+
+if (!result.success) {
+  console.error('Validation errors:', result.error.issues);
+}
+```
+
+## Best Practices
+
+1. **Version Control**: Commit generated clients for deterministic builds
+2. **CI Integration**: Regenerate SDKs automatically after ReAuth changes
+3. **Type Safety**: Leverage generated types for end-to-end validation
+4. **Error Handling**: Always check `result.error` before using `result.data`
+5. **Token Management**: Use appropriate auth types for your environment
+6. **Testing**: Write tests against generated client interfaces
+7. **Documentation**: Document custom interceptors and middleware
+
+## Next Steps
+
+- **Add to your frontend**: Integrate generated clients into your web/mobile apps
+- **End-to-end testing**: Use generated types for comprehensive API testing
+- **API versioning**: Set up CI to detect breaking changes automatically
+- **Custom middleware**: Add request/response interceptors for logging and monitoring

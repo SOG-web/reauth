@@ -1,39 +1,63 @@
 {
   "name": "@re-auth/http-adapters",
   "version": "1.0.0-alpha.19",
-  "description": "V2 HTTP protocol adapters for ReAuth - framework-agnostic integration with Express, Fastify, and Hono",
+  "description": "HTTP protocol adapters for ReAuth - framework-agnostic integration with Express, Fastify, and Hono",
   "type": "module",
-  "main": "./dist/cjs/src/index.js",
-  "module": "./dist/esm/src/index.js",
-  "types": "./dist/esm/src/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/esm/src/index.d.ts",
-      "import": "./dist/esm/src/index.js",
-      "require": "./dist/cjs/src/index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./base-adapter": {
+      "types": "./dist/base-adapter.d.ts",
+      "import": "./dist/base-adapter.js",
+      "require": "./dist/base-adapter.cjs"
     },
     "./adapters/*": {
-      "types": "./dist/esm/src/adapters/*.d.ts",
-      "import": "./dist/esm/src/adapters/*.js",
-      "require": "./dist/cjs/src/adapters/*.js"
+      "types": "./dist/adapters/*.d.ts",
+      "import": "./dist/adapters/*.js",
+      "require": "./dist/adapters/*.cjs"
     },
     "./middleware/*": {
-      "types": "./dist/esm/src/middleware/*.d.ts",
-      "import": "./dist/esm/src/middleware/*.js",
-      "require": "./dist/cjs/src/middleware/*.js"
+      "types": "./dist/middleware/*.d.ts",
+      "import": "./dist/middleware/*.js",
+      "require": "./dist/middleware/*.cjs"
+    },
+    "./utils/*": {
+      "types": "./dist/utils/*.d.ts",
+      "import": "./dist/utils/*.js",
+      "require": "./dist/utils/*.cjs"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
+      "require": "./dist/types.cjs"
     }
   },
   "typesVersions": {
     "*": {
       ".": [
-        "./dist/esm/src/index.d.ts"
+        "./dist/index.d.ts"
+      ],
+      "base-adapter": [
+        "./dist/base-adapter.d.ts"
       ],
       "adapters/*": [
-        "./dist/esm/src/adapters/*.d.ts"
+        "./dist/adapters/*.d.ts"
       ],
       "middleware/*": [
-        "./dist/esm/src/middleware/*.d.ts"
+        "./dist/middleware/*.d.ts"
+      ],
+      "utils/*": [
+        "./dist/utils/*.d.ts"
+      ],
+      "types": [
+        "./dist/types.d.ts"
       ]
     }
   },
@@ -45,10 +69,9 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build:esm": "tsc -p tsconfig.esm.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build": "pnpm clean && pnpm build:esm && pnpm build:cjs",
-    "dev": "pnpm build:esm --watch",
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "dev": "tsup --watch",
     "lint": "tsc --noEmit",
     "test": "vitest",
     "test:watch": "vitest --watch"
@@ -71,6 +94,7 @@
     "express": "^5.1.0",
     "fastify": "^5.3.3",
     "hono": "^4.7.10",
+    "tsup": "^8.5.0",
     "typescript": "^5.0.0",
     "vite": "^5.0.0",
     "vitest": "^1.0.0"
