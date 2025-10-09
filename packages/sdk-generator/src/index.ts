@@ -490,21 +490,30 @@ function generateAxiosIndexCode(
 				withCredentials: config.auth?.type === 'cookie',
 			});
 
-			const getToken = async (): Promise<string | null> => {
+			const getToken = async (): Promise<string | { accessToken: string; refreshToken: string } | null> => {
 				if (!config.auth || typeof window === 'undefined' || config.auth.type === 'cookie') return null;
 				const { type, key, getToken: customGetToken } = config.auth;
 				if (customGetToken) {
-					const token = await customGetToken();
-					return extractAccessToken(token);
+					return await customGetToken();
 				}
 				switch (type) {
 					case 'localstorage': {
 						const token = localStorage.getItem(key || 'reauth-token');
-						return extractAccessToken(token);
+						if (!token) return null;
+						try {
+							return JSON.parse(token);
+						} catch {
+							return token;
+						}
 					}
 					case 'sessionstorage': {
 						const token = sessionStorage.getItem(key || 'reauth-token');
-						return extractAccessToken(token);
+						if (!token) return null;
+						try {
+							return JSON.parse(token);
+						} catch {
+							return token;
+						}
 					}
 					default: return null;
 				}
@@ -602,21 +611,30 @@ function generateFetchIndexCode(
 				throw new Error('baseURL must be provided when using fetch client.');
 			}
 
-			const getToken = async (): Promise<string | null> => {
+			const getToken = async (): Promise<string | { accessToken: string; refreshToken: string } | null> => {
 				if (!config.auth) return null;
 				const { type, key, getToken: customGetToken } = config.auth;
 				if (customGetToken) {
-					const token = await customGetToken();
-					return extractAccessToken(token);
+					return await customGetToken();
 				}
 				switch (type) {
 					case 'localstorage': {
 						const token = localStorage.getItem(key || 'reauth-token');
-						return extractAccessToken(token);
+						if (!token) return null;
+						try {
+							return JSON.parse(token);
+						} catch {
+							return token;
+						}
 					}
 					case 'sessionstorage': {
 						const token = sessionStorage.getItem(key || 'reauth-token');
-						return extractAccessToken(token);
+						if (!token) return null;
+						try {
+							return JSON.parse(token);
+						} catch {
+							return token;
+						}
 					}
 					default: return null;
 				}
