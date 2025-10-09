@@ -6,7 +6,7 @@ export const reauthClients = table('reauth_clients', {
   id: idColumn('id', 'varchar(255)').defaultTo$('auto'),
   client_secret_hash: column('client_secret_hash', 'varchar(255)').nullable(),
   client_type: column('client_type', 'varchar(20)'), // 'public' | 'confidential'
-  name: column('name', 'varchar(255)'),
+  name: column('name', 'varchar(255)').unique(),
   subject_id: column('subject_id', 'varchar(255)'),
   description: column('description', 'string').nullable(),
   is_active: column('is_active', 'bool').defaultTo(true),
