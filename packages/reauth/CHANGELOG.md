@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.26
+
+### Minor Changes
+
+- [`7f03085`](https://github.com/SOG-web/reauth/commit/7f030853c77e2d0ff7290340ca1213769cec1897) Thanks [@SOG-web](https://github.com/SOG-web)! - fix: update optional fields in JWT and session steps- Made the `token` field optional in the `register-client.step.ts`.- Refactored the `sessions` field in `list-sessions.step.ts` to use an array type for better structure and clarity.- Added a new changeset "rotten-cups-itch" to the project.
+
 ## 0.1.0-alpha.25
 
 ### Minor Changes
