@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.29
+
+### Minor Changes
+
+- [`4c7c700`](https://github.com/SOG-web/reauth/commit/4c7c7001fcb3c6c6660174d6af73420c035278ff) Thanks [@SOG-web](https://github.com/SOG-web)! - fix arktype json schema error
+
 ## 0.1.0-alpha.28
 
 ### Minor Changes

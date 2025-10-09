@@ -1,6 +1,6 @@
 {
   "name": "web",
-  "version": "0.1.1-alpha.10",
+  "version": "0.1.1-alpha.11",
   "description": "Next.js web application demonstrating ReAuth HTTP client SDK usage and integration patterns",
   "type": "module",
   "private": true,
