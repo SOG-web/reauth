@@ -15,6 +15,7 @@ export default defineConfig([
       'src/plugins/passwordless/index.ts',
       'src/plugins/session/index.ts',
       'src/plugins/username/index.ts',
+      'src/plugins/admin/index.ts',
       'src/services/index.ts',
     ],
     format: ['esm', 'cjs'],

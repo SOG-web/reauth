@@ -68,6 +68,11 @@
       "import": "./dist/plugins/username/index.js",
       "require": "./dist/plugins/username/index.cjs"
     },
+    "./plugins/admin": {
+      "types": "./dist/plugins/admin/index.d.ts",
+      "import": "./dist/plugins/admin/index.js",
+      "require": "./dist/plugins/admin/index.cjs"
+    },
     "./services": {
       "types": "./dist/services/index.d.ts",
       "import": "./dist/services/index.js",
@@ -108,6 +113,9 @@
       ],
       "plugins/username": [
         "./dist/plugins/username/index.d.ts"
+      ],
+      "plugins/admin": [
+        "./dist/plugins/admin/index.d.ts"
       ],
       "services": [
         "./dist/services/index.d.ts"
