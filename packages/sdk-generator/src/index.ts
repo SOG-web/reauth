@@ -221,9 +221,9 @@ function generateAxiosPluginCode(
 					callbacks.interceptors.request(requestConfig);
 				}
 				const rawToken = await getToken();
-				if (rawToken) {
-					const accessToken = extractAccessToken(rawToken);
-					const refreshToken = extractRefreshToken(rawToken);
+				if (rawToken && typeof rawToken === 'object') {
+					const accessToken = rawToken.accessToken;
+                    const refreshToken = rawToken.refreshToken;
 					if (accessToken) {
 						const authValue = ${useBearer ? '`Bearer ${accessToken}`' : 'accessToken'};
 						requestConfig.headers = { ...requestConfig.headers, '${accessTokenHeader}': authValue };
@@ -231,7 +231,12 @@ function generateAxiosPluginCode(
 					if (refreshToken) {
 						requestConfig.headers = { ...requestConfig.headers, '${refreshTokenHeader}': refreshToken };
 					}
-				}
+				} else if (rawToken && typeof rawToken === 'string') {
+					const authValue = ${useBearer ? '`Bearer ${rawToken}`' : 'rawToken'};
+					requestConfig.headers = { ...requestConfig.headers, 'Authorization': authValue };
+                  }
+
+
 				const response = await api.post('${endpoint}', payload, requestConfig);`
       : `const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
 				if (callbacks?.interceptors?.request) {
@@ -315,9 +320,9 @@ function generateFetchPluginCode(
 					'Content-Type': 'application/json',
 					...config.headers,
 				};
-				if (rawToken) {
-					const accessToken = extractAccessToken(rawToken);
-					const refreshToken = extractRefreshToken(rawToken);
+				if (rawToken && typeof rawToken === 'object') {
+					const accessToken = rawToken.accessToken;
+                    const refreshToken = rawToken.refreshToken;
 					if (accessToken) {
 						const authValue = ${useBearer ? '`Bearer ${accessToken}`' : 'accessToken'};
 						headers['${accessTokenHeader}'] = authValue;
@@ -325,6 +330,9 @@ function generateFetchPluginCode(
 					if (refreshToken) {
 						headers['${refreshTokenHeader}'] = refreshToken;
 					}
+				} else if (rawToken && typeof rawToken === 'string') {
+					const authValue = ${useBearer ? '`Bearer ${rawToken}`' : 'rawToken'};
+					headers['Authorization'] = authValue;
 				}
 
 				let request: RequestInit = {
