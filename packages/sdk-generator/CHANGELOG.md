@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.13
+
+### Minor Changes
+
+- [`450f5da`](https://github.com/SOG-web/reauth/commit/450f5da993ba31c99d7c8da60e11e28ee61c7f14) Thanks [@SOG-web](https://github.com/SOG-web)! - fix: update token handling in SDK generator to ensure consistent return type for getToken function
+
 ## 0.1.0-alpha.12
 
 ### Minor Changes
