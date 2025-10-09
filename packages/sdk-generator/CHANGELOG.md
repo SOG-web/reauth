@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.11
+
+### Minor Changes
+
+- [`9da8035`](https://github.com/SOG-web/reauth/commit/9da8035cb953afa445de39d15ae8030b254088d5) Thanks [@SOG-web](https://github.com/SOG-web)! - feat: add token extraction helpers and update HTTP configuration handling in SDK generator
+
 ## 0.1.0-alpha.10
 
 ### Minor Changes
