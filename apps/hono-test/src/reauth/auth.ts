@@ -19,6 +19,7 @@ import { usernamePasswordSchema } from '@re-auth/reauth/plugins/username';
 import { anonymousSchema } from '@re-auth/reauth/plugins/anonymous';
 import { phonePasswordSchema } from '@re-auth/reauth/plugins/phone';
 import { apiKeySchema } from '@re-auth/reauth/plugins/api-key';
+import adminPlugin, { AdminConfig } from '@re-auth/reauth/plugins/admin';
 
 export const kysely = new Kysely({
   dialect: new SqliteDialect({
@@ -88,6 +89,7 @@ export default createReAuthEngine({
       defaultRefreshTokenTtlSeconds: 86400,
       enableRefreshTokenRotation: true,
     }),
+    adminPlugin({}),
   ],
   authHooks: [
     // {
