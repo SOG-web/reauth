@@ -493,6 +493,7 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
           name: p.name,
           description: `${p.name} authentication plugin`,
           steps: (p.steps || []).map((s) => {
+            console.log('s outputs', s.outputs?.toJsonSchema());
             return {
               name: s.name,
               description: s.description,

@@ -46,7 +46,10 @@ export type Token =
 export const tokenType = type({
   accessToken: 'string',
   refreshToken: 'string',
-}).or(type('string'));
+})
+  .or(type('string'))
+  .or(type('null'))
+  .or(type('undefined'));
 
 // Shared  input/output shapes (entity removed). Keep names the same for cross-package compatibility.
 export interface AuthInput {

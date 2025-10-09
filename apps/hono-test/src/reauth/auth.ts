@@ -19,7 +19,10 @@ import { usernamePasswordSchema } from '@re-auth/reauth/plugins/username';
 import { anonymousSchema } from '@re-auth/reauth/plugins/anonymous';
 import { phonePasswordSchema } from '@re-auth/reauth/plugins/phone';
 import { apiKeySchema } from '@re-auth/reauth/plugins/api-key';
-import adminPlugin, { AdminConfig } from '@re-auth/reauth/plugins/admin';
+import adminPlugin, {
+  AdminConfig,
+  adminSchema,
+} from '@re-auth/reauth/plugins/admin';
 
 export const kysely = new Kysely({
   dialect: new SqliteDialect({
@@ -33,9 +36,10 @@ export const kysely = new Kysely({
 
 // Version 1.0.1 - Base schema with core authentication
 const { schema: v1, plugins: v1Plugins } = reauthDb('1.0.1', [
-  emailPasswordSchema,
   jwtSchema,
   sessionSchema,
+  emailPasswordSchema,
+  apiKeySchema,
 ]);
 
 // Version 1.0.2 - Extended from v1 using the helper function
@@ -52,7 +56,7 @@ const { schema: v2, plugins: v2Plugins } = extendSchemaVersion(
 const { schema: v3, plugins: v3Plugins } = extendSchemaVersion(
   v2Plugins,
   '1.0.3',
-  [apiKeySchema],
+  [adminSchema],
 );
 
 export const factory = reauthDbVersions([v1, v2, v3]);

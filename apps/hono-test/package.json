@@ -6,9 +6,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "migrate": "node ./src/reauth/cli.ts migrate:up",
-    "migrate:down": "node ./src/reauth/cli.ts migrate:down",
-    "migrate:status": "node ./src/reauth/cli.ts migrate:status"
+    "migrate": "tsx ./src/reauth/cli.ts migrate:up",
+    "migrate:down": "tsx ./src/reauth/cli.ts migrate:down",
+    "migrate:status": "tsx ./src/reauth/cli.ts migrate:status"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.2",
