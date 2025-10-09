@@ -367,6 +367,7 @@ export class FumaSessionService implements SessionService {
         isJWT = true;
       } catch (jwtError: any) {
         // JWT verification failed, could be expired
+        // check if it is expired
         isJWT = false;
       }
     }
@@ -391,8 +392,12 @@ export class FumaSessionService implements SessionService {
       }
 
       if (deviceToValidate) {
-        if (!(await this.options.deviceValidator(deviceToValidate, deviceInfo))) {
-          console.log(`Device validation failed for ${isJWT ? 'JWT' : 'legacy'} token`);
+        if (
+          !(await this.options.deviceValidator(deviceToValidate, deviceInfo))
+        ) {
+          console.log(
+            `Device validation failed for ${isJWT ? 'JWT' : 'legacy'} token`,
+          );
           return { subject: null, token: null };
         }
       }

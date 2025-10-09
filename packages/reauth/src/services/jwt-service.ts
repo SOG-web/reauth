@@ -88,6 +88,7 @@ export class EnhancedJWKSService implements JWTServiceType {
   async getActiveKey(): Promise<JWKSKey> {
     // Check cache first
     if (this.activeKeyCache && Date.now() < this.cacheExpiry) {
+      console.log('jwt-service- active key found in cache');
       return this.activeKeyCache;
     }
 
@@ -100,6 +101,7 @@ export class EnhancedJWKSService implements JWTServiceType {
     });
 
     if (!keyRecord) {
+      console.log('jwt-service- no active key found, generating one');
       // No active key found, generate one
       return await this.generateKeyPair();
     }
@@ -108,10 +110,12 @@ export class EnhancedJWKSService implements JWTServiceType {
 
     // Check if key needs rotation
     if (jwksKey.expiresAt && jwksKey.expiresAt <= new Date()) {
+      console.log('jwt-service- key needs rotation, rotating');
       return await this.rotateKeys('scheduled');
     }
 
     // Update cache
+    console.log('jwt-service- updating active key cache');
     this.activeKeyCache = jwksKey;
     this.cacheExpiry = Date.now() + this.CACHE_TTL;
 
@@ -183,7 +187,9 @@ export class EnhancedJWKSService implements JWTServiceType {
       ? await this.getKeyById(keyId)
       : await this.getActiveKey();
 
-    const expirationTime = ttlSeconds || this.defaultAccessTokenTtlSeconds;
+    const ttlSecondsToUse = ttlSeconds || this.defaultAccessTokenTtlSeconds;
+    const now = Math.floor(Date.now() / 1000);
+    const expirationTime = now + ttlSecondsToUse;
 
     const jwt = await new SignJWT(payload)
       .setProtectedHeader({
@@ -595,6 +601,7 @@ export class EnhancedJWKSService implements JWTServiceType {
     const hashedApiKey = await hashPassword(apiKey);
 
     const clientRecord = await orm.create('reauth_clients', {
+      subject_id: client.subjectId,
       client_secret_hash: hashedApiKey,
       client_type: client.clientType,
       name: client.name,
