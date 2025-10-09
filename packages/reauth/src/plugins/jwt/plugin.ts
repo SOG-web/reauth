@@ -5,6 +5,8 @@ import { type JWTPluginConfig } from '../../services';
 // JWT Plugin Steps
 
 import { getJWKSStep } from './steps/get-jwks.step';
+import { getJWKSByKidStep } from './steps/get-jwks-by-kid.step';
+import { verifyTokenStep } from './steps/verify-token.step';
 import { registerClientStep } from './steps/register-client.step';
 
 export const baseJWTPlugin = {
@@ -155,7 +157,12 @@ export const baseJWTPlugin = {
     enableLegacyTokenSupport: true,
     issuer: 'reauth',
   },
-  steps: [getJWKSStep, registerClientStep],
+  steps: [
+    getJWKSStep,
+    getJWKSByKidStep,
+    verifyTokenStep,
+    registerClientStep,
+  ],
   async getProfile(subjectId, ctx) {
     const sessionService = ctx.engine.getSessionService();
     const jwksService = sessionService.getJwkService();
