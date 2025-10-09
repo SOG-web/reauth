@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.12
+
+### Minor Changes
+
+- [`755e669`](https://github.com/SOG-web/reauth/commit/755e669c00b8deb8e1f86bcba8a881cb4e8a2909) Thanks [@SOG-web](https://github.com/SOG-web)! - fix token
+
 ## 0.1.0-alpha.11
 
 ### Minor Changes

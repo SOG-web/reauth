@@ -1,6 +1,6 @@
 {
   "name": "@re-auth/sdk-generator",
-  "version": "0.1.0-alpha.11",
+  "version": "0.1.0-alpha.12",
   "private": false,
   "description": "TypeScript client SDK generator for ReAuth HTTP protocol - automatically generates type-safe client libraries from HTTP API introspection",
   "bin": {
