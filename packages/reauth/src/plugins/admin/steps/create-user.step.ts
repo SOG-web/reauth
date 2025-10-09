@@ -30,7 +30,7 @@ export const createUserValidation = type({
   'roles?': 'string[]',
   'sendWelcomeEmail?': 'boolean',
   'skipVerification?': 'boolean',
-  'metadata?': 'object | undefined',
+  'metadata?': 'object',
 });
 
 export const createUserStep: AuthStep<

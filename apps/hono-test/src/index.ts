@@ -22,6 +22,9 @@ app.use('*', async (c, next) => {
 //   password: '',
 // });
 
+// const td2 = reAuth.getPlugin('session')?.steps[3]?.outputs?.toJsonSchema();
+// console.log('td2', td2);
+
 const authAdapter = honoReAuth(
   {
     engine: reAuth,
@@ -42,7 +45,9 @@ app.use('/', authAdapter.createUserMiddleware());
 
 app.get('/', (c) => {
   const user = c.get('user');
-  return c.json({ message: 'Hello Hono!', user });
+  const td1 = reAuth.getPlugin('session')?.steps[0]?.outputs?.toJsonSchema();
+  console.log('td1', td1);
+  return c.json({ message: 'Hello Hono!', user, td1 });
 });
 
 showRoutes(app, {

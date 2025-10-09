@@ -17,9 +17,9 @@ export type RevokeApiKeyInput = {
 
 export const revokeApiKeyValidation = type({
   token: tokenType,
-  api_key_id: 'string?',
-  name: 'string?',
-  'others?': 'object | undefined',
+  'api_key_id?': 'string',
+  'name?': 'string',
+  'others?': 'object',
 });
 
 export const revokeApiKeyStep: AuthStep<
@@ -51,7 +51,7 @@ export const revokeApiKeyStep: AuthStep<
     'error?': 'string | object',
     status: 'string',
     'revoked_key_id?': 'string',
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
 

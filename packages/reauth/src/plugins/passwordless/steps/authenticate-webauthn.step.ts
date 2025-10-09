@@ -14,7 +14,7 @@ export const authenticateWebAuthnValidation = type({
   credential_id: 'string',
   signature: 'string',
   counter: 'number',
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const authenticateWebAuthnStep: AuthStep<
@@ -47,7 +47,7 @@ export const authenticateWebAuthnStep: AuthStep<
       verified: 'boolean',
       profile: 'object?',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { credential_id, signature, counter, others } = input;

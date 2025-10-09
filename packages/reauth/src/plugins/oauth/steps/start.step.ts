@@ -32,7 +32,7 @@ export const startOAuthStep: AuthStep<
     message: 'string',
     status: 'string',
     'redirect?': ' string | undefined',
-    'secret?': 'object | undefined',
+    'secret?': 'object',
   }),
   async run(input: StartOAuthInput, ctx): Promise<AuthOutput> {
     const { provider: providerName } = input;

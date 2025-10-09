@@ -17,7 +17,7 @@ export type GetSessionInput = {
 export const getSessionValidation = type({
   token: tokenType,
   'deviceInfo?': 'object',
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 type Session = {
@@ -58,7 +58,7 @@ export const getSessionStep: AuthStep<
     'session?': type({
       sessionId: 'string',
       token: tokenType,
-      subject: 'object',
+      subject: 'object?',
       createdAt: 'string',
       expiresAt: 'string?',
       'deviceInfo?': type({
@@ -70,7 +70,7 @@ export const getSessionStep: AuthStep<
       }),
       metadata: 'object?',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { token, deviceInfo, others } = input;

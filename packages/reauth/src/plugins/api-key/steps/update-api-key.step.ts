@@ -22,13 +22,13 @@ export type UpdateApiKeyInput = {
 
 export const updateApiKeyValidation = type({
   token: tokenType,
-  api_key_id: 'string?',
-  name: 'string?',
+  'api_key_id?': 'string',
+  'name?': 'string',
   new_name: 'string?',
-  permissions: 'string[]?',
-  scopes: 'string[]?',
-  expires_at: 'Date?',
-  'others?': 'object | undefined',
+  'permissions?': 'string[]',
+  'scopes?': 'string[]',
+  'expires_at?': 'Date',
+  'others?': 'object',
 });
 
 export const updateApiKeyStep: AuthStep<
@@ -74,7 +74,7 @@ export const updateApiKeyStep: AuthStep<
       api_key: type({
         id: 'string',
         name: 'string',
-        permissions: 'string[]',
+        'permissions?': 'string[]',
         scopes: 'string[]',
         expires_at: 'Date',
         is_active: 'boolean',
@@ -83,7 +83,7 @@ export const updateApiKeyStep: AuthStep<
         last_used_at: 'Date',
       }),
     }), // Contains updated ApiKeyMetadata
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
 

@@ -23,10 +23,10 @@ export const registerWebAuthnValidation = type({
   token: tokenType,
   credential_id: 'string',
   public_key: 'string',
-  counter: 'number?',
-  transports: 'string[]?',
-  name: 'string?',
-  'others?': 'object | undefined',
+  'counter?': 'number',
+  'transports?': 'string[]',
+  'name?': 'string',
+  'others?': 'object',
 });
 
 export const registerWebAuthnStep: AuthStep<
@@ -64,9 +64,9 @@ export const registerWebAuthnStep: AuthStep<
       id: 'string',
       name: 'string',
       created_at: 'string',
-      transports: 'string[]',
+      'transports?': 'string[]',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
   async run(input, ctx) {

@@ -17,7 +17,7 @@ export const registerClientValidation = type({
   name: 'string',
   description: 'string?',
   is_active: 'boolean?',
-  'others?': 'object | undefined',
+  'others?': 'object',
   token: tokenType,
 });
 
@@ -67,7 +67,7 @@ export const registerClientStep: AuthStep<
       description: 'string?',
       is_active: 'boolean?',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
   run: async (input, ctx) => {

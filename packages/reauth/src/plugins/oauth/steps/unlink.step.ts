@@ -9,7 +9,7 @@ export type UnlinkOAuthInput = {
 
 export const unlinkOAuthValidation = type({
   provider: 'string',
-  entity: 'object',
+  entity: 'object?',
 });
 
 export const unlinkOAuthStep: AuthStep<

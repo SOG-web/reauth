@@ -24,7 +24,7 @@ export const changePasswordValidation = type({
   token: tokenType,
   oldPassword: passwordSchema,
   newPassword: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const changePasswordStep: AuthStep<
@@ -44,7 +44,7 @@ export const changePasswordStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
   async run(input, ctx) {

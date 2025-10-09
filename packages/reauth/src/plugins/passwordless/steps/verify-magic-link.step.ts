@@ -20,7 +20,7 @@ export type VerifyMagicLinkInput = {
 
 export const verifyMagicLinkValidation = type({
   magic_token: 'string',
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const verifyMagicLinkStep: AuthStep<
@@ -50,7 +50,7 @@ export const verifyMagicLinkStep: AuthStep<
       'email?': 'string',
       'name?': 'string',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { magic_token, others } = input;

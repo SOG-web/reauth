@@ -16,7 +16,7 @@ export type RegisterInput = {
 export const registerValidation = type({
   phone: phoneSchema,
   password: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const registerStep: AuthStep<
@@ -48,7 +48,7 @@ export const registerStep: AuthStep<
       verified: 'boolean',
       profile: 'object?',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { phone, password, others } = input;

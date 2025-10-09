@@ -379,7 +379,7 @@ if (result.success) {
 
 ### Client-Side Verification
 
-```ts
+    ```ts
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 // Create JWKS client
@@ -550,8 +550,8 @@ engine.registerCleanupTask({
         b('expires_at', '<', new Date())
       ),
     });
-    
-    return {
+
+      return {
       cleaned: cleaned.count,
       expiredRefreshTokensDeleted: cleaned.count,
     };

@@ -257,8 +257,8 @@ const emailResult = await engine.executeStep('email-or-username', 'register', {
   metadata: {
     displayName: 'John Doe',
     preferredMethod: 'email',
-  },
-});
+      },
+    });
 
 if (emailResult.success) {
   console.log('Email account created:', emailResult.subject.email);

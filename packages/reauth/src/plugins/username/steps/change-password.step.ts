@@ -24,7 +24,7 @@ export type ChangePasswordInput = {
 export const changePasswordValidation = type({
   currentPassword: passwordSchema,
   newPassword: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
   token: tokenType,
 });
 
@@ -50,7 +50,7 @@ export const changePasswordStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
   async run(input, ctx) {

@@ -493,12 +493,43 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
           name: p.name,
           description: `${p.name} authentication plugin`,
           steps: (p.steps || []).map((s) => {
-            console.log('s outputs', s.outputs?.toJsonSchema());
+            if (`${p.name}.${s.name}` === 'session.logout') {
+              // console.log(
+              //   `s inputs ${p.name}.${s.name}`,
+              //   s.validationSchema?.toJSON(),
+              // );
+              // console.log(
+              //   `s outputs ${p.name}.${s.name}`,
+              //   s.outputs?.toJsonSchema(),
+              // );
+            }
+
+            let inputs = {};
+            let outputs = {};
+
+            try {
+              inputs = s.validationSchema?.toJsonSchema() || {};
+            } catch (error) {
+              console.warn(
+                `Failed to convert inputs schema for ${p.name}.${s.name}:`,
+                error,
+              );
+            }
+
+            try {
+              outputs = s.outputs?.toJsonSchema() || {};
+            } catch (error) {
+              console.warn(
+                `Failed to convert outputs schema for ${p.name}.${s.name}:`,
+                error,
+              );
+            }
+
             return {
               name: s.name,
               description: s.description,
-              inputs: s.validationSchema?.toJsonSchema() || {},
-              outputs: s.outputs?.toJsonSchema() || {},
+              inputs,
+              outputs,
               protocol: s.protocol || {},
               requiresAuth: Boolean(s.protocol?.http?.auth || false),
             };

@@ -32,7 +32,7 @@ export const createApiKeyValidation = type({
   scopes: 'string[]?',
   expires_at: 'Date?',
   ttl_days: 'number?',
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const createApiKeyStep: AuthStep<
@@ -74,9 +74,9 @@ export const createApiKeyStep: AuthStep<
     status: 'string',
     'data?': type({
       api_key: 'string',
-      metadata: 'object',
+      metadata: 'object?',
     }), // Contains CreateApiKeyOutput
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
 

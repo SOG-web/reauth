@@ -20,7 +20,7 @@ export type RegisterInput = {
 export const registerValidation = type({
   username: usernameSchema,
   password: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const registerStep: AuthStep<
@@ -52,7 +52,7 @@ export const registerStep: AuthStep<
       verified: 'boolean',
       profile: 'object?',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { username, password, others } = input;

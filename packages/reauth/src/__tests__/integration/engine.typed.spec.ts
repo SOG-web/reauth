@@ -33,7 +33,7 @@ type ChangePasswordOutput = {
 const changePasswordValidation = type({
   currentPassword: passwordSchema,
   newPassword: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
   token: tokenType,
 });
 
@@ -59,7 +59,7 @@ const changePasswordStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
   async run(input, ctx) {
@@ -106,7 +106,7 @@ type RegisterStepOutput = {
 const registerStepValidation = type({
   phoneNumber: 'string',
   password: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 const registerStep: AuthStep<
@@ -131,7 +131,7 @@ const registerStep: AuthStep<
     message: 'string',
     'error?': 'string | object',
     status: 'string',
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
   async run(input, ctx) {

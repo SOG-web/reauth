@@ -7,7 +7,7 @@ import { hashPassword } from '../../../lib/password';
 export type SendResetInput = { email: string; others?: Record<string, any> };
 export const sendResetValidation = type({
   email: 'string.email',
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const sendResetStep: AuthStep<
@@ -31,7 +31,7 @@ export const sendResetStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { email, others } = input;

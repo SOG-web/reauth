@@ -13,7 +13,7 @@ export type GetJWKSInput = {
 export const getJWKSValidation = type({
   client_id: 'string',
   'client_secret?': 'string',
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export type GetJWKSOutput = {
@@ -49,7 +49,7 @@ export const getJWKSStep: AuthStep<
     'error?': 'string | object',
     status: 'string',
     'jwk?': 'object',
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const others = input.others || {};

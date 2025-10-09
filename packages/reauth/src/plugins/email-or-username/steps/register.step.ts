@@ -17,7 +17,7 @@ export type RegisterInput = {
 export const registerValidation = type({
   emailOrUsername: 'string',
   password: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const registerStep: AuthStep<
@@ -54,7 +54,7 @@ export const registerStep: AuthStep<
       verified: 'boolean',
       profile: 'object?',
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { emailOrUsername, password, others } = input;

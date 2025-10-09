@@ -18,7 +18,7 @@ export const resetPasswordValidation = type({
   email: 'string.email',
   code: 'string',
   newPassword: passwordSchema,
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const resetPasswordStep: AuthStep<
@@ -42,7 +42,7 @@ export const resetPasswordStep: AuthStep<
     success: 'boolean',
     message: 'string',
     status: 'string',
-    'others?': 'object | undefined',
+    'others?': 'object',
   }),
   async run(input, ctx) {
     const { email, code, newPassword, others } = input;

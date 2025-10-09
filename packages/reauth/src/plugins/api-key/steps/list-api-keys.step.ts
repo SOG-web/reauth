@@ -18,7 +18,7 @@ export type ListApiKeysInput = {
 export const listApiKeysValidation = type({
   token: tokenType,
   include_inactive: 'boolean?',
-  'others?': 'object | undefined',
+  'others?': 'object',
 });
 
 export const listApiKeysStep: AuthStep<
@@ -60,7 +60,7 @@ export const listApiKeysStep: AuthStep<
         last_used_at: 'Date | string',
       }).array(), // Contains array of ApiKeyMetadata
     }),
-    'others?': 'object | undefined',
+    'others?': 'object',
     'token?': tokenType,
   }),
 

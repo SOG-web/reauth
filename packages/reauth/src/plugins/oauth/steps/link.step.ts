@@ -19,7 +19,7 @@ export const linkOAuthValidation = type({
   oauth_state: 'string',
   'oauth_code_verifier?': 'string',
   oauth_provider: 'string',
-  entity: 'object',
+  'entity?': 'object',
 });
 
 export const linkOAuthStep: AuthStep<
