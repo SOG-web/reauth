@@ -8,12 +8,12 @@ import {
 import type { AdminConfig } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface SystemStatusInput {
+export type SystemStatusInput = {
   token: Token;
   includeDatabaseStats?: boolean;
   includePluginStatus?: boolean;
   includeSessionStats?: boolean;
-}
+};
 
 export const systemStatusValidation = type({
   token: tokenType,
@@ -22,7 +22,7 @@ export const systemStatusValidation = type({
   'includeSessionStats?': 'boolean',
 });
 
-export interface SystemStatusOutput extends AuthOutput {
+export type SystemStatusOutput = {
   uptime?: number;
   version?: string;
   database?: {
@@ -47,7 +47,7 @@ export interface SystemStatusOutput extends AuthOutput {
     percentage: number;
   };
   token?: Token;
-}
+} & AuthOutput;
 
 export const systemStatusStep: AuthStep<
   AdminConfig,
@@ -65,7 +65,12 @@ export const systemStatusStep: AuthStep<
       auth: true,
     },
   },
-  inputs: ['token', 'includeDatabaseStats', 'includePluginStatus', 'includeSessionStats'],
+  inputs: [
+    'token',
+    'includeDatabaseStats',
+    'includePluginStatus',
+    'includeSessionStats',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
@@ -84,7 +89,7 @@ export const systemStatusStep: AuthStep<
       token,
       includeDatabaseStats = true,
       includePluginStatus = true,
-      includeSessionStats = true
+      includeSessionStats = true,
     } = input;
 
     // Check admin permissions
@@ -104,10 +109,11 @@ export const systemStatusStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b: any) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b: any) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -170,7 +176,12 @@ export const systemStatusStep: AuthStep<
         });
 
         // Add other common plugins if they exist
-        const commonPlugins = ['email-password', 'session', 'jwt', 'organization'];
+        const commonPlugins = [
+          'email-password',
+          'session',
+          'jwt',
+          'organization',
+        ];
         for (const pluginName of commonPlugins) {
           try {
             const plugin = ctx.engine.getPlugin(pluginName);
@@ -198,10 +209,11 @@ export const systemStatusStep: AuthStep<
           tomorrow.setDate(tomorrow.getDate() + 1);
 
           const todaySessions = await orm.count('sessions', {
-            where: (b: any) => b.and(
-              b('created_at', '>=', today),
-              b('created_at', '<', tomorrow)
-            ),
+            where: (b: any) =>
+              b.and(
+                b('created_at', '>=', today),
+                b('created_at', '<', tomorrow),
+              ),
           });
 
           // Simplified session stats
@@ -229,7 +241,6 @@ export const systemStatusStep: AuthStep<
       };
 
       return attachNewTokenIfDifferent(result, token, session.token);
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {

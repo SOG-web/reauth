@@ -8,7 +8,7 @@ import {
 import type { AdminConfig, AdminUser } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface ListUsersInput {
+export type ListUsersInput = {
   token: Token;
   page?: number;
   limit?: number;
@@ -17,7 +17,7 @@ export interface ListUsersInput {
   status?: 'active' | 'inactive' | 'banned' | 'all';
   sortBy?: 'created_at' | 'updated_at' | 'email' | 'username';
   sortOrder?: 'asc' | 'desc';
-}
+};
 
 export const listUsersValidation = type({
   token: tokenType,
@@ -30,14 +30,14 @@ export const listUsersValidation = type({
   'sortOrder?': 'string',
 });
 
-export interface ListUsersOutput extends AuthOutput {
+export type ListUsersOutput = {
   users?: AdminUser[];
   total?: number;
   page?: number;
   limit?: number;
   totalPages?: number;
   token?: Token;
-}
+} & AuthOutput;
 
 export const listUsersStep: AuthStep<
   AdminConfig,
@@ -55,7 +55,16 @@ export const listUsersStep: AuthStep<
       auth: true,
     },
   },
-  inputs: ['token', 'page', 'limit', 'search', 'role', 'status', 'sortBy', 'sortOrder'],
+  inputs: [
+    'token',
+    'page',
+    'limit',
+    'search',
+    'role',
+    'status',
+    'sortBy',
+    'sortOrder',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
@@ -77,7 +86,7 @@ export const listUsersStep: AuthStep<
       role,
       status = 'all',
       sortBy = 'created_at',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
     } = input;
 
     // Check admin permissions
@@ -97,10 +106,11 @@ export const listUsersStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b: any) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b: any) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -150,10 +160,8 @@ export const listUsersStep: AuthStep<
       let bannedUserIds: any[] = [];
       if (status === 'banned') {
         const bannedResults = await orm.findMany('user_bans', {
-          where: (b: any) => b.or(
-            b('expires_at', '>', new Date()),
-            b('expires_at', '=', null)
-          ),
+          where: (b: any) =>
+            b.or(b('expires_at', '>', new Date()), b('expires_at', '=', null)),
         });
         bannedUserIds = bannedResults || [];
       }
@@ -167,8 +175,8 @@ export const listUsersStep: AuthStep<
           conditions.push(
             b.or(
               b('email', 'contains', search),
-              b('username', 'contains', search)
-            )
+              b('username', 'contains', search),
+            ),
           );
         }
 
@@ -180,8 +188,8 @@ export const listUsersStep: AuthStep<
               conditions.push(
                 b.or(
                   b('deleted_at', '=', null),
-                  b('deleted_at', '>', new Date())
-                )
+                  b('deleted_at', '>', new Date()),
+                ),
               );
               break;
             case 'inactive':
@@ -191,7 +199,11 @@ export const listUsersStep: AuthStep<
               // Users with active bans
               if (bannedUserIds.length > 0) {
                 conditions.push(
-                  b('id', 'in', bannedUserIds.map(ban => ban.subject_id))
+                  b(
+                    'id',
+                    'in',
+                    bannedUserIds.map((ban) => ban.subject_id),
+                  ),
                 );
               } else {
                 // No banned users, return false condition
@@ -224,15 +236,13 @@ export const listUsersStep: AuthStep<
       for (const subject of subjects || []) {
         // Get roles
         const roles = await orm.findMany('subject_roles', {
-          where: (b) => b.and(
-            b('subject_id', '=', subject.id),
-            b('revoked_at', '=', null)
-          ),
+          where: (b) =>
+            b.and(b('subject_id', '=', subject.id), b('revoked_at', '=', null)),
         });
 
         // Get permissions from roles
         const permissions = new Set<string>();
-        roles?.forEach(r => {
+        roles?.forEach((r) => {
           if (r.permissions) {
             try {
               const rolePerms = JSON.parse(r.permissions as string);
@@ -243,25 +253,28 @@ export const listUsersStep: AuthStep<
 
         // Check ban status
         const activeBan = await orm.findFirst('user_bans', {
-          where: (b) => b.and(
-            b('subject_id', '=', subject.id),
-            b.or(
-              b('expires_at', '>', new Date()),
-              b('expires_at', '=', null)
-            )
-          ),
+          where: (b) =>
+            b.and(
+              b('subject_id', '=', subject.id),
+              b.or(
+                b('expires_at', '>', new Date()),
+                b('expires_at', '=', null),
+              ),
+            ),
         });
 
         users.push({
           id: subject.id as string,
           email: subject.email as string | undefined,
           username: subject.username as string | undefined,
-          roles: roles?.map(r => r.role as string) || [],
+          roles: roles?.map((r) => r.role as string) || [],
           permissions: Array.from(permissions),
           createdAt: (subject.created_at as Date)?.toISOString() || '',
           lastLogin: (subject.last_login_at as Date)?.toISOString(),
           isActive: Boolean(subject.is_active) && !subject.deleted_at,
-          metadata: subject.metadata ? JSON.parse(subject.metadata as string) : undefined,
+          metadata: subject.metadata
+            ? JSON.parse(subject.metadata as string)
+            : undefined,
         });
       }
 
@@ -281,7 +294,6 @@ export const listUsersStep: AuthStep<
         token,
         session.token,
       );
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {

@@ -8,7 +8,7 @@ import {
 import type { AdminConfig, AuditLogEntry } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface ViewAuditLogsInput {
+export type ViewAuditLogsInput = {
   token: Token;
   page?: number;
   limit?: number;
@@ -21,7 +21,7 @@ export interface ViewAuditLogsInput {
   ipAddress?: string;
   sortBy?: 'created_at' | 'action' | 'actor_id';
   sortOrder?: 'asc' | 'desc';
-}
+};
 
 export const viewAuditLogsValidation = type({
   token: tokenType,
@@ -38,14 +38,14 @@ export const viewAuditLogsValidation = type({
   'sortOrder?': 'string',
 });
 
-export interface ViewAuditLogsOutput extends AuthOutput {
+export type ViewAuditLogsOutput = {
   logs?: AuditLogEntry[];
   total?: number;
   page?: number;
   limit?: number;
   totalPages?: number;
   token?: Token;
-}
+} & AuthOutput;
 
 export const viewAuditLogsStep: AuthStep<
   AdminConfig,
@@ -63,7 +63,20 @@ export const viewAuditLogsStep: AuthStep<
       auth: true,
     },
   },
-  inputs: ['token', 'page', 'limit', 'actorId', 'targetId', 'action', 'targetType', 'dateFrom', 'dateTo', 'ipAddress', 'sortBy', 'sortOrder'],
+  inputs: [
+    'token',
+    'page',
+    'limit',
+    'actorId',
+    'targetId',
+    'action',
+    'targetType',
+    'dateFrom',
+    'dateTo',
+    'ipAddress',
+    'sortBy',
+    'sortOrder',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
@@ -89,7 +102,7 @@ export const viewAuditLogsStep: AuthStep<
       dateTo,
       ipAddress,
       sortBy = 'created_at',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
     } = input;
 
     // Check admin permissions
@@ -109,10 +122,11 @@ export const viewAuditLogsStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b: any) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b: any) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -216,7 +230,7 @@ export const viewAuditLogsStep: AuthStep<
       });
 
       // Format logs
-      const logs: AuditLogEntry[] = (auditLogs || []).map(log => ({
+      const logs: AuditLogEntry[] = (auditLogs || []).map((log) => ({
         id: log.id as string,
         actorId: log.actor_id as string,
         action: log.action as string,
@@ -244,7 +258,6 @@ export const viewAuditLogsStep: AuthStep<
         token,
         session.token,
       );
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {

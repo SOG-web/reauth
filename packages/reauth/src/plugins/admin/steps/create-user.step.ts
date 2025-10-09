@@ -8,7 +8,6 @@ import {
 import type { AdminConfig } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 import { ReAuthEngine } from '../../../engine';
-import { baseEmailOrUsernamePlugin } from '../../email-or-username';
 import { baseUsernamePasswordPlugin } from '../../username';
 import { baseEmailPasswordPlugin } from '../../email-password';
 

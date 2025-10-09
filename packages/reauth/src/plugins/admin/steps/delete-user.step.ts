@@ -8,13 +8,13 @@ import {
 import type { AdminConfig } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface DeleteUserInput {
+export type DeleteUserInput = {
   token: Token;
   userId: string;
   reason: string;
   hardDelete?: boolean; // false = soft delete, true = hard delete
   metadata?: Record<string, any>;
-}
+};
 
 export const deleteUserValidation = type({
   token: tokenType,
@@ -24,11 +24,11 @@ export const deleteUserValidation = type({
   'metadata?': 'object',
 });
 
-export interface DeleteUserOutput extends AuthOutput {
+export type DeleteUserOutput = {
   deleted?: boolean;
   deleteType?: 'soft' | 'hard';
   token?: Token;
-}
+} & AuthOutput;
 
 export const deleteUserStep: AuthStep<
   AdminConfig,
@@ -76,10 +76,11 @@ export const deleteUserStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b: any) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b: any) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -154,7 +155,6 @@ export const deleteUserStep: AuthStep<
         await orm.deleteMany('subjects', {
           where: (b: any) => b('id', '=', userId),
         });
-
       } else {
         // SOFT DELETE - Mark as deleted but keep data for audit/compliance
         await orm.updateMany('subjects', {
@@ -212,7 +212,6 @@ export const deleteUserStep: AuthStep<
         token,
         session.token,
       );
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {

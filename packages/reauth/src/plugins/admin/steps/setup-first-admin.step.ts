@@ -11,14 +11,14 @@ import { baseEmailPasswordPlugin } from '../../email-password';
 import { baseUsernamePasswordPlugin } from '../../username';
 import { baseEmailOrUsernamePlugin } from '../../email-or-username';
 
-export interface SetupFirstAdminInput {
+export type SetupFirstAdminInput = {
   email?: string;
   username?: string;
   password: string;
   setupKey?: string; // Optional setup key for additional security
   adminRole?: string; // Role to assign to the first admin
   metadata?: Record<string, any>;
-}
+};
 
 export const setupFirstAdminValidation = type({
   'email?': 'string',
@@ -29,12 +29,12 @@ export const setupFirstAdminValidation = type({
   'metadata?': 'object',
 });
 
-export interface SetupFirstAdminOutput extends AuthOutput {
+export type SetupFirstAdminOutput = {
   adminCreated?: boolean;
   adminId?: string;
   adminRole?: string;
   token?: Token;
-}
+} & AuthOutput;
 
 export const setupFirstAdminStep: AuthStep<
   AdminConfig,

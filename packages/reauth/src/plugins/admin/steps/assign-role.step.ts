@@ -8,7 +8,7 @@ import {
 import type { AdminConfig } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface AssignRoleInput {
+export type AssignRoleInput = {
   token: Token;
   userId: string;
   role: string;
@@ -16,7 +16,7 @@ export interface AssignRoleInput {
   expiresAt?: string; // ISO date string
   reason: string;
   metadata?: Record<string, any>;
-}
+};
 
 export const assignRoleValidation = type({
   token: tokenType,
@@ -28,11 +28,11 @@ export const assignRoleValidation = type({
   'metadata?': 'object',
 });
 
-export interface AssignRoleOutput extends AuthOutput {
+export type AssignRoleOutput = {
   roleAssigned?: boolean;
   roleId?: string;
   expiresAt?: string;
-}
+} & AuthOutput;
 
 export const assignRoleStep: AuthStep<
   AdminConfig,
@@ -50,7 +50,15 @@ export const assignRoleStep: AuthStep<
       auth: true,
     },
   },
-  inputs: ['token', 'userId', 'role', 'permissions', 'expiresAt', 'reason', 'metadata'],
+  inputs: [
+    'token',
+    'userId',
+    'role',
+    'permissions',
+    'expiresAt',
+    'reason',
+    'metadata',
+  ],
   outputs: type({
     success: 'boolean',
     message: 'string',
@@ -62,7 +70,15 @@ export const assignRoleStep: AuthStep<
     'token?': tokenType,
   }),
   async run(input, ctx) {
-    const { token, userId, role, permissions = [], expiresAt, reason, metadata } = input;
+    const {
+      token,
+      userId,
+      role,
+      permissions = [],
+      expiresAt,
+      reason,
+      metadata,
+    } = input;
 
     // Check admin permissions
     const session = await ctx.engine.checkSession(token);
@@ -77,10 +93,11 @@ export const assignRoleStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -97,7 +114,10 @@ export const assignRoleStep: AuthStep<
     }
 
     // Validate role
-    if (ctx.config?.availableRoles && !ctx.config.availableRoles.includes(role)) {
+    if (
+      ctx.config?.availableRoles &&
+      !ctx.config.availableRoles.includes(role)
+    ) {
       return attachNewTokenIfDifferent(
         {
           success: false,
@@ -130,10 +150,7 @@ export const assignRoleStep: AuthStep<
 
     // Check if user already has this role
     const existingRole = await orm.findFirst('subject_roles', {
-      where: (b) => b.and(
-        b('subject_id', '=', userId),
-        b('role', '=', role)
-      ),
+      where: (b) => b.and(b('subject_id', '=', userId), b('role', '=', role)),
     });
 
     if (existingRole) {
@@ -212,7 +229,6 @@ export const assignRoleStep: AuthStep<
         token,
         session.token,
       );
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {

@@ -8,13 +8,13 @@ import {
 import type { AdminConfig } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface RevokeRoleInput {
+export type RevokeRoleInput = {
   token: Token;
   userId: string;
   role: string;
   reason: string;
   metadata?: Record<string, any>;
-}
+};
 
 export const revokeRoleValidation = type({
   token: tokenType,
@@ -24,10 +24,10 @@ export const revokeRoleValidation = type({
   'metadata?': 'object',
 });
 
-export interface RevokeRoleOutput extends AuthOutput {
+export type RevokeRoleOutput = {
   roleRevoked?: boolean;
   roleId?: string;
-}
+} & AuthOutput;
 
 export const revokeRoleStep: AuthStep<
   AdminConfig,
@@ -71,10 +71,11 @@ export const revokeRoleStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -110,10 +111,7 @@ export const revokeRoleStep: AuthStep<
 
     // Check if user has this role
     const existingRole = await orm.findFirst('subject_roles', {
-      where: (b) => b.and(
-        b('subject_id', '=', userId),
-        b('role', '=', role)
-      ),
+      where: (b) => b.and(b('subject_id', '=', userId), b('role', '=', role)),
     });
 
     if (!existingRole) {
@@ -130,14 +128,17 @@ export const revokeRoleStep: AuthStep<
     }
 
     // Prevent admin from revoking their own admin role if they're the only admin
-    if (role === (ctx.config?.adminRole || 'admin') &&
-        session.subject!.id === userId) {
+    if (
+      role === (ctx.config?.adminRole || 'admin') &&
+      session.subject!.id === userId
+    ) {
       // Check if there are other admins
       const otherAdmins = await orm.findMany('subject_roles', {
-        where: (b) => b.and(
-          b('subject_id', '!=', userId),
-          b('role', '=', ctx.config?.adminRole || 'admin')
-        ),
+        where: (b) =>
+          b.and(
+            b('subject_id', '!=', userId),
+            b('role', '=', ctx.config?.adminRole || 'admin'),
+          ),
         limit: 1,
       });
 
@@ -200,7 +201,6 @@ export const revokeRoleStep: AuthStep<
         token,
         session.token,
       );
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {

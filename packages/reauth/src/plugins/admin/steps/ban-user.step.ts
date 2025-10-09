@@ -8,14 +8,14 @@ import {
 import type { AdminConfig } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface BanUserInput {
+export type BanUserInput = {
   token: Token;
   userId: string;
   reason: string;
   duration?: number; // in seconds, null for permanent
   banType?: 'temporary' | 'permanent';
   metadata?: Record<string, any>;
-}
+};
 
 export const banUserValidation = type({
   token: tokenType,
@@ -26,11 +26,11 @@ export const banUserValidation = type({
   'metadata?': 'object',
 });
 
-export interface BanUserOutput extends AuthOutput {
+export type BanUserOutput = {
   banned?: boolean;
   banExpiresAt?: string;
   previousStatus?: string;
-}
+} & AuthOutput;
 
 export const banUserStep: AuthStep<
   AdminConfig,
@@ -60,7 +60,14 @@ export const banUserStep: AuthStep<
     'token?': tokenType,
   }),
   async run(input, ctx) {
-    const { token, userId, reason, duration, banType = 'permanent', metadata } = input;
+    const {
+      token,
+      userId,
+      reason,
+      duration,
+      banType = 'permanent',
+      metadata,
+    } = input;
 
     // Check admin permissions
     const session = await ctx.engine.checkSession(token);
@@ -75,10 +82,11 @@ export const banUserStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -114,13 +122,11 @@ export const banUserStep: AuthStep<
 
     // Check if user is already banned
     const existingBan = await orm.findFirst('user_bans', {
-      where: (b) => b.and(
-        b('subject_id', '=', userId),
-        b.or(
-          b('expires_at', '>', new Date()),
-          b('expires_at', '=', null)
-        )
-      ),
+      where: (b) =>
+        b.and(
+          b('subject_id', '=', userId),
+          b.or(b('expires_at', '>', new Date()), b('expires_at', '=', null)),
+        ),
     });
 
     if (existingBan) {
@@ -199,7 +205,6 @@ export const banUserStep: AuthStep<
         token,
         session.token,
       );
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {

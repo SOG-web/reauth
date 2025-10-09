@@ -8,14 +8,14 @@ import {
 import type { AdminConfig } from '../types';
 import { attachNewTokenIfDifferent } from '../../../utils/token-utils';
 
-export interface UpdateUserInput {
+export type UpdateUserInput = {
   token: Token;
   userId: string;
   email?: string;
   username?: string;
   metadata?: Record<string, any>;
   isActive?: boolean;
-}
+};
 
 export const updateUserValidation = type({
   token: tokenType,
@@ -26,11 +26,11 @@ export const updateUserValidation = type({
   'isActive?': 'boolean',
 });
 
-export interface UpdateUserOutput extends AuthOutput {
+export type UpdateUserOutput = {
   userUpdated?: boolean;
   changes?: string[];
   token?: Token;
-}
+} & AuthOutput;
 
 export const updateUserStep: AuthStep<
   AdminConfig,
@@ -78,10 +78,11 @@ export const updateUserStep: AuthStep<
 
     const orm = await ctx.engine.getOrm();
     const adminRole = await orm.findFirst('subject_roles', {
-      where: (b: any) => b.and(
-        b('subject_id', '=', session.subject!.id),
-        b('role', '=', ctx.config?.adminRole || 'admin')
-      ),
+      where: (b: any) =>
+        b.and(
+          b('subject_id', '=', session.subject!.id),
+          b('role', '=', ctx.config?.adminRole || 'admin'),
+        ),
     });
 
     if (!adminRole) {
@@ -200,7 +201,6 @@ export const updateUserStep: AuthStep<
         token,
         session.token,
       );
-
     } catch (error) {
       return attachNewTokenIfDifferent(
         {
