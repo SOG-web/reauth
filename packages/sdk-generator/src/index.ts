@@ -272,7 +272,7 @@ function generateAxiosPluginCode(
   }
 
   pluginCode += `
-		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (api: AxiosInstance, getToken: () => Promise<string | null>, config: any) => ({
+		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (api: AxiosInstance, getToken: () => Promise<string | { accessToken: string; refreshToken: string } | null>, config: any) => ({
 			${stepMethods.join(',\n')}
 		});
 	`;
@@ -405,7 +405,7 @@ function generateFetchPluginCode(
   }
 
   pluginCode += `
-		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => Promise<string | null>, responseInterceptor?: (response: Response) => Promise<Response>) => ({
+		export const create${pluginName.charAt(0).toUpperCase() + pluginName.slice(1)}Endpoints = (config: any, getToken: () => Promise<string | { accessToken: string; refreshToken: string } | null>, responseInterceptor?: (response: Response) => Promise<Response>) => ({
 			${stepMethods.join(',\n')}
 		});
 	`;
@@ -475,7 +475,7 @@ function generateAxiosIndexCode(
 			auth?: {
 				type: 'localstorage' | 'sessionstorage' | 'cookie' | 'custom';
 				key?: string;
-				getToken?: () => Promise<string | { accessToken: string; refreshToken: string } | null> | string | { accessToken: string; refreshToken: string } | null;
+				getToken?: () => Promise<string | { accessToken: string; refreshToken: string } | null>;
 			}
 		}
 
@@ -601,7 +601,7 @@ function generateFetchIndexCode(
 			auth?: {
 				type: 'localstorage' | 'sessionstorage' | 'cookie' | 'custom';
 				key?: string;
-				getToken?: () => Promise<string | { accessToken: string; refreshToken: string } | null> | string | { accessToken: string; refreshToken: string } | null;
+				getToken?: () => Promise<string | { accessToken: string; refreshToken: string } | null>;
 			},
 			responseInterceptor?: (response: Response) => Promise<Response>;
 		}
