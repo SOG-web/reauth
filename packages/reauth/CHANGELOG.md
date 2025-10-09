@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.25
+
+### Minor Changes
+
+- [`8ac5dc6`](https://github.com/SOG-web/reauth/commit/8ac5dc6e59143e060bf0f3fe1c42a92e438fd77b) Thanks [@SOG-web](https://github.com/SOG-web)! - refactor: update interfaces to types in admin steps- Changed `interface` declarations to `type` for input and output types in various admin steps, enhancing consistency across the codebase.- Reformatted input arrays for better readability in `assign-role`, `ban-user`, `list-users`, `system-status`, and other steps.- Minor adjustments to ensure consistent code style and improve maintainability.
+
 ## 0.1.0-alpha.24
 
 ### Minor Changes
