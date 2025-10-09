@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.24
+
+### Minor Changes
+
+- [`227b180`](https://github.com/SOG-web/reauth/commit/227b1802d88c75bf00f5cbf4a3b5f81152f933db) Thanks [@SOG-web](https://github.com/SOG-web)! - feat: add admin plugin support and new changeset- Introduced support for the admin plugin in the reauth package, including type definitions and import paths.- Added a new changeset "ninety-ears-juggle" to the project.
+
 ## 0.1.0-alpha.23
 
 ### Minor Changes
