@@ -4,6 +4,7 @@ export type { UsernamePasswordConfig } from './types';
 import { loginStep } from './steps/login.step';
 import { registerStep } from './steps/register.step';
 import { changePasswordStep } from './steps/change-password.step';
+import { linkAccountStep } from './steps/link-account.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredCodes } from './utils';
 
@@ -67,6 +68,7 @@ export const baseUsernamePasswordPlugin = {
     loginStep,
     registerStep,
     changePasswordStep,
+    linkAccountStep,
     // Note: No verification steps since username doesn't require verification
     //TODO: Optional: Add reset steps if enableResetByUsername is implemented in the future
   ],

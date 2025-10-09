@@ -148,3 +148,52 @@ export function generateCredentialName(authenticatorType?: string): string {
   const type = authenticatorType || 'Security Key';
   return `${type} (${timestamp})`;
 }
+
+/**
+ * Generate a verification code for passwordless authentication
+ */
+export async function generateCode(
+  destination: string,
+  destinationType: 'phone' | 'email' | 'whatsapp',
+  config?: PasswordlessConfig,
+): Promise<string> {
+  const codeLength = config?.verificationCodeLength || 6;
+  const codeType = config?.verificationCodeType || 'numeric';
+
+  if (codeType === 'numeric') {
+    return Array(codeLength)
+      .fill(0)
+      .map(() => Math.floor(Math.random() * 10))
+      .join('');
+  }
+
+  if (codeType === 'alphanumeric') {
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    return Array(codeLength)
+      .fill(0)
+      .map(() => chars.charAt(Math.floor(Math.random() * chars.length)))
+      .join('');
+  }
+
+  // Default to numeric
+  return Array(codeLength)
+    .fill(0)
+    .map(() => Math.floor(Math.random() * 10))
+    .join('');
+}
+
+/**
+ * Clean up expired verification codes
+ */
+export async function cleanupExpiredVerificationCodes(
+  orm: OrmLike,
+): Promise<void> {
+  try {
+    const now = new Date();
+    await orm.deleteMany('verification_codes', {
+      where: (b: any) => b('expires_at', '<', now),
+    });
+  } catch (_) {
+    // Best effort cleanup; never block auth flows
+  }
+}

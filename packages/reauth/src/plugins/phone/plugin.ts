@@ -9,6 +9,7 @@ import { sendResetPasswordStep } from './steps/send-reset-password.step';
 import { resetPasswordStep } from './steps/reset-password.step';
 import { changePasswordStep } from './steps/change-password.step';
 import { changePhoneStep } from './steps/change-phone.step';
+import { linkAccountStep } from './steps/link-account.step';
 import { createAuthPlugin } from '../../utils/create-plugin';
 import { cleanupExpiredCodes } from './utils';
 
@@ -77,6 +78,7 @@ export const basePhonePasswordPlugin = {
     resetPasswordStep,
     changePasswordStep,
     changePhoneStep,
+    linkAccountStep,
   ],
   async getProfile(subjectId, ctx) {
     const orm = await ctx.engine.getOrm();

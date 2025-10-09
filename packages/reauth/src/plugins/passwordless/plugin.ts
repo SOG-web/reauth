@@ -3,6 +3,8 @@ import type { PasswordlessConfig } from './types';
 export type { PasswordlessConfig } from './types';
 import { sendMagicLinkStep } from './steps/send-magic-link.step';
 import { verifyMagicLinkStep } from './steps/verify-magic-link.step';
+import { sendCodeStep } from './steps/send-code.step';
+import { verifyCodeStep } from './steps/verify-code.step';
 import { registerWebAuthnStep } from './steps/register-webauthn.step';
 import { authenticateWebAuthnStep } from './steps/authenticate-webauthn.step';
 import { listCredentialsStep } from './steps/list-credentials.step';
@@ -81,6 +83,8 @@ export const basePasswordlessPlugin = {
   steps: [
     sendMagicLinkStep,
     verifyMagicLinkStep,
+    sendCodeStep,
+    verifyCodeStep,
     // registerWebAuthnStep,
     // authenticateWebAuthnStep,
     // listCredentialsStep,
@@ -179,9 +183,9 @@ const passwordlessPlugin = (
       const errs: string[] = [];
 
       // At least one authentication method must be enabled
-      if (!config.magicLinks && !config.webauthn) {
+      if (!config.magicLinks && !config.webauthn && !config.verificationCodes) {
         errs.push(
-          'At least one authentication method must be enabled. Set magicLinks: true or webauthn: true.',
+          'At least one authentication method must be enabled. Set magicLinks: true, webauthn: true, or verificationCodes: true.',
         );
       }
 
@@ -195,6 +199,13 @@ const passwordlessPlugin = (
       if (config.magicLinks && typeof config.sendMagicLink !== 'function') {
         errs.push(
           "magicLinks is true but 'sendMagicLink' function is not provided. Supply sendMagicLink(email, token, subject) in plugin config.",
+        );
+      }
+
+      // Verification codes validation
+      if (config.verificationCodes && typeof config.sendCode !== 'function') {
+        errs.push(
+          "verificationCodes is true but 'sendCode' function is not provided. Supply sendCode(destination, code, destinationType, purpose, subject) in plugin config.",
         );
       }
 
@@ -227,6 +238,16 @@ const passwordlessPlugin = (
         (config.magicLinkTtlMinutes <= 0 || config.magicLinkTtlMinutes > 1440)
       ) {
         errs.push('magicLinkTtlMinutes must be between 1 and 1440 (24 hours)');
+      }
+
+      if (
+        config.verificationCodeTtlMinutes &&
+        (config.verificationCodeTtlMinutes <= 0 ||
+          config.verificationCodeTtlMinutes > 60)
+      ) {
+        errs.push(
+          'verificationCodeTtlMinutes must be between 1 and 60 minutes',
+        );
       }
 
       // Validate cleanup configuration
