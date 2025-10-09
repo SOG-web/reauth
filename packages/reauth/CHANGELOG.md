@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.28
+
+### Minor Changes
+
+- [`683ab3f`](https://github.com/SOG-web/reauth/commit/683ab3f84dd8ffe1f715cc44f2ca19cdb3ce8ac9) Thanks [@SOG-web](https://github.com/SOG-web)! - feat: add unique constraint to client name in JWT schema and include new changeset "tangy-parents-begin"
+
 ## 0.1.0-alpha.27
 
 ### Minor Changes
