@@ -34,6 +34,45 @@ interface HttpConfig {
   };
 }
 
+// Helper function to extract access token from various token formats
+function extractAccessToken(
+  token: string | { accessToken: string; refreshToken: string } | null,
+): string | null {
+  if (!token) return null;
+  if (typeof token === 'string') {
+    // Try to parse JSON in case it's a stringified token object
+    try {
+      const parsed = JSON.parse(token);
+      if (parsed && typeof parsed === 'object' && 'accessToken' in parsed) {
+        return parsed.accessToken;
+      }
+    } catch {
+      // Not JSON, return as is
+    }
+    return token;
+  }
+  return token.accessToken;
+}
+
+// Helper function to extract refresh token from various token formats
+function extractRefreshToken(
+  token: string | { accessToken: string; refreshToken: string } | null,
+): string | null {
+  if (!token) return null;
+  if (typeof token === 'string') {
+    try {
+      const parsed = JSON.parse(token);
+      if (parsed && typeof parsed === 'object' && 'refreshToken' in parsed) {
+        return parsed.refreshToken;
+      }
+    } catch {
+      // Not JSON, no refresh token in plain string
+    }
+    return null;
+  }
+  return token.refreshToken;
+}
+
 type HttpClient = 'axios' | 'fetch';
 
 program
@@ -125,9 +164,9 @@ async function generate(options: {
     // Generate main index.ts
     let indexCode: string;
     if (options.client === 'axios') {
-      indexCode = generateAxiosIndexCode(pluginFileNames, tokenConfig);
+      indexCode = generateAxiosIndexCode(pluginFileNames, httpConfig);
     } else {
-      indexCode = generateFetchIndexCode(pluginFileNames, tokenConfig);
+      indexCode = generateFetchIndexCode(pluginFileNames, httpConfig);
     }
 
     const formattedIndexCode = await prettier.format(indexCode, {
@@ -169,15 +208,29 @@ function generateAxiosPluginCode(
     pluginCode += `export ${jsonSchemaToZod(step.outputs, { name: outputSchemaName })}\n\n`;
 
     const endpoint = `${basePath}/${plugin.name}/${step.name}`;
+    const useBearer = tokenConfig?.header?.useBearer ?? true;
+    const accessTokenHeader =
+      tokenConfig?.header?.accessTokenHeader ?? 'Authorization';
+    const refreshTokenHeader =
+      tokenConfig?.header?.refreshTokenHeader ?? 'X-Refresh-Token';
+
     const apiPostLogic = step.requiresAuth
       ? `
 				const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
 				if (callbacks?.interceptors?.request) {
 					callbacks.interceptors.request(requestConfig);
 				}
-				const token = await getToken();
-				if (token) {
-					requestConfig.headers = { ...requestConfig.headers, Authorization: \`Bearer \${token}\` };
+				const rawToken = await getToken();
+				if (rawToken) {
+					const accessToken = extractAccessToken(rawToken);
+					const refreshToken = extractRefreshToken(rawToken);
+					if (accessToken) {
+						const authValue = ${useBearer ? '`Bearer ${accessToken}`' : 'accessToken'};
+						requestConfig.headers = { ...requestConfig.headers, '${accessTokenHeader}': authValue };
+					}
+					if (refreshToken) {
+						requestConfig.headers = { ...requestConfig.headers, '${refreshTokenHeader}': refreshToken };
+					}
 				}
 				const response = await api.post('${endpoint}', payload, requestConfig);`
       : `const requestConfig: AxiosRequestConfig = { ...config.axiosConfig };
@@ -249,15 +302,29 @@ function generateFetchPluginCode(
     pluginCode += `export ${jsonSchemaToZod(step.outputs, { name: outputSchemaName })}\n\n`;
 
     const endpoint = `${basePath}/${plugin.name}/${step.name}`;
+    const useBearer = tokenConfig?.header?.useBearer ?? true;
+    const accessTokenHeader =
+      tokenConfig?.header?.accessTokenHeader ?? 'Authorization';
+    const refreshTokenHeader =
+      tokenConfig?.header?.refreshTokenHeader ?? 'X-Refresh-Token';
+
     const apiPostLogic = step.requiresAuth
       ? `
-				const token = await getToken();
+				const rawToken = await getToken();
 				const headers: Record<string, string> = {
 					'Content-Type': 'application/json',
 					...config.headers,
 				};
-				if (token) {
-					headers.Authorization = \`Bearer \${token}\`;
+				if (rawToken) {
+					const accessToken = extractAccessToken(rawToken);
+					const refreshToken = extractRefreshToken(rawToken);
+					if (accessToken) {
+						const authValue = ${useBearer ? '`Bearer ${accessToken}`' : 'accessToken'};
+						headers['${accessTokenHeader}'] = authValue;
+					}
+					if (refreshToken) {
+						headers['${refreshTokenHeader}'] = refreshToken;
+					}
 				}
 
 				let request: RequestInit = {
@@ -348,11 +415,15 @@ function generateFetchPluginCode(
 
 function generateAxiosIndexCode(
   pluginFileNames: string[],
-  tokenConfig?: HttpConfig['tokenConfig'],
+  httpConfig?: HttpConfig,
 ): string {
+  const tokenConfig = httpConfig?.tokenConfig;
   let indexCode = `
 		import axios from 'axios';
 		import type { AxiosInstance, AxiosRequestConfig } from 'axios';
+
+		// Export HTTP configuration from introspection
+		export const httpConfig = ${JSON.stringify(httpConfig, null, 2)};
 	`;
 
   for (const fileName of pluginFileNames) {
@@ -362,6 +433,41 @@ function generateAxiosIndexCode(
   }
 
   indexCode += `
+		// Helper function to extract access token from various token formats
+		function extractAccessToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
+			if (!token) return null;
+			if (typeof token === 'string') {
+				// Try to parse JSON in case it's a stringified token object
+				try {
+					const parsed = JSON.parse(token);
+					if (parsed && typeof parsed === 'object' && 'accessToken' in parsed) {
+						return parsed.accessToken;
+					}
+				} catch {
+					// Not JSON, return as is
+				}
+				return token;
+			}
+			return token.accessToken;
+		}
+
+		// Helper function to extract refresh token from various token formats
+		function extractRefreshToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
+			if (!token) return null;
+			if (typeof token === 'string') {
+				try {
+					const parsed = JSON.parse(token);
+					if (parsed && typeof parsed === 'object' && 'refreshToken' in parsed) {
+						return parsed.refreshToken;
+					}
+				} catch {
+					// Not JSON, no refresh token in plain string
+				}
+				return null;
+			}
+			return token.refreshToken;
+		}
+
 		interface AuthClientConfig {
 			baseURL?: string;
 			axiosInstance?: AxiosInstance;
@@ -369,7 +475,7 @@ function generateAxiosIndexCode(
 			auth?: {
 				type: 'localstorage' | 'sessionstorage' | 'cookie' | 'custom';
 				key?: string;
-				getToken?: () => Promise<string | null> | string | null;
+				getToken?: () => Promise<string | { accessToken: string; refreshToken: string } | null> | string | { accessToken: string; refreshToken: string } | null;
 			}
 		}
 
@@ -388,11 +494,18 @@ function generateAxiosIndexCode(
 				if (!config.auth || typeof window === 'undefined' || config.auth.type === 'cookie') return null;
 				const { type, key, getToken: customGetToken } = config.auth;
 				if (customGetToken) {
-					return await customGetToken();
+					const token = await customGetToken();
+					return extractAccessToken(token);
 				}
 				switch (type) {
-					case 'localstorage': return localStorage.getItem(key || 'reauth-token');
-					case 'sessionstorage': return sessionStorage.getItem(key || 'reauth-token');
+					case 'localstorage': {
+						const token = localStorage.getItem(key || 'reauth-token');
+						return extractAccessToken(token);
+					}
+					case 'sessionstorage': {
+						const token = sessionStorage.getItem(key || 'reauth-token');
+						return extractAccessToken(token);
+					}
 					default: return null;
 				}
 			};
@@ -422,10 +535,12 @@ function generateAxiosIndexCode(
 
 function generateFetchIndexCode(
   pluginFileNames: string[],
-  tokenConfig?: HttpConfig['tokenConfig'],
+  httpConfig?: HttpConfig,
 ): string {
+  const tokenConfig = httpConfig?.tokenConfig;
   let indexCode = `
-		
+		// Export HTTP configuration from introspection
+		export const httpConfig = ${JSON.stringify(httpConfig, null, 2)};
 	`;
 
   for (const fileName of pluginFileNames) {
@@ -435,6 +550,41 @@ function generateFetchIndexCode(
   }
 
   indexCode += `
+		// Helper function to extract access token from various token formats
+		function extractAccessToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
+			if (!token) return null;
+			if (typeof token === 'string') {
+				// Try to parse JSON in case it's a stringified token object
+				try {
+					const parsed = JSON.parse(token);
+					if (parsed && typeof parsed === 'object' && 'accessToken' in parsed) {
+						return parsed.accessToken;
+					}
+				} catch {
+					// Not JSON, return as is
+				}
+				return token;
+			}
+			return token.accessToken;
+		}
+
+		// Helper function to extract refresh token from various token formats
+		function extractRefreshToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
+			if (!token) return null;
+			if (typeof token === 'string') {
+				try {
+					const parsed = JSON.parse(token);
+					if (parsed && typeof parsed === 'object' && 'refreshToken' in parsed) {
+						return parsed.refreshToken;
+					}
+				} catch {
+					// Not JSON, no refresh token in plain string
+				}
+				return null;
+			}
+			return token.refreshToken;
+		}
+
 		interface AuthClientConfig {
 			baseURL: string;
 			headers?: Record<string, string>;
@@ -442,7 +592,7 @@ function generateFetchIndexCode(
 			auth?: {
 				type: 'localstorage' | 'sessionstorage' | 'cookie' | 'custom';
 				key?: string;
-				getToken?: () => Promise<string | null> | string | null;
+				getToken?: () => Promise<string | { accessToken: string; refreshToken: string } | null> | string | { accessToken: string; refreshToken: string } | null;
 			},
 			responseInterceptor?: (response: Response) => Promise<Response>;
 		}
@@ -456,11 +606,18 @@ function generateFetchIndexCode(
 				if (!config.auth) return null;
 				const { type, key, getToken: customGetToken } = config.auth;
 				if (customGetToken) {
-					return await customGetToken();
+					const token = await customGetToken();
+					return extractAccessToken(token);
 				}
 				switch (type) {
-					case 'localstorage': return localStorage.getItem(key || 'reauth-token');
-					case 'sessionstorage': return sessionStorage.getItem(key || 'reauth-token');
+					case 'localstorage': {
+						const token = localStorage.getItem(key || 'reauth-token');
+						return extractAccessToken(token);
+					}
+					case 'sessionstorage': {
+						const token = sessionStorage.getItem(key || 'reauth-token');
+						return extractAccessToken(token);
+					}
 					default: return null;
 				}
 			};
