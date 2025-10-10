@@ -1,5 +1,11 @@
 # @re-auth/sdk-generator
 
+## 0.1.0-alpha.15
+
+### Minor Changes
+
+- [`fe06fa6`](https://github.com/SOG-web/reauth/commit/fe06fa655378f75962445cdec615bb654a6f219c) Thanks [@SOG-web](https://github.com/SOG-web)! - cor
+
 ## 0.1.0-alpha.14
 
 ### Minor Changes
