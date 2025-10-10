@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.32
+
+### Minor Changes
+
+- [`f8cb696`](https://github.com/SOG-web/reauth/commit/f8cb6964579edf1b158a3da1f9dbf5a9ec2df66f) Thanks [@SOG-web](https://github.com/SOG-web)! - feat(types): introduce AllStepInputs and AllStepOutputs types for improved plugin step handling
+
 ## 0.1.0-alpha.31
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@re-auth/reauth",
-  "version": "0.1.0-alpha.31",
+  "version": "0.1.0-alpha.32",
   "description": "Runtime, framework, and protocol-independent authentication engine for TypeScript/JavaScript applications with plugin-based architecture",
   "type": "module",
   "main": "./dist/index.cjs",
