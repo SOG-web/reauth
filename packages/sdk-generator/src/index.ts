@@ -34,45 +34,6 @@ interface HttpConfig {
   };
 }
 
-// Helper function to extract access token from various token formats
-function extractAccessToken(
-  token: string | { accessToken: string; refreshToken: string } | null,
-): string | null {
-  if (!token) return null;
-  if (typeof token === 'string') {
-    // Try to parse JSON in case it's a stringified token object
-    try {
-      const parsed = JSON.parse(token);
-      if (parsed && typeof parsed === 'object' && 'accessToken' in parsed) {
-        return parsed.accessToken;
-      }
-    } catch {
-      // Not JSON, return as is
-    }
-    return token;
-  }
-  return token.accessToken;
-}
-
-// Helper function to extract refresh token from various token formats
-function extractRefreshToken(
-  token: string | { accessToken: string; refreshToken: string } | null,
-): string | null {
-  if (!token) return null;
-  if (typeof token === 'string') {
-    try {
-      const parsed = JSON.parse(token);
-      if (parsed && typeof parsed === 'object' && 'refreshToken' in parsed) {
-        return parsed.refreshToken;
-      }
-    } catch {
-      // Not JSON, no refresh token in plain string
-    }
-    return null;
-  }
-  return token.refreshToken;
-}
-
 type HttpClient = 'axios' | 'fetch';
 
 program
@@ -400,7 +361,7 @@ function generateFetchPluginCode(
 						processedResponse = await callbacks.interceptors.response(response);
 					}
 					const responseData = await processedResponse.json();
-					const data = ${outputSchemaName}.parse(responseData);
+					const data = ${outputSchemaName}.parse(responseData.data);
 					await callbacks?.onSuccess?.(data);
 					return { data, error: null };
 				} catch (error: any) {
@@ -441,40 +402,7 @@ function generateAxiosIndexCode(
   }
 
   indexCode += `
-		// Helper function to extract access token from various token formats
-		function extractAccessToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
-			if (!token) return null;
-			if (typeof token === 'string') {
-				// Try to parse JSON in case it's a stringified token object
-				try {
-					const parsed = JSON.parse(token);
-					if (parsed && typeof parsed === 'object' && 'accessToken' in parsed) {
-						return parsed.accessToken;
-					}
-				} catch {
-					// Not JSON, return as is
-				}
-				return token;
-			}
-			return token.accessToken;
-		}
-
-		// Helper function to extract refresh token from various token formats
-		function extractRefreshToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
-			if (!token) return null;
-			if (typeof token === 'string') {
-				try {
-					const parsed = JSON.parse(token);
-					if (parsed && typeof parsed === 'object' && 'refreshToken' in parsed) {
-						return parsed.refreshToken;
-					}
-				} catch {
-					// Not JSON, no refresh token in plain string
-				}
-				return null;
-			}
-			return token.refreshToken;
-		}
+		
 
 		interface AuthClientConfig {
 			baseURL?: string;
@@ -556,8 +484,7 @@ function generateFetchIndexCode(
 ): string {
   const tokenConfig = httpConfig?.tokenConfig;
   let indexCode = `
-		// Export HTTP configuration from introspection
-		export const httpConfig = ${JSON.stringify(httpConfig, null, 2)};
+		
 	`;
 
   for (const fileName of pluginFileNames) {
@@ -567,40 +494,8 @@ function generateFetchIndexCode(
   }
 
   indexCode += `
-		// Helper function to extract access token from various token formats
-		function extractAccessToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
-			if (!token) return null;
-			if (typeof token === 'string') {
-				// Try to parse JSON in case it's a stringified token object
-				try {
-					const parsed = JSON.parse(token);
-					if (parsed && typeof parsed === 'object' && 'accessToken' in parsed) {
-						return parsed.accessToken;
-					}
-				} catch {
-					// Not JSON, return as is
-				}
-				return token;
-			}
-			return token.accessToken;
-		}
-
-		// Helper function to extract refresh token from various token formats
-		function extractRefreshToken(token: string | { accessToken: string; refreshToken: string } | null): string | null {
-			if (!token) return null;
-			if (typeof token === 'string') {
-				try {
-					const parsed = JSON.parse(token);
-					if (parsed && typeof parsed === 'object' && 'refreshToken' in parsed) {
-						return parsed.refreshToken;
-					}
-				} catch {
-					// Not JSON, no refresh token in plain string
-				}
-				return null;
-			}
-			return token.refreshToken;
-		}
+		// Export HTTP configuration from introspection
+		export const httpConfig = ${JSON.stringify(httpConfig, null, 2)};
 
 		interface AuthClientConfig {
 			baseURL: string;
