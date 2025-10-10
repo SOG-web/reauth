@@ -1,5 +1,11 @@
 # @re-auth/http-adapters
 
+## 1.0.0-alpha.32
+
+### Minor Changes
+
+- [`836aff2`](https://github.com/SOG-web/reauth/commit/836aff25addcd0ada4e68368c01531817cb34243) Thanks [@SOG-web](https://github.com/SOG-web)! - feat(http-adapters): add detailed logging for token extraction and session validation
+
 ## 1.0.0-alpha.31
 
 ### Patch Changes
