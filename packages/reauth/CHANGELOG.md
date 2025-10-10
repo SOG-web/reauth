@@ -1,5 +1,11 @@
 # @re-auth/reauth
 
+## 0.1.0-alpha.33
+
+### Minor Changes
+
+- [`0cad477`](https://github.com/SOG-web/reauth/commit/0cad477cbb903245f9542ddf23a4149455eea640) Thanks [@SOG-web](https://github.com/SOG-web)! - refactor(types): replace AllStepInputs and AllStepOutputs with more specific StepInput and StepOutput types for enhanced type safety
+
 ## 0.1.0-alpha.32
 
 ### Minor Changes
