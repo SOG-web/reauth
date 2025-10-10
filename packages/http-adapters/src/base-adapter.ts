@@ -451,17 +451,37 @@ export class ReAuthHttpAdapter {
     }
 
     if (!accessToken) {
+      console.log(
+        'no access token in extractSessionToken',
+        req.path,
+        req.headers,
+      );
       return null;
     }
 
     if (accessToken && refreshToken) {
+      console.log(
+        'access token and refresh token in extractSessionToken',
+        req.path,
+        req.headers,
+      );
       return { accessToken, refreshToken };
     }
 
     if (accessToken && !refreshToken) {
+      console.log(
+        'access token and no refresh token in extractSessionToken',
+        req.path,
+        req.headers,
+      );
       return accessToken;
     }
 
+    console.log(
+      'no access token or refresh token in extractSessionToken',
+      req.path,
+      req.headers,
+    );
     return null;
   }
 
@@ -512,6 +532,7 @@ export class ReAuthHttpAdapter {
     const token = this.extractSessionToken(req);
 
     if (!token) {
+      console.log('no token in getCurrentUser', req.path, req.headers);
       return null;
     }
 
@@ -519,6 +540,10 @@ export class ReAuthHttpAdapter {
       const session = await this.engine.checkSession(token, deviceInfo);
 
       if (!session.valid || !session.subject) {
+        console.log(
+          'session is not valid or subject is not found',
+          req.headers,
+        );
         return null;
       }
 
@@ -533,6 +558,7 @@ export class ReAuthHttpAdapter {
       };
     } catch (error) {
       // Silently return null if session check fails
+      console.log('session check failed', req.headers, error);
       return null;
     }
   }
@@ -547,6 +573,12 @@ export class ReAuthHttpAdapter {
     const user = await this.getCurrentUser(req, deviceInfo);
 
     if (!user) {
+      console.log(
+        'no user in requireAuthentication',
+        req.path,
+        req.headers,
+        user,
+      );
       throw new AuthenticationError('Authentication required');
     }
 
