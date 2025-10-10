@@ -198,6 +198,20 @@ export type StepOutput<
     ? O
     : AuthOutput;
 
+// Union type for all possible step inputs across all plugins
+export type AllStepInputs<P extends AuthPlugin[]> = {
+  [K in PluginNames<P>]: {
+    [S in StepsForPlugin<P, K>]: StepInput<P, K, S>;
+  }[StepsForPlugin<P, K>];
+}[PluginNames<P>];
+
+// Union type for all possible step outputs across all plugins
+export type AllStepOutputs<P extends AuthPlugin[]> = {
+  [K in PluginNames<P>]: {
+    [S in StepsForPlugin<P, K>]: StepOutput<P, K, S>;
+  }[StepsForPlugin<P, K>];
+}[PluginNames<P>];
+
 // Typed list of input keys allowed for a step definition
 export type StepInputKeys<I = AuthInput> = ReadonlyArray<
   Extract<keyof I, string>
@@ -235,15 +249,15 @@ export interface AuthHook<
   session?: boolean; // marks this as a session-level hook
   universal?: boolean; // applies to all plugins/steps
   fn: (
-    data: StepInput<P, PN, SN> | StepOutput<P, PN, SN> | AuthInput | AuthOutput,
+    data: AllStepInputs<P> | AllStepOutputs<P> | AuthInput | AuthOutput,
     container: ReAuthCradle,
     error?: unknown,
     pluginName?: string,
     stepName?: string,
   ) =>
-    | Promise<StepInput<P, PN, SN> | StepOutput<P, PN, SN> | void>
-    | StepInput<P, PN, SN>
-    | StepOutput<P, PN, SN>
+    | Promise<AllStepInputs<P> | AllStepOutputs<P> | void>
+    | AllStepInputs<P>
+    | AllStepOutputs<P>
     | void;
 }
 
