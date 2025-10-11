@@ -254,6 +254,7 @@ import createReAuthEngine, {
   reauthDb,
   reauthDbVersions,
 } from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import emailPasswordPlugin, {
   emailPasswordSchema,
@@ -267,11 +268,21 @@ const client = factory.client(
   kyselyAdapter({ provider: 'sqlite', db: kysely }),
 );
 
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'MyApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'plugin'],
+  timestampFormat: 'human',
+  emojis: true,
+});
+
 export const engine = createReAuthEngine({
   dbClient: {
     version: async () => await client.version(),
     orm: (version: any) => client.orm(version),
   },
+  logger: logger, // Required logger instance
   plugins: [
     emailPasswordPlugin({
       sessionTtlSeconds: 3600, // 1 hour sessions
@@ -288,7 +299,8 @@ export const engine = createReAuthEngine({
       type: 'before',
       universal: true,
       fn: async (input, container) => {
-        console.log('Before any auth flow');
+        const logger = container.resolve('logger');
+        logger.info('engine', 'Before any auth flow', { input });
         return input;
       },
     },
@@ -298,7 +310,8 @@ export const engine = createReAuthEngine({
     {
       type: 'after',
       fn: async (data, container) => {
-        console.log('After session created');
+        const logger = container.resolve('logger');
+        logger.info('session', 'After session created', { data });
         return data;
       },
     },
@@ -317,6 +330,7 @@ export const engine = createReAuthEngine({
 **Key Configuration Options:**
 
 - `dbClient`: FumaDB client for database operations
+- `logger`: Logger instance for structured logging (required)
 - `plugins`: Authentication flows that extend the engine
 - `authHooks`: Engine-level hooks that run for all authentication flows
 - `sessionHooks`: Hooks that run during session creation/verification
@@ -379,23 +393,25 @@ ReAuth provides a flexible hooks system at three levels:
     
     Global hooks that run for all authentication flows:
     
-    ```ts
-    const engine = createReAuthEngine({
-      dbClient,
-      authHooks: [
-        {
-          type: 'before',
-          universal: true,
-          fn: async (input, container) => {
-            // Rate limiting, logging, etc.
-            console.log('Before any auth step');
-            return input;
-          },
-        },
-      ],
-      getUserData: async (subjectId, orm) => ({}),
-    });
-    ```
+```ts
+const engine = createReAuthEngine({
+  dbClient,
+  logger,
+  authHooks: [
+    {
+      type: 'before',
+      universal: true,
+      fn: async (input, container) => {
+        // Rate limiting, logging, etc.
+        const logger = container.resolve('logger');
+        logger.info('engine', 'Before any auth step', { input });
+        return input;
+      },
+    },
+  ],
+  getUserData: async (subjectId, orm) => ({}),
+});
+```
   </Step>
   
   <Step>
@@ -403,28 +419,31 @@ ReAuth provides a flexible hooks system at three levels:
     
     Hooks that run for all steps within a plugin:
     
-    ```ts
-    const myPlugin = {
-      name: 'my-plugin',
-      rootHooks: {
-        before: async (input, ctx, step) => {
-          // Pre-process input for all plugin steps
-          console.log(`Executing step: ${step.name}`);
-          return input;
-        },
-        after: async (output, ctx, step) => {
-          // Post-process output
-          console.log(`Completed step: ${step.name}`);
-          return output;
-        },
-        onError: async (error, input, ctx, step) => {
-          // Handle errors
-          console.error(`Error in ${step.name}:`, error);
-        },
-      },
-      steps: [/* ... */],
-    };
-    ```
+```ts
+const myPlugin = {
+  name: 'my-plugin',
+  rootHooks: {
+    before: async (input, ctx, step) => {
+      // Pre-process input for all plugin steps
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.info('plugin', `Executing step: ${step.name}`, { input });
+      return input;
+    },
+    after: async (output, ctx, step) => {
+      // Post-process output
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.info('plugin', `Completed step: ${step.name}`, { output });
+      return output;
+    },
+    onError: async (error, input, ctx, step) => {
+      // Handle errors
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.error('plugin', `Error in ${step.name}`, { error, input });
+    },
+  },
+  steps: [/* ... */],
+};
+```
   </Step>
   
   <Step>
@@ -432,28 +451,31 @@ ReAuth provides a flexible hooks system at three levels:
     
     Hooks specific to individual steps:
     
-    ```ts
-    const registerStep = {
-      name: 'register',
-      hooks: {
-        before: async (input, ctx) => {
-          // Step-specific pre-processing
-          console.log('Before registration');
-        },
-        after: async (output, ctx) => {
-          // Step-specific post-processing  
-          console.log('After registration');
-        },
-        onError: async (error, ctx) => {
-          // Step-specific error handling
-          console.error('Registration failed:', error);
-        },
-      },
-      async run(input, ctx) {
-        // Step implementation
-      },
-    };
-    ```
+```ts
+const registerStep = {
+  name: 'register',
+  hooks: {
+    before: async (input, ctx) => {
+      // Step-specific pre-processing
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.info('step', 'Before registration', { input });
+    },
+    after: async (output, ctx) => {
+      // Step-specific post-processing  
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.info('step', 'After registration', { output });
+    },
+    onError: async (error, ctx) => {
+      // Step-specific error handling
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.error('step', 'Registration failed', { error });
+    },
+  },
+  async run(input, ctx) {
+    // Step implementation
+  },
+};
+```
   </Step>
   
   <Step>
@@ -461,22 +483,25 @@ ReAuth provides a flexible hooks system at three levels:
     
     Special hooks for session lifecycle:
     
-    ```ts
-    const engine = createReAuthEngine({
-      dbClient,
-      sessionHooks: [
-        {
-          type: 'after',
-          fn: async (data, container) => {
-            // Track session creation
-            analytics.track('session_created', { userId: data.subject?.id });
-            return data;
-          },
-        },
-      ],
-      getUserData: async (subjectId, orm) => ({}),
-    });
-    ```
+```ts
+const engine = createReAuthEngine({
+  dbClient,
+  logger,
+  sessionHooks: [
+    {
+      type: 'after',
+      fn: async (data, container) => {
+        // Track session creation
+        const logger = container.resolve('logger');
+        logger.info('session', 'Session created', { userId: data.subject?.id });
+        analytics.track('session_created', { userId: data.subject?.id });
+        return data;
+      },
+    },
+  ],
+  getUserData: async (subjectId, orm) => ({}),
+});
+```
   </Step>
 </Steps>
 
@@ -570,12 +595,19 @@ ReAuth provides multiple ways to monitor and observe authentication flows:
 ```ts
 const engine = createReAuthEngine({
   dbClient,
+  logger,
   authHooks: [
     {
       type: 'before',
       universal: true,
       fn: async (input, container) => {
         // Log all authentication attempts
+        const logger = container.resolve('logger');
+        logger.info('engine', 'Authentication attempt', {
+          plugin: input.pluginName,
+          step: input.stepName,
+          timestamp: new Date().toISOString(),
+        });
         telemetry.track('auth.attempt', {
           plugin: input.pluginName,
           step: input.stepName,
@@ -590,6 +622,11 @@ const engine = createReAuthEngine({
       type: 'after',
       fn: async (data, container) => {
         // Track session creation
+        const logger = container.resolve('logger');
+        logger.info('session', 'Session created', {
+          userId: data.subject?.id,
+          timestamp: new Date().toISOString(),
+        });
         telemetry.track('session.created', {
           userId: data.subject?.id,
           timestamp: new Date().toISOString(),
@@ -610,6 +647,13 @@ const myPlugin = {
   rootHooks: {
     onError: async (error, input, ctx, step) => {
       // Log plugin-specific errors
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.error('plugin', 'Plugin error', {
+        plugin: 'my-plugin',
+        step: step.name,
+        userId: input.subject?.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       monitoring.captureError(error, {
         plugin: 'my-plugin',
         step: step.name,
@@ -635,6 +679,12 @@ engine.registerCleanupTask({
     const result = await cleanupExpiredTokens(orm);
 
     // Log cleanup results
+    const logger = engine.getContainer().resolve('logger');
+    logger.info('cleanup', 'Cleanup task completed', {
+      task: 'expired-tokens',
+      cleaned: result.cleaned,
+      errors: result.errors?.length || 0,
+    });
     telemetry.track('cleanup.completed', {
       task: 'expired-tokens',
       cleaned: result.cleaned,

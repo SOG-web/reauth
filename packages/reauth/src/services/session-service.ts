@@ -12,11 +12,13 @@ import type { ReAuthJWTPayload, TokenPair } from './jwt.types';
 import { EnhancedJWKSService } from './jwt-service';
 import { JWK } from 'jose';
 import { generateSessionToken } from '../lib';
+import type { LoggerInterface } from '@re-auth/logger';
 
 export class FumaSessionService implements SessionService {
   private enhancedMode = false;
   private jwtService: EnhancedJWKSService | null = null;
   private useJwks: boolean = false;
+  private logger: LoggerInterface;
 
   constructor(
     private dbClient: FumaClient,
@@ -27,7 +29,17 @@ export class FumaSessionService implements SessionService {
       orm: OrmLike,
     ) => Promise<Record<string, any>>,
     private options: SessionServiceOptions = {},
-  ) {}
+    logger?: LoggerInterface,
+  ) {
+    this.logger = logger || {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      success: () => {},
+      setEnabledTags: () => {},
+      destroy: () => {},
+    };
+  }
 
   // Enable JWKS functionality
   enableJWKS(options: {
@@ -46,6 +58,7 @@ export class FumaSessionService implements SessionService {
       options.defaultAccessTokenTtlSeconds,
       options.defaultRefreshTokenTtlSeconds,
       options.enableRefreshTokenRotation,
+      this.logger,
     );
     this.useJwks = true;
     this.jwtService.generateKeyPair();
@@ -306,14 +319,18 @@ export class FumaSessionService implements SessionService {
     const accessToken = typeof token === 'string' ? token : token.accessToken;
     const refreshToken = typeof token === 'string' ? null : token.refreshToken;
 
-    console.log('accessToken', accessToken);
+    this.logger.info('session', 'Verifying session token', {
+      accessToken: accessToken ? 'present' : 'missing',
+    });
 
     // Always check session table first for unified management
     let session = await orm.findFirst('sessions', {
       where: (b: any) => b('token', '=', accessToken),
     });
 
-    console.log('session- from db', session);
+    this.logger.info('session', 'Session found in database', {
+      sessionId: session?.id,
+    });
 
     if (!session) {
       return { subject: null, token: null };
@@ -352,12 +369,12 @@ export class FumaSessionService implements SessionService {
       }
     }
 
-    console.log('session- after db', {
+    this.logger.info('session', 'Session validation complete', {
       needsRefresh,
       sessionExpired,
       isJWT,
-      payload,
-      storedDeviceInfo: storedDeviceInfo ? 'present' : 'none',
+      hasPayload: !!payload,
+      hasStoredDeviceInfo: !!storedDeviceInfo,
     });
 
     // Try JWT verification first (for optimization)
@@ -372,11 +389,11 @@ export class FumaSessionService implements SessionService {
       }
     }
 
-    console.log('session- after jwt', {
+    this.logger.info('session', 'JWT verification complete', {
       needsRefresh,
       sessionExpired,
       isJWT,
-      payload,
+      hasPayload: !!payload,
     });
 
     // Device validation for all token types (JWT uses payload, legacy uses stored device info)
@@ -395,7 +412,8 @@ export class FumaSessionService implements SessionService {
         if (
           !(await this.options.deviceValidator(deviceToValidate, deviceInfo))
         ) {
-          console.log(
+          this.logger.warn(
+            'session',
             `Device validation failed for ${isJWT ? 'JWT' : 'legacy'} token`,
           );
           return { subject: null, token: null };
@@ -492,7 +510,9 @@ export class FumaSessionService implements SessionService {
 
         const resolver = this.resolvers.get(finalSubjectType);
         if (!resolver) {
-          console.log('resolver not found', finalSubjectType);
+          this.logger.warn('session', 'Resolver not found for subject type', {
+            subjectType: finalSubjectType,
+          });
           return {
             subject: null,
             token: updatedToken,
@@ -521,7 +541,7 @@ export class FumaSessionService implements SessionService {
           payload,
         };
       } catch (refreshError) {
-        console.log('refresh failed', refreshError);
+        this.logger.error('session', 'Token refresh failed', refreshError);
         await orm.deleteMany('sessions', {
           where: (b: any) => b('token', '=', accessToken),
         });
@@ -552,9 +572,10 @@ export class FumaSessionService implements SessionService {
 
     const resolver = this.resolvers.get(finalSubjectType);
     if (!resolver) {
-      console.log(
-        'resolver not found - after not exp and not ref',
-        finalSubjectType,
+      this.logger.warn(
+        'session',
+        'Resolver not found after session validation',
+        { subjectType: finalSubjectType },
       );
       return {
         subject: null,
@@ -565,9 +586,9 @@ export class FumaSessionService implements SessionService {
     }
 
     const subject = await resolver.getById(finalSubjectId, orm);
-    console.log('subject', subject);
+    this.logger.info('session', 'Subject resolved', { subjectId: subject?.id });
     if (!subject) {
-      console.log('subject not found - after not exp and not ref', subject);
+      this.logger.warn('session', 'Subject not found after session validation');
       return { subject: null, token, type: isJWT ? 'jwt' : 'legacy', payload };
     }
 

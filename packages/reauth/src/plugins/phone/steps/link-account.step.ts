@@ -172,7 +172,11 @@ export const linkAccountStep: AuthStep<
         try {
           await ctx.config.sendCode(subject, code, phone, 'verify');
         } catch (error) {
-          console.error('Failed to send verification code:', error);
+          const logger = ctx.engine.getContainer().resolve('logger');
+          logger.error('phone', 'Failed to send verification code', {
+            error,
+            phone,
+          });
           // Continue anyway - the account is linked, just verification failed
         }
 

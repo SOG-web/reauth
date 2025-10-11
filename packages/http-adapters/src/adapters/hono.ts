@@ -7,6 +7,7 @@ import type {
 import { ReAuthHttpAdapter } from '../base-adapter';
 import { Context, Hono } from 'hono';
 import { setCookie } from 'hono/cookie';
+import type { LoggerInterface } from '@re-auth/logger';
 
 export class HonoAdapter {
   public readonly name = 'hono';
@@ -18,8 +19,17 @@ export class HonoAdapter {
   constructor(
     config: HttpAdapterConfig,
     generateDeviceInfo?: (request: Context) => Promise<Record<string, any>>,
+    logger?: LoggerInterface,
   ) {
-    this.adapter = new ReAuthHttpAdapter(config);
+    const defaultLogger: LoggerInterface = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      success: () => {},
+      setEnabledTags: () => {},
+      destroy: () => {},
+    };
+    this.adapter = new ReAuthHttpAdapter(config, logger || defaultLogger);
     this.generateDeviceInfo = generateDeviceInfo;
   }
 
@@ -413,8 +423,9 @@ export class HonoAdapter {
 export function honoReAuth(
   config: HttpAdapterConfig,
   generateDeviceInfo?: (request: Context) => Promise<Record<string, any>>,
+  logger?: LoggerInterface,
 ): HonoAdapter {
-  const adapter = new HonoAdapter(config, generateDeviceInfo);
+  const adapter = new HonoAdapter(config, generateDeviceInfo, logger);
   return adapter;
 }
 

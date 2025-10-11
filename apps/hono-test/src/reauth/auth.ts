@@ -5,6 +5,7 @@ import createReAuthEngine, {
   extendSchemaVersion,
   reauthDb,
 } from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import SQLite from 'better-sqlite3';
 import { Kysely, SqliteDialect } from 'kysely';
@@ -68,6 +69,15 @@ export const client = factory.client(
   }),
 );
 
+// Create logger instance for the example
+const logger = createDefaultLogger({
+  prefix: 'HonoTest',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'http', 'plugin'],
+  timestampFormat: 'human',
+  emojis: true,
+});
+
 export default createReAuthEngine({
   dbClient: {
     version: async () => await client.version(),
@@ -76,11 +86,17 @@ export default createReAuthEngine({
       return orm as OrmLike;
     },
   },
+  logger: logger, // Required logger instance
   plugins: [
     sessionPlugin({}),
     emailPasswordPlugin({
       sendCode(subject, code, email, type) {
-        console.log(subject, code, email, type);
+        logger.info('email', 'Sending verification code', {
+          subject,
+          code,
+          email,
+          type,
+        });
         return Promise.resolve();
       },
       verifyEmail: true,

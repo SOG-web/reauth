@@ -4,12 +4,22 @@ import { Hono } from 'hono';
 import { showRoutes } from 'hono/dev';
 import reAuth from './reauth/auth';
 import { honoReAuth } from '@re-auth/http-adapters';
+import { createDefaultLogger } from '@re-auth/logger';
 import { ConnInfo } from 'hono/conninfo';
 
 const app = new Hono();
 
 // Set the introspection auth key for testing
 process.env.REAUTH_INTROSPECTION_KEY = 'test-key-123';
+
+// Create logger instance for HTTP adapter
+const httpLogger = createDefaultLogger({
+  prefix: 'HonoTest-HTTP',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['http', 'auth', 'session'],
+  timestampFormat: 'human',
+  emojis: true,
+});
 
 app.use('*', async (c, next) => {
   const info = getConnInfo(c);
@@ -37,6 +47,7 @@ const authAdapter = honoReAuth(
       trusted: c.get('connInfo')?.remote.address,
     };
   },
+  httpLogger, // Pass logger to HTTP adapter
 );
 
 authAdapter.registerRoutes(app, '/auth', true);
@@ -46,7 +57,7 @@ app.use('/', authAdapter.createUserMiddleware());
 app.get('/', (c) => {
   const user = c.get('user');
   const td1 = reAuth.getPlugin('session')?.steps[0]?.outputs?.toJsonSchema();
-  console.log('td1', td1);
+  httpLogger.info('http', 'Session schema requested', { schema: td1 });
   return c.json({ message: 'Hello Hono!', user, td1 });
 });
 
@@ -60,7 +71,10 @@ serve(
     port: 3001,
   },
   (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
+    httpLogger.info(
+      'http',
+      `Server is running on http://localhost:${info.port}`,
+    );
   },
 );
 

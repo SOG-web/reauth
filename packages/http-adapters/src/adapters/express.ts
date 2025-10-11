@@ -9,6 +9,7 @@ import type {
   AuthStepRequest,
 } from '../types';
 import { ReAuthHttpAdapter } from '../base-adapter';
+import type { LoggerInterface } from '@re-auth/logger';
 
 export class ExpressAdapter
   implements FrameworkAdapter<Request, Response, NextFunction>
@@ -23,8 +24,17 @@ export class ExpressAdapter
     config: HttpAdapterConfig,
     private exposeIntrospection: boolean,
     generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
+    logger?: LoggerInterface,
   ) {
-    this.adapter = new ReAuthHttpAdapter(config);
+    const defaultLogger: LoggerInterface = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      success: () => {},
+      setEnabledTags: () => {},
+      destroy: () => {},
+    };
+    this.adapter = new ReAuthHttpAdapter(config, logger || defaultLogger);
     this.generateDeviceInfo = generateDeviceInfo;
   }
 
@@ -431,8 +441,14 @@ export function createExpressAdapter(
   config: HttpAdapterConfig,
   exposeIntrospection: boolean = false,
   generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
+  logger?: LoggerInterface,
 ): ExpressAdapter {
-  return new ExpressAdapter(config, exposeIntrospection, generateDeviceInfo);
+  return new ExpressAdapter(
+    config,
+    exposeIntrospection,
+    generateDeviceInfo,
+    logger,
+  );
 }
 
 /**
@@ -442,11 +458,13 @@ export function expressReAuth(
   config: HttpAdapterConfig,
   exposeIntrospection: boolean = false,
   generateDeviceInfo?: (request: Request) => Promise<Record<string, any>>,
+  logger?: LoggerInterface,
 ): MiddlewareFunction<Request, Response, NextFunction> {
   const adapter = new ExpressAdapter(
     config,
     exposeIntrospection,
     generateDeviceInfo,
+    logger,
   );
   return adapter.createMiddleware();
 }

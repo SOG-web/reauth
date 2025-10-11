@@ -1,4 +1,5 @@
 import { AuthInput, ReAuthEngine, Token } from '@re-auth/reauth';
+import type { LoggerInterface } from '@re-auth/logger';
 import type {
   HttpAdapterConfig,
   HttpRequest,
@@ -25,10 +26,12 @@ export class ReAuthHttpAdapter {
   private engine: ReAuthEngine;
   protected config: HttpAdapterConfig;
   private endpoints: Map<string, PluginEndpoint> = new Map();
+  private logger: LoggerInterface;
 
-  constructor(config: HttpAdapterConfig) {
+  constructor(config: HttpAdapterConfig, logger: LoggerInterface) {
     this.engine = config.engine;
     this.config = config;
+    this.logger = logger;
     this.buildEndpoints();
   }
 
@@ -451,37 +454,33 @@ export class ReAuthHttpAdapter {
     }
 
     if (!accessToken) {
-      console.log(
-        'no access token in extractSessionToken',
-        req.path,
-        req.headers,
-      );
+      this.logger.info('http', 'No access token found in request', {
+        path: req.path,
+        hasHeaders: !!req.headers,
+      });
       return null;
     }
 
     if (accessToken && refreshToken) {
-      console.log(
-        'access token and refresh token in extractSessionToken',
-        req.path,
-        req.headers,
-      );
+      this.logger.info('http', 'Access token and refresh token found', {
+        path: req.path,
+        hasHeaders: !!req.headers,
+      });
       return { accessToken, refreshToken };
     }
 
     if (accessToken && !refreshToken) {
-      console.log(
-        'access token and no refresh token in extractSessionToken',
-        req.path,
-        req.headers,
-      );
+      this.logger.info('http', 'Access token found without refresh token', {
+        path: req.path,
+        hasHeaders: !!req.headers,
+      });
       return accessToken;
     }
 
-    console.log(
-      'no access token or refresh token in extractSessionToken',
-      req.path,
-      req.headers,
-    );
+    this.logger.info('http', 'No access token or refresh token found', {
+      path: req.path,
+      hasHeaders: !!req.headers,
+    });
     return null;
   }
 
@@ -532,7 +531,10 @@ export class ReAuthHttpAdapter {
     const token = this.extractSessionToken(req);
 
     if (!token) {
-      console.log('no token in getCurrentUser', req.path, req.headers);
+      this.logger.info('http', 'No token found in getCurrentUser', {
+        path: req.path,
+        hasHeaders: !!req.headers,
+      });
       return null;
     }
 
@@ -540,10 +542,9 @@ export class ReAuthHttpAdapter {
       const session = await this.engine.checkSession(token, deviceInfo);
 
       if (!session.valid || !session.subject) {
-        console.log(
-          'session is not valid or subject is not found',
-          req.headers,
-        );
+        this.logger.warn('http', 'Session is not valid or subject not found', {
+          hasHeaders: !!req.headers,
+        });
         return null;
       }
 
@@ -558,7 +559,10 @@ export class ReAuthHttpAdapter {
       };
     } catch (error) {
       // Silently return null if session check fails
-      console.log('session check failed', req.headers, error);
+      this.logger.error('http', 'Session check failed', {
+        hasHeaders: !!req.headers,
+        error,
+      });
       return null;
     }
   }
@@ -573,12 +577,10 @@ export class ReAuthHttpAdapter {
     const user = await this.getCurrentUser(req, deviceInfo);
 
     if (!user) {
-      console.log(
-        'no user in requireAuthentication',
-        req.path,
-        req.headers,
-        user,
-      );
+      this.logger.warn('http', 'Authentication required but no user found', {
+        path: req.path,
+        hasHeaders: !!req.headers,
+      });
       throw new AuthenticationError('Authentication required');
     }
 

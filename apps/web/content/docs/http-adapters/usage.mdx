@@ -8,19 +8,30 @@ description: Step-by-step instructions for wiring the ReAuth adapter into Expres
 ```ts
 import express from 'express';
 import createReAuthEngine from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { createExpressAdapter } from '@re-auth/http-adapters';
 import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
 
 const app = express();
 app.use(express.json()); // Required for body parsing
 
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'ExpressApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'http'],
+  timestampFormat: 'human',
+  emojis: true,
+});
+
 // Create ReAuth engine
 const engine = createReAuthEngine({
   dbClient,
+  logger: logger, // Required logger instance
   plugins: [
     emailPasswordPlugin({
       sendCode: async (subject, code, email, type) => {
-        console.log(`Code for ${email}: ${code}`);
+        logger.info('email', `Code for ${email}: ${code}`);
       },
       verifyEmail: true,
     }),
@@ -42,6 +53,7 @@ const adapter = createExpressAdapter(
       fingerprint: req.get('X-Request-ID'),
     };
   },
+  logger, // Pass logger to HTTP adapter
 );
 
 // Register authentication routes
@@ -63,7 +75,7 @@ app.get('/api/profile', (req, res) => {
 });
 
 app.listen(3000, () => {
-  console.log('Server running on http://localhost:3000');
+  logger.info('http', 'Server running on http://localhost:3000');
 });
 ```
 
@@ -175,16 +187,27 @@ const adapter = createFastifyAdapter({
 ```ts
 import { Hono } from 'hono';
 import createReAuthEngine from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { honoReAuth } from '@re-auth/http-adapters';
 import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
+
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'HonoApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'http'],
+  timestampFormat: 'human',
+  emojis: true,
+});
 
 // Create ReAuth engine
 const engine = createReAuthEngine({
   dbClient,
+  logger: logger, // Required logger instance
   plugins: [
     emailPasswordPlugin({
       sendCode: async (subject, code, email, type) => {
-        console.log(`Code for ${email}: ${code}`);
+        logger.info('email', `Code for ${email}: ${code}`);
       },
       verifyEmail: true,
     }),
@@ -208,6 +231,7 @@ const adapter = honoReAuth(
       country: c.req.header('cf-ipcountry'),
     };
   },
+  logger, // Pass logger to HTTP adapter
 );
 
 // Register authentication routes
@@ -270,16 +294,27 @@ Itty-router provides a generic fetch adapter optimized for Cloudflare Workers, e
 ```ts
 import { AutoRouter } from 'itty-router';
 import createReAuthEngine from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { reAuthRouter, createReAuthRouter } from '@re-auth/http-adapters';
 import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
+
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'IttyApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'http'],
+  timestampFormat: 'human',
+  emojis: true,
+});
 
 // Create ReAuth engine
 const engine = createReAuthEngine({
   dbClient,
+  logger: logger, // Required logger instance
   plugins: [
     emailPasswordPlugin({
       sendCode: async (subject, code, email, type) => {
-        console.log(`Code for ${email}: ${code}`);
+        logger.info('email', `Code for ${email}: ${code}`);
       },
       verifyEmail: true,
     }),
@@ -301,6 +336,7 @@ const adapter = reAuthRouter(
       country: request.headers.get('CF-IPCountry'),
     };
   },
+  logger, // Pass logger to HTTP adapter
 );
 
 const router = AutoRouter();
@@ -319,6 +355,7 @@ const { router: authRouter, adapter: authAdapter } = createReAuthRouter(
     ip: request.headers.get('CF-Connecting-IP'),
     userAgent: request.headers.get('User-Agent'),
   }),
+  logger, // Pass logger to HTTP adapter
 );
 
 // Export for Cloudflare Workers
@@ -413,14 +450,14 @@ For custom error handling, use framework-specific error middleware:
 ```ts
 // Express
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  logger.error('http', 'Express error', { error: err.message, path: req.path });
   // Error is already formatted by adapter
   res.status(err.statusCode || 500).json(err);
 });
 
 // Hono
 app.onError((err, c) => {
-  console.error('Error:', err);
+  logger.error('http', 'Hono error', { error: err.message, path: c.req.path });
   return c.json(
     {
       success: false,
@@ -437,7 +474,7 @@ app.onError((err, c) => {
 // Itty-router
 router.finally.push(async (response) => {
   if (response.status >= 400) {
-    console.error('Error response:', response);
+    logger.error('http', 'Error response', { status: response.status });
   }
   return response;
 });

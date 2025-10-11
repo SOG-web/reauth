@@ -5,6 +5,7 @@ import type {
   AuthenticatedUser,
 } from '../types.js';
 import { ReAuthHttpAdapter } from '../base-adapter.js';
+import type { LoggerInterface } from '@re-auth/logger';
 import {
   AutoRouter,
   AutoRouterType,
@@ -23,12 +24,22 @@ export class IttyRouterAdapter {
     request: IRequest,
   ) => Promise<Record<string, any>>;
   private routePaths: string[] = [];
+  private logger: LoggerInterface;
 
   constructor(
     config: HttpAdapterConfig,
     generateDeviceInfo?: (request: IRequest) => Promise<Record<string, any>>,
+    logger?: LoggerInterface,
   ) {
-    this.adapter = new ReAuthHttpAdapter(config);
+    this.logger = logger || {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      success: () => {},
+      setEnabledTags: () => {},
+      destroy: () => {},
+    };
+    this.adapter = new ReAuthHttpAdapter(config, this.logger);
     this.config = config;
     this.generateDeviceInfo = generateDeviceInfo;
   }
@@ -272,7 +283,9 @@ export class IttyRouterAdapter {
       }
     }
 
-    console.log(this.routePaths);
+    this.logger.info('http', 'Route paths registered', {
+      routes: this.routePaths,
+    });
 
     return targetRouter;
   }
@@ -495,8 +508,9 @@ export class IttyRouterAdapter {
 export function reAuthRouter(
   config: HttpAdapterConfig,
   generateDeviceInfo?: (request: IRequest) => Promise<Record<string, any>>,
+  logger?: LoggerInterface,
 ): IttyRouterAdapter {
-  const adapter = new IttyRouterAdapter(config, generateDeviceInfo);
+  const adapter = new IttyRouterAdapter(config, generateDeviceInfo, logger);
   return adapter;
 }
 
@@ -508,8 +522,9 @@ export const createReAuthRouter = (
   },
   config: HttpAdapterConfig,
   generateDeviceInfo?: (request: IRequest) => Promise<Record<string, any>>,
+  logger?: LoggerInterface,
 ): { router: AutoRouterType; adapter: IttyRouterAdapter } => {
-  const adapter = new IttyRouterAdapter(config, generateDeviceInfo);
+  const adapter = new IttyRouterAdapter(config, generateDeviceInfo, logger);
   const router = adapter.createRouter(
     routerConfig.basePath,
     routerConfig.exposeIntrospection,

@@ -231,6 +231,138 @@ export class MyAuthPlugin implements AuthPlugin {
 }
 ```
 
+## 📝 Logging
+
+ReAuth provides comprehensive structured logging through the `@re-auth/logger` package. All authentication operations, plugin steps, and system events are logged with appropriate tags for easy filtering and debugging.
+
+### Logger Configuration
+
+```typescript
+import { createDefaultLogger } from '@re-auth/logger';
+import { ReAuthEngine } from '@re-auth/reauth';
+
+// Create a logger instance
+const logger = createDefaultLogger({
+  prefix: 'MyApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'plugin'],
+  timestampFormat: 'human',
+  emojis: true,
+});
+
+// Initialize engine with logger
+const auth = new ReAuthEngine({
+  plugins: [emailPassword],
+  entity: entityService,
+  session: sessionService,
+  logger: logger, // Required logger instance
+});
+```
+
+### Log Tags
+
+ReAuth uses structured tags to categorize log messages:
+
+- **`auth`** - Core authentication operations (login, logout, verification)
+- **`session`** - Session management (creation, validation, expiration)
+- **`token`** - Token operations (generation, validation, refresh)
+- **`jwt`** - JWT-specific operations (signing, verification, rotation)
+- **`plugin`** - Plugin-specific operations (oauth, email, phone, api-key)
+- **`http`** - HTTP adapter operations (requests, responses, middleware)
+- **`engine`** - Engine operations (step execution, validation, cleanup)
+- **`database`** - Database operations (queries, migrations, cleanup)
+
+### Environment Variable Control
+
+Control logging via environment variables:
+
+```bash
+# Enable specific tags
+REAUTH_DEBUG=auth,session,plugin
+
+# Enable all tags
+REAUTH_DEBUG=*
+
+# Disable all logging
+REAUTH_DEBUG=
+```
+
+### Production vs Development
+
+- **Development**: Beautiful terminal output with colors and emojis
+- **Production**: Structured JSON logging for log aggregation systems
+
+```typescript
+// Production logging (JSON format)
+{"level":"info","tags":["auth"],"message":"User authentication successful","timestamp":"2024-01-15T10:30:00.000Z","prefix":"MyApp"}
+
+// Development logging (pretty format)
+[10:30:00am 15 Jan 2024] [MyApp] [auth] ℹ️ User authentication successful
+```
+
+### Migration from console.log
+
+If you're upgrading from a version that used `console.log`, follow this migration guide:
+
+#### Before (Old Version)
+
+```typescript
+import { ReAuthEngine } from '@re-auth/reauth';
+
+const auth = new ReAuthEngine({
+  plugins: [emailPassword],
+  entity: entityService,
+  session: sessionService,
+  // No logger configuration
+});
+
+// Console.log statements throughout your code
+console.log('User authenticated');
+console.warn('Token expired');
+console.error('Database connection failed');
+```
+
+#### After (New Version)
+
+```typescript
+import { ReAuthEngine } from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
+
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'MyApp',
+  enabledTags: ['auth', 'session', 'database'],
+});
+
+const auth = new ReAuthEngine({
+  plugins: [emailPassword],
+  entity: entityService,
+  session: sessionService,
+  logger: logger, // Required logger instance
+});
+
+// Replace console.log with structured logging
+logger.info('auth', 'User authenticated');
+logger.warn('session', 'Token expired');
+logger.error('database', 'Database connection failed');
+```
+
+#### Key Changes
+
+1. **Add logger dependency**: Install `@re-auth/logger` package
+2. **Create logger instance**: Use `createDefaultLogger()` with appropriate configuration
+3. **Pass to ReAuthEngine**: Logger is now a required parameter
+4. **Replace console statements**: Use structured logging with appropriate tags
+5. **Configure log filtering**: Use environment variables to control which logs are shown
+
+#### Benefits of Migration
+
+- **Structured logging**: Consistent format across all log messages
+- **Runtime control**: Enable/disable logging without code changes
+- **Better debugging**: Tag-based filtering helps focus on specific issues
+- **Production ready**: JSON logging for log aggregation systems
+- **Beautiful output**: Colored terminal output with emojis in development
+
 ## 📚 API Reference
 
 ### ReAuthEngine
@@ -242,6 +374,7 @@ const auth = new ReAuthEngine({
   plugins: AuthPlugin[],      // Array of authentication plugins
   entity: EntityService,     // Abstract entity service implementation
   session: SessionService,   // Abstract session service implementation
+  logger: LoggerInterface,   // Logger instance for structured logging
   sensitiveFields?: {        // Fields to redact in logs
     [key: string]: boolean;
   };

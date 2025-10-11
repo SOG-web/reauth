@@ -55,7 +55,10 @@ export const resetPasswordStep: AuthStep<
       isSafe = await haveIbeenPawned(newPassword);
     } catch (err) {
       // Consider a config flag to choose fail-open vs fail-closed.
-      console.warn({ err }, 'HIBP check failed; defaulting to allow reset');
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.warn('phone', 'HIBP check failed; defaulting to allow reset', {
+        error: err,
+      });
       isSafe = true; // flip to false if you prefer fail-closed
     }
     if (!isSafe) {

@@ -82,7 +82,8 @@ export const changePasswordStep: AuthStep<
     try {
       isSafe = await haveIbeenPawned(newPassword);
     } catch (err) {
-      console.log('haveIbeenPawned check failed', { err });
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.warn('username', 'haveIbeenPawned check failed', { error: err });
       // Decide: fail-open vs fail-closed per policy.
       isSafe = true;
     }

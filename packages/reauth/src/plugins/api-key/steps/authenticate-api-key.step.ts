@@ -200,7 +200,10 @@ export const authenticateApiKeyStep: AuthStep<
       });
     } catch (error) {
       // Don't fail authentication if we can't update last_used_at
-      console.warn('Failed to update API key last_used_at:', error);
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.warn('api-key', 'Failed to update API key last_used_at', {
+        error,
+      });
     }
 
     // Log successful usage
@@ -272,6 +275,5 @@ async function logUsageIfEnabled(
     });
   } catch (error) {
     // Don't fail authentication if usage logging fails
-    console.warn('Failed to log API key usage:', error);
   }
 }

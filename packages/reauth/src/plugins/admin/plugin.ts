@@ -120,7 +120,8 @@ export const baseAdminPlugin = {
             throw error;
           }
           // If ban check fails for other reasons, log but don't block (fail open)
-          console.warn('Failed to check user ban status:', error);
+          const logger = engine.getContainer().resolve('logger');
+          logger.warn('admin', 'Failed to check user ban status', { error });
         }
 
         return input;
@@ -216,7 +217,10 @@ export const baseAdminPlugin = {
             throw error;
           }
           // If access check fails for other reasons, log but don't block (fail open)
-          console.warn('Failed to check user access permissions:', error);
+          const logger = engine.getContainer().resolve('logger');
+          logger.warn('admin', 'Failed to check user access permissions', {
+            error,
+          });
         }
 
         return input;

@@ -1,4 +1,5 @@
 import type { CleanupScheduler, CleanupTask, OrmLike } from './types';
+import type { LoggerInterface } from '@re-auth/logger';
 
 /**
  * Simple in-memory cleanup scheduler for background tasks.
@@ -10,15 +11,24 @@ export class SimpleCleanupScheduler implements CleanupScheduler {
   private running = false;
   private getOrm: () => Promise<OrmLike>;
   private pluginConfigs: Map<string, any> = new Map();
+  private logger: LoggerInterface;
 
-  constructor(getOrm: () => Promise<OrmLike>) {
+  constructor(getOrm: () => Promise<OrmLike>, logger?: LoggerInterface) {
     this.getOrm = getOrm;
+    this.logger = logger || {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      success: () => {},
+      setEnabledTags: () => {},
+      destroy: () => {},
+    };
   }
 
   registerTask(task: CleanupTask): void {
     // Replace existing task with same name/plugin
     const existingIndex = this.tasks.findIndex(
-      t => t.name === task.name && t.pluginName === task.pluginName
+      (t) => t.name === task.name && t.pluginName === task.pluginName,
     );
 
     if (existingIndex >= 0) {
@@ -97,17 +107,32 @@ export class SimpleCleanupScheduler implements CleanupScheduler {
         const config = this.pluginConfigs.get(task.pluginName);
         const result = await task.runner(orm, config);
 
-        // Log success (in production, use proper logging)
+        // Log success
         if (result.cleaned > 0) {
-          console.log(`[ReAuth Cleanup] ${task.pluginName}.${task.name}: cleaned ${result.cleaned} items`);
+          this.logger.info('cleanup', `Cleaned ${result.cleaned} items`, {
+            plugin: task.pluginName,
+            task: task.name,
+          });
         }
 
         if (result.errors && result.errors.length > 0) {
-          console.warn(`[ReAuth Cleanup] ${task.pluginName}.${task.name}: ${result.errors.length} errors occurred`);
+          this.logger.warn(
+            'cleanup',
+            `${result.errors.length} errors occurred during cleanup`,
+            {
+              plugin: task.pluginName,
+              task: task.name,
+              errors: result.errors,
+            },
+          );
         }
       } catch (error) {
         // Never let cleanup errors break the scheduler
-        console.error(`[ReAuth Cleanup] ${task.pluginName}.${task.name} failed:`, error);
+        this.logger.error('cleanup', `Cleanup task failed`, {
+          plugin: task.pluginName,
+          task: task.name,
+          error,
+        });
       }
     }, task.intervalMs);
 

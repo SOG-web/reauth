@@ -94,7 +94,11 @@ export const unlinkOAuthStep: AuthStep<
         status: 'su',
       };
     } catch (error: any) {
-      console.error(`${providerName} OAuth unlink error:`, error);
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.error('oauth', `${providerName} OAuth unlink error`, {
+        error,
+        provider: providerName,
+      });
       return {
         success: false,
         message: `Failed to unlink ${providerName} account: ${error.message}`,

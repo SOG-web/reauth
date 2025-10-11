@@ -30,12 +30,23 @@ All adapters share the same core configuration pattern:
 
 ```ts
 import createReAuthEngine from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { honoReAuth } from '@re-auth/http-adapters';
 import { Hono } from 'hono';
 import emailPasswordPlugin from '@re-auth/reauth/plugins/email-password';
 
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'MyApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'http'],
+  timestampFormat: 'human',
+  emojis: true,
+});
+
 const engine = createReAuthEngine({
   dbClient,
+  logger: logger, // Required logger instance
   plugins: [
     emailPasswordPlugin({
       /* config */
@@ -58,6 +69,7 @@ const adapter = honoReAuth(
       fingerprint: c.req.header('x-request-id'),
     };
   },
+  logger, // Pass logger to HTTP adapter
 );
 
 // Register authentication routes

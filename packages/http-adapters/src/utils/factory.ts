@@ -1,12 +1,14 @@
 import type { HttpAdapterConfig, PluginEndpoint } from '../types';
 import { ReAuthHttpAdapter } from '../base-adapter';
 import { ReAuthEngine } from '@re-auth/reauth';
+import type { LoggerInterface } from '@re-auth/logger';
 
 /**
  * Factory function to create HTTP adapter with default configuration
  */
 export function createReAuthHttpAdapter(
   config: Partial<HttpAdapterConfig> & { engine: ReAuthEngine },
+  logger: LoggerInterface,
 ): ReAuthHttpAdapter {
   const defaultConfig: HttpAdapterConfig = {
     basePath: '/api/v2',
@@ -34,7 +36,7 @@ export function createReAuthHttpAdapter(
     ...config,
   };
 
-  return new ReAuthHttpAdapter(defaultConfig);
+  return new ReAuthHttpAdapter(defaultConfig, logger);
 }
 
 /**

@@ -42,6 +42,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@re-auth/http-adapters": "workspace:*",
     "@re-auth/reauth": "workspace:*",
+    "@re-auth/logger": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tailwindcss/postcss": "^4.1.14",
     "@types/mdx": "^2.0.13",

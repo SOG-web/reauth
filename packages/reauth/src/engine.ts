@@ -4,6 +4,7 @@ import {
   asValue,
   type AwilixContainer,
 } from 'awilix';
+import type { LoggerInterface } from '@re-auth/logger';
 import { InMemorySessionResolvers, ReAuthJWTPayload } from './services';
 import { FumaSessionService } from './services/session-service';
 import { SimpleCleanupScheduler } from './cleanup-scheduler';
@@ -44,6 +45,7 @@ export type ReAuthConfig<P extends AuthPlugin[] = AuthPlugin[]> = {
     storedDeviceInfo: Record<string, any>,
     currentDeviceInfo: Record<string, any>,
   ) => boolean | Promise<boolean>;
+  logger: LoggerInterface;
 };
 
 export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
@@ -59,12 +61,15 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
     subjectId: string,
     orm: OrmLike,
   ) => Promise<Record<string, any>>;
+  private logger: LoggerInterface;
 
   constructor(config: ReAuthConfig<P>) {
     this.container = createContainer({
       injectionMode: InjectionMode.CLASSIC,
       strict: true,
     });
+
+    this.logger = config.logger;
 
     this.sessionResolvers = new InMemorySessionResolvers();
     this.sessionService = new FumaSessionService(
@@ -73,16 +78,22 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
       config.tokenFactory,
       config.getUserData,
       { deviceValidator: config.deviceValidator },
+      config.logger,
     );
 
     this.getUserData = config.getUserData;
-    this.cleanupScheduler = new SimpleCleanupScheduler(() => this.getOrm());
+    this.logger = config.logger;
+    this.cleanupScheduler = new SimpleCleanupScheduler(
+      () => this.getOrm(),
+      this.logger,
+    );
 
     this.container.register({
       dbClient: asValue(config.dbClient),
       sessionResolvers: asValue(this.sessionResolvers),
       sessionService: asValue(this.sessionService),
       engine: asValue(this),
+      logger: asValue(config.logger),
     });
 
     for (const plugin of config.plugins || []) this.registerPlugin(plugin);
@@ -510,7 +521,8 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
             try {
               inputs = s.validationSchema?.toJsonSchema() || {};
             } catch (error) {
-              console.warn(
+              this.logger.warn(
+                'schema',
                 `Failed to convert inputs schema for ${p.name}.${s.name}:`,
                 error,
               );
@@ -519,7 +531,8 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
             try {
               outputs = s.outputs?.toJsonSchema() || {};
             } catch (error) {
-              console.warn(
+              this.logger.warn(
+                'schema',
                 `Failed to convert outputs schema for ${p.name}.${s.name}:`,
                 error,
               );
@@ -539,7 +552,11 @@ export class ReAuthEngine<P extends AuthPlugin[] = AuthPlugin[]> {
         version: '1.0.0',
       };
     } catch (error) {
-      console.error(error);
+      this.logger.error(
+        'introspection',
+        'Failed to generate introspection data:',
+        error,
+      );
       return {
         plugins: [],
         generatedAt: new Date().toISOString(),

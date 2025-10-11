@@ -5,16 +5,17 @@ description: Detailed reference for configuring the ReAuth engine.
 
 ## createReAuthEngine options
 
-| Option                   | Type           | Required | Description                                             |
-| ------------------------ | -------------- | -------- | ------------------------------------------------------- |
-| `dbClient`               | `FumaClient`   | Yes      | FumaDB client for database operations                   |
-| `plugins`                | `AuthPlugin[]` | No       | List of plugins that register authentication flows      |
-| `authHooks`              | `AuthHook[]`   | No       | Engine-level hooks that run before/after all steps      |
-| `sessionHooks`           | `AuthHook[]`   | No       | Session-level hooks for session lifecycle events        |
-| `getUserData`            | `Function`     | Yes      | Function to fetch user data for JWT payloads            |
-| `tokenFactory`           | `Function`     | No       | Custom token generation function                        |
-| `deviceValidator`        | `Function`     | No       | Custom device validation function                       |
-| `enableCleanupScheduler` | `boolean`      | No       | Enable/disable background cleanup tasks (default: true) |
+| Option                   | Type              | Required | Description                                             |
+| ------------------------ | ----------------- | -------- | ------------------------------------------------------- |
+| `dbClient`               | `FumaClient`      | Yes      | FumaDB client for database operations                   |
+| `logger`                 | `LoggerInterface` | Yes      | Logger instance for structured logging                  |
+| `plugins`                | `AuthPlugin[]`    | No       | List of plugins that register authentication flows      |
+| `authHooks`              | `AuthHook[]`      | No       | Engine-level hooks that run before/after all steps      |
+| `sessionHooks`           | `AuthHook[]`      | No       | Session-level hooks for session lifecycle events        |
+| `getUserData`            | `Function`        | Yes      | Function to fetch user data for JWT payloads            |
+| `tokenFactory`           | `Function`        | No       | Custom token generation function                        |
+| `deviceValidator`        | `Function`        | No       | Custom device validation function                       |
+| `enableCleanupScheduler` | `boolean`         | No       | Enable/disable background cleanup tasks (default: true) |
 
 ### Database Client
 
@@ -61,6 +62,60 @@ const engine = createReAuthEngine({
 });
 ```
 
+### Logger Configuration
+
+ReAuth requires a logger instance for structured logging. Create a logger using the `@re-auth/logger` package:
+
+```ts
+import { createDefaultLogger } from '@re-auth/logger';
+
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'MyApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'plugin'],
+  timestampFormat: 'human',
+  emojis: true,
+});
+
+const engine = createReAuthEngine({
+  dbClient: {
+    version: async () => await client.version(),
+    orm: (version: any) => client.orm(version),
+  },
+  logger: logger, // Required logger instance
+  plugins: [emailPasswordPlugin({})],
+  getUserData: async (subjectId, orm) => {
+    const user = await orm.findFirst('subjects', {
+      where: (b) => b('id', '=', subjectId),
+    });
+    return user ?? {};
+  },
+});
+```
+
+**Logger Options:**
+
+- `prefix`: Application identifier for log messages
+- `prefixEnv`: Environment variable prefix for tag control (e.g., `REAUTH_DEBUG`)
+- `enabledTags`: Array of log tags to enable by default
+- `timestampFormat`: `'iso'` for ISO timestamps or `'human'` for readable format
+- `emojis`: Enable/disable emoji icons in log messages
+- `fileOutput`: Optional file logging configuration
+
+**Environment Variable Control:**
+
+```bash
+# Enable specific log tags
+REAUTH_DEBUG=auth,session,plugin
+
+# Enable all tags
+REAUTH_DEBUG=*
+
+# Production logging (JSON format)
+NODE_ENV=production
+```
+
 ### Engine Hooks
 
 ReAuth supports hooks at multiple levels for extending functionality:
@@ -70,12 +125,14 @@ ReAuth supports hooks at multiple levels for extending functionality:
 ```ts
 const engine = createReAuthEngine({
   dbClient,
+  logger,
   authHooks: [
     {
       type: 'before',
       universal: true, // Runs for all plugins and steps
       fn: async (input, container) => {
-        console.log('Before any authentication step');
+        const logger = container.resolve('logger');
+        logger.info('engine', 'Before any authentication step', { input });
         return input;
       },
     },
@@ -83,7 +140,8 @@ const engine = createReAuthEngine({
       type: 'after',
       universal: true,
       fn: async (output, container) => {
-        console.log('After any authentication step');
+        const logger = container.resolve('logger');
+        logger.info('engine', 'After any authentication step', { output });
         return output;
       },
     },
@@ -97,18 +155,23 @@ const engine = createReAuthEngine({
 ```ts
 const engine = createReAuthEngine({
   dbClient,
+  logger,
   sessionHooks: [
     {
       type: 'before',
       fn: async (data, container) => {
-        console.log('Before session creation/verification');
+        const logger = container.resolve('logger');
+        logger.info('session', 'Before session creation/verification', {
+          data,
+        });
         return data;
       },
     },
     {
       type: 'after',
       fn: async (data, container) => {
-        console.log('After session creation/verification');
+        const logger = container.resolve('logger');
+        logger.info('session', 'After session creation/verification', { data });
         return data;
       },
     },
@@ -420,9 +483,11 @@ Inject environment-aware dependencies (email providers, caches, analytics) when 
 Before deploying to production, ensure:
 
 - [ ] Database client properly configured with FumaDB
+- [ ] Logger instance created and passed to ReAuth engine
 - [ ] All required plugins registered and configured
 - [ ] `getUserData` function properly implemented
 - [ ] Environment variables for external services (email, SMS, OAuth) configured
+- [ ] Environment variables for logger tag control (e.g., `REAUTH_DEBUG`) configured
 - [ ] Cleanup scheduler enabled for production
 - [ ] Device validation configured if needed
 - [ ] Engine hooks properly implemented for logging/monitoring
@@ -438,6 +503,7 @@ import createReAuthEngine, {
   reauthDb,
   reauthDbVersions,
 } from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import emailPasswordPlugin, {
   emailPasswordSchema,
@@ -456,11 +522,21 @@ const client = factory.client(
   kyselyAdapter({ provider: 'postgresql', db: kysely }),
 );
 
+// Create logger instance
+const logger = createDefaultLogger({
+  prefix: 'ProductionApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'plugin', 'database'],
+  timestampFormat: 'iso',
+  emojis: false, // Professional output for production
+});
+
 const engine = createReAuthEngine({
   dbClient: {
     version: async () => await client.version(),
     orm: (version: any) => client.orm(version),
   },
+  logger: logger, // Required logger instance
 
   plugins: [
     emailPasswordPlugin({
@@ -498,7 +574,8 @@ const engine = createReAuthEngine({
       universal: true,
       fn: async (input, container) => {
         // Log all authentication attempts
-        console.log('Auth attempt:', input);
+        const logger = container.resolve('logger');
+        logger.info('engine', 'Authentication attempt', { input });
         return input;
       },
     },
@@ -509,6 +586,8 @@ const engine = createReAuthEngine({
       type: 'after',
       fn: async (data, container) => {
         // Track session creation
+        const logger = container.resolve('logger');
+        logger.info('session', 'Session created', { userId: data.subject?.id });
         analytics.track('session_created', { userId: data.subject?.id });
         return data;
       },

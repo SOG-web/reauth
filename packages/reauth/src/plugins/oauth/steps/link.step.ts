@@ -187,7 +187,11 @@ export const linkOAuthStep: AuthStep<
         status: 'su',
       };
     } catch (error: any) {
-      console.error(`${oauth_provider} OAuth link error:`, error);
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.error('oauth', `${oauth_provider} OAuth link error`, {
+        error,
+        provider: oauth_provider,
+      });
       return {
         success: false,
         message: `Failed to link ${oauth_provider} account: ${error.message}`,

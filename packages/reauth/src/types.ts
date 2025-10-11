@@ -5,6 +5,7 @@ import { JWK, JWTPayload } from 'jose';
 import { ReAuthEngine } from './engine';
 import { RelationBuilder, column, idColumn, table } from 'fumadb/schema';
 import { EnhancedJWKSService, ReAuthJWTPayload } from './services';
+import type { LoggerInterface } from '@re-auth/logger';
 
 // Minimal Fuma client interface used by
 // InferFumaDB<typeof ChatDB>
@@ -330,6 +331,7 @@ export interface ReAuthCradleExtension {
   sessionService: SessionService;
   sessionResolvers: SessionResolvers;
   engine: ReAuthEngine;
+  logger: LoggerInterface;
 }
 
 export type ReAuthCradle = AwilixContainer<ReAuthCradleExtension>;

@@ -4,6 +4,7 @@ import createReAuthEngine, {
   reauthDbVersions,
   type OrmLike,
 } from '@re-auth/reauth';
+import { createDefaultLogger } from '@re-auth/logger';
 import { kyselyAdapter } from 'fumadb/adapters/kysely';
 import SQLite from 'better-sqlite3';
 import { Kysely, SqliteDialect } from 'kysely';
@@ -43,6 +44,15 @@ const client = factory.client(
   }),
 );
 
+// Create logger instance for the web app
+const logger = createDefaultLogger({
+  prefix: 'WebApp',
+  prefixEnv: 'REAUTH_',
+  enabledTags: ['auth', 'session', 'http', 'plugin'],
+  timestampFormat: 'human',
+  emojis: true,
+});
+
 // Create ReAuth engine
 const engine = createReAuthEngine({
   dbClient: {
@@ -52,6 +62,7 @@ const engine = createReAuthEngine({
       return orm as OrmLike;
     },
   },
+  logger: logger, // Required logger instance
   plugins: [
     sessionPlugin({}),
     emailPasswordPlugin({
@@ -60,7 +71,11 @@ const engine = createReAuthEngine({
       sessionTtlSeconds: 3600, // 1 hour
       sendCode: async (subject, code, email, type) => {
         // Mock send code - in production, integrate with email service
-        console.log(`[${type}] Sending code ${code} to ${email} for subject ${subject.id}`);
+        logger.info('email', `Sending ${type} code`, {
+          code,
+          email,
+          subjectId: subject.id,
+        });
       },
     }),
     usernamePlugin({

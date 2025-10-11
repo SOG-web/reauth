@@ -92,7 +92,8 @@ export const changePasswordStep: AuthStep<
     try {
       safePassword = await haveIbeenPawned(newPassword);
     } catch (e) {
-      console.error(e);
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.error('email', 'Password change error', { error: e });
       safePassword = true;
     }
 

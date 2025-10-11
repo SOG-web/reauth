@@ -23,6 +23,7 @@ import type {
 } from './jwt.types';
 import { generateApiKey } from '../plugins/api-key';
 import { hashPassword } from '../lib';
+import type { LoggerInterface } from '@re-auth/logger';
 
 export class EnhancedJWKSService implements JWTServiceType {
   private keyCache = new Map<string, JWKSKey>();
@@ -30,6 +31,8 @@ export class EnhancedJWKSService implements JWTServiceType {
   private publicJWKSCache: { keys: JWK[] } | null = null;
   private cacheExpiry = 0;
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  private logger: LoggerInterface;
 
   constructor(
     private dbClient: FumaClient,
@@ -39,7 +42,17 @@ export class EnhancedJWKSService implements JWTServiceType {
     private defaultAccessTokenTtlSeconds: number = 15 * 60, // 15 minutes
     private defaultRefreshTokenTtlSeconds: number = 30 * 24 * 60 * 60, // 30 days
     private enableRefreshTokenRotation: boolean = true,
-  ) {}
+    logger?: LoggerInterface,
+  ) {
+    this.logger = logger || {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      success: () => {},
+      setEnabledTags: () => {},
+      destroy: () => {},
+    };
+  }
 
   async generateKeyPair(algorithm: string = 'RS256'): Promise<JWKSKey> {
     const { publicKey, privateKey } = await generateKeyPair(algorithm, {
@@ -88,7 +101,7 @@ export class EnhancedJWKSService implements JWTServiceType {
   async getActiveKey(): Promise<JWKSKey> {
     // Check cache first
     if (this.activeKeyCache && Date.now() < this.cacheExpiry) {
-      console.log('jwt-service- active key found in cache');
+      this.logger.info('jwt', 'Active key found in cache');
       return this.activeKeyCache;
     }
 
@@ -101,7 +114,7 @@ export class EnhancedJWKSService implements JWTServiceType {
     });
 
     if (!keyRecord) {
-      console.log('jwt-service- no active key found, generating one');
+      this.logger.info('jwt', 'No active key found, generating new key pair');
       // No active key found, generate one
       return await this.generateKeyPair();
     }
@@ -110,12 +123,12 @@ export class EnhancedJWKSService implements JWTServiceType {
 
     // Check if key needs rotation
     if (jwksKey.expiresAt && jwksKey.expiresAt <= new Date()) {
-      console.log('jwt-service- key needs rotation, rotating');
+      this.logger.info('jwt', 'Key expired, performing scheduled rotation');
       return await this.rotateKeys('scheduled');
     }
 
     // Update cache
-    console.log('jwt-service- updating active key cache');
+    this.logger.info('jwt', 'Updating active key cache');
     this.activeKeyCache = jwksKey;
     this.cacheExpiry = Date.now() + this.CACHE_TTL;
 

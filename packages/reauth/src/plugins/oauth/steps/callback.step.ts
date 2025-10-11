@@ -225,7 +225,11 @@ export const callbackOAuthStep: AuthStep<
         status: 'su',
       };
     } catch (error: any) {
-      console.error(`${providerName} OAuth callback error:`, error);
+      const logger = ctx.engine.getContainer().resolve('logger');
+      logger.error('oauth', `${providerName} OAuth callback error`, {
+        error,
+        provider: providerName,
+      });
       return {
         success: false,
         message: `OAuth authentication failed: ${error.message}`,
