@@ -9,7 +9,8 @@
     "@repo/ui": "0.0.0",
     "@re-auth/http-adapters": "0.1.0-alpha.0",
     "@re-auth/sdk-generator": "0.0.1",
-    "@re-auth/reauth-old": "0.1.0-alpha.19"
+    "@re-auth/reauth-old": "0.1.0-alpha.19",
+    "@re-auth/logger": "0.1.0"
   },
   "changesets": [
     "all-chairs-poke",
@@ -27,6 +28,7 @@
     "forty-papers-prove",
     "four-boxes-cry",
     "four-emus-teach",
+    "funny-feet-find",
     "gentle-ways-lick",
     "happy-ducks-design",
     "hungry-results-hear",
