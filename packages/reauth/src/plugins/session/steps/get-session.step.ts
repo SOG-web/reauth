@@ -71,6 +71,7 @@ export const getSessionStep: AuthStep<
       metadata: 'object?',
     }),
     'others?': 'object',
+    'token?': tokenType,
   }),
   async run(input, ctx) {
     const { token, deviceInfo, others } = input;
@@ -112,7 +113,7 @@ export const getSessionStep: AuthStep<
       // Try to get enhanced session information if available
       let sessionInfo: any = {
         sessionId: 'current-session',
-        token: '*current*',
+        token: ses.token,
         subject: ses.subject,
         createdAt: new Date().toISOString(),
       };
@@ -132,7 +133,7 @@ export const getSessionStep: AuthStep<
         if (currentSession) {
           sessionInfo = {
             sessionId: currentSession.sessionId,
-            token: '*current*', // Don't expose full token for security
+            token: ses.token, // Don't expose full token for security
             subject: ses.subject,
             createdAt: currentSession.createdAt,
             expiresAt: currentSession.expiresAt,
